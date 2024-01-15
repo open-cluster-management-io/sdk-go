@@ -83,3 +83,19 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: unit
         run: make test
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          path: go/src/open-cluster-management.io/sdk-go
+      - name: install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: integration
+        run: make integration
