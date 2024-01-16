@@ -13,10 +13,14 @@ import (
 	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	agentclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/client"
 	agenthandler "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/handler"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/internal"
+	sourceclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/client"
+	sourcehandler "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/handler"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/watcher"
 )
 
@@ -27,15 +31,20 @@ const defaultInformerResyncTime = 10 * time.Minute
 //
 // ClientHolder also implements the ManifestWorksGetter interface.
 type ClientHolder struct {
-	workClient           workv1client.WorkV1Interface
+	workClientSet        workclientset.Interface
 	manifestWorkInformer workv1informers.ManifestWorkInformer
 }
 
 var _ workv1client.ManifestWorksGetter = &ClientHolder{}
 
+// WorkInterface returns a workclientset Interface
+func (h *ClientHolder) WorkInterface(namespace string) workclientset.Interface {
+	return h.workClientSet
+}
+
 // ManifestWorks returns a ManifestWorkInterface
 func (h *ClientHolder) ManifestWorks(namespace string) workv1client.ManifestWorkInterface {
-	return h.workClient.ManifestWorks(namespace)
+	return h.workClientSet.WorkV1().ManifestWorks(namespace)
 }
 
 // ManifestWorkInformer returns a ManifestWorkInformer
@@ -49,6 +58,7 @@ type ClientHolderBuilder struct {
 	codecs             []generic.Codec[*workv1.ManifestWork]
 	informerOptions    []workinformers.SharedInformerOption
 	informerResyncTime time.Duration
+	sourceID           string
 	clusterName        string
 	clientID           string
 }
@@ -58,12 +68,18 @@ type ClientHolderBuilder struct {
 // Available configurations:
 //   - Kubeconfig (*rest.Config): builds a manifestwork client with kubeconfig
 //   - MQTTOptions (*mqtt.MQTTOptions): builds a manifestwork client based on cloudevents with MQTT
+//   - GRPCOptions (*mqtt.GRPCOptions): builds a manifestwork client based on cloudevents with GRPC
 func NewClientHolderBuilder(clientID string, config any) *ClientHolderBuilder {
 	return &ClientHolderBuilder{
 		clientID:           clientID,
 		config:             config,
 		informerResyncTime: defaultInformerResyncTime,
 	}
+}
+
+func (b *ClientHolderBuilder) WithSourceID(sourceID string) *ClientHolderBuilder {
+	b.sourceID = sourceID
+	return b
 }
 
 // WithClusterName set the managed cluster name when building a  manifestwork client for an agent.
@@ -99,25 +115,29 @@ func (b *ClientHolderBuilder) NewClientHolder(ctx context.Context) (*ClientHolde
 		factory := workinformers.NewSharedInformerFactoryWithOptions(kubeWorkClientSet, b.informerResyncTime, b.informerOptions...)
 
 		return &ClientHolder{
-			workClient:           kubeWorkClientSet.WorkV1(),
+			workClientSet:        kubeWorkClientSet,
 			manifestWorkInformer: factory.Work().V1().ManifestWorks(),
 		}, nil
 	case *mqtt.MQTTOptions:
 		if len(b.clusterName) != 0 {
-			return b.newAgentClients(ctx, config)
+			return b.newAgentClients(ctx, mqtt.NewAgentOptions(config, b.clusterName, b.clientID))
 		}
 
-		//TODO build manifestwork clients for source
-		return nil, nil
+		return b.newSourceClients(ctx, mqtt.NewSourceOptions(config, b.clientID, b.sourceID))
+	case *grpc.GRPCOptions:
+		if len(b.clusterName) != 0 {
+			return b.newAgentClients(ctx, grpc.NewAgentOptions(config, b.clusterName, b.clientID))
+		}
+
+		return b.newSourceClients(ctx, grpc.NewSourceOptions(config, b.sourceID))
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}
 }
 
-func (b *ClientHolderBuilder) newAgentClients(ctx context.Context, config *mqtt.MQTTOptions) (*ClientHolder, error) {
+func (b *ClientHolderBuilder) newAgentClients(ctx context.Context, agentOptions *options.CloudEventsAgentOptions) (*ClientHolder, error) {
 	workLister := &ManifestWorkLister{}
 	watcher := watcher.NewManifestWorkWatcher()
-	agentOptions := mqtt.NewAgentOptions(config, b.clusterName, b.clientID)
 	cloudEventsClient, err := generic.NewCloudEventAgentClient[*workv1.ManifestWork](
 		ctx,
 		agentOptions,
@@ -146,7 +166,39 @@ func (b *ClientHolderBuilder) newAgentClients(ctx context.Context, config *mqtt.
 	cloudEventsClient.Subscribe(ctx, agenthandler.NewManifestWorkAgentHandler(namespacedLister, watcher))
 
 	return &ClientHolder{
-		workClient:           workClient,
+		workClientSet:        workClientSet,
+		manifestWorkInformer: informers,
+	}, nil
+}
+
+func (b *ClientHolderBuilder) newSourceClients(ctx context.Context, sourceOptions *options.CloudEventsSourceOptions) (*ClientHolder, error) {
+	workLister := &ManifestWorkLister{}
+	watcher := watcher.NewManifestWorkWatcher()
+	cloudEventsClient, err := generic.NewCloudEventSourceClient[*workv1.ManifestWork](
+		ctx,
+		sourceOptions,
+		workLister,
+		ManifestWorkStatusHash,
+		b.codecs...,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	manifestWorkClient := sourceclient.NewManifestWorkSourceClient(cloudEventsClient, watcher)
+	workClient := &internal.WorkV1ClientWrapper{ManifestWorkClient: manifestWorkClient}
+	workClientSet := &internal.WorkClientSetWrapper{WorkV1ClientWrapper: workClient}
+	factory := workinformers.NewSharedInformerFactoryWithOptions(workClientSet, b.informerResyncTime, b.informerOptions...)
+	informers := factory.Work().V1().ManifestWorks()
+	manifestWorkLister := informers.Lister()
+	// Set informer lister back to work lister and client.
+	workLister.Lister = manifestWorkLister
+	manifestWorkClient.SetLister(manifestWorkLister)
+
+	cloudEventsClient.Subscribe(ctx, sourcehandler.NewManifestWorkSourceHandler(manifestWorkLister, watcher))
+
+	return &ClientHolder{
+		workClientSet:        workClientSet,
 		manifestWorkInformer: informers,
 	}, nil
 }
