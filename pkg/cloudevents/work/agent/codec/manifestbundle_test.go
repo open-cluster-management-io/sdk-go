@@ -78,7 +78,7 @@ func TestManifestBundleEncode(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					UID:             "test",
 					ResourceVersion: "13",
-					Annotations: map[string]string{
+					Labels: map[string]string{
 						"cloudevents.open-cluster-management.io/originalsource": "source1",
 					},
 				},

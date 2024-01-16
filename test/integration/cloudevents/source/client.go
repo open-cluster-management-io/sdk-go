@@ -15,7 +15,9 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
 )
 
 type resourceCodec struct{}
@@ -175,4 +177,18 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 	})
 
 	return client, nil
+}
+
+func StartManifestWorkSourceClient(ctx context.Context, sourceID string, config any) (*work.ClientHolder, error) {
+	clientHolder, err := work.NewClientHolderBuilder(fmt.Sprintf("%s-client", sourceID), config).
+		WithSourceID(sourceID).
+		WithCodecs(codec.NewManifestBundleCodec()).
+		NewClientHolder(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	go clientHolder.ManifestWorkInformer().Informer().Run(ctx.Done())
+
+	return clientHolder, nil
 }

@@ -2,7 +2,6 @@ package codec
 
 import (
 	"fmt"
-	"strconv"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
@@ -11,13 +10,11 @@ import (
 	kubetypes "k8s.io/apimachinery/pkg/types"
 
 	workv1 "open-cluster-management.io/api/work/v1"
-	"open-cluster-management.io/sdk-go/pkg/apis/work/v1/validator"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 )
 
-// ManifestBundleCodec is a codec to encode/decode a ManifestWork/cloudevent with ManifestBundle for an agent.
+// ManifestBundleCodec is a codec to encode/decode a ManifestWork/cloudevent with ManifestBundle for a source.
 type ManifestBundleCodec struct{}
 
 func NewManifestBundleCodec() *ManifestBundleCodec {
@@ -29,36 +26,28 @@ func (c *ManifestBundleCodec) EventDataType() types.CloudEventsDataType {
 	return payload.ManifestBundleEventDataType
 }
 
-// Encode the status of a ManifestWork to a cloudevent with ManifestBundleStatus.
+// Encode the spec of a ManifestWork to a cloudevent with ManifestBundle.
 func (c *ManifestBundleCodec) Encode(source string, eventType types.CloudEventsType, work *workv1.ManifestWork) (*cloudevents.Event, error) {
 	if eventType.CloudEventsDataType != payload.ManifestBundleEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
 
-	resourceVersion, err := strconv.ParseInt(work.ResourceVersion, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse the resourceversion of the work %s, %v", work.UID, err)
-	}
-
-	originalSource, ok := work.Labels[common.CloudEventsOriginalSourceLabelKey]
-	if !ok {
-		return nil, fmt.Errorf("failed to find originalsource from the work %s", work.UID)
-	}
-
 	evt := types.NewEventBuilder(source, eventType).
-		WithResourceID(string(work.UID)).
-		WithStatusUpdateSequenceID(sequenceGenerator.Generate().String()).
-		WithResourceVersion(resourceVersion).
 		WithClusterName(work.Namespace).
-		WithOriginalSource(originalSource).
+		WithResourceID(string(work.UID)).
+		WithResourceVersion(work.Generation).
 		NewEvent()
-
-	manifestBundleStatus := &payload.ManifestBundleStatus{
-		Conditions:     work.Status.Conditions,
-		ResourceStatus: work.Status.ResourceStatus.Manifests,
+	if !work.DeletionTimestamp.IsZero() {
+		evt.SetExtension(types.ExtensionDeletionTimestamp, work.DeletionTimestamp.Time)
+		return &evt, nil
 	}
 
-	if err := evt.SetData(cloudevents.ApplicationJSON, manifestBundleStatus); err != nil {
+	manifests := &payload.ManifestBundle{
+		Manifests:       work.Spec.Workload.Manifests,
+		DeleteOption:    work.Spec.DeleteOption,
+		ManifestConfigs: work.Spec.ManifestConfigs,
+	}
+	if err := evt.SetData(cloudevents.ApplicationJSON, manifests); err != nil {
 		return nil, fmt.Errorf("failed to encode manifestwork status to a cloudevent: %v", err)
 	}
 
@@ -88,53 +77,24 @@ func (c *ManifestBundleCodec) Decode(evt *cloudevents.Event) (*workv1.ManifestWo
 		return nil, fmt.Errorf("failed to get resourceversion extension: %v", err)
 	}
 
-	clusterName, err := cloudeventstypes.ToString(evtExtensions[types.ExtensionClusterName])
-	if err != nil {
-		return nil, fmt.Errorf("failed to get clustername extension: %v", err)
-	}
-
 	work := &workv1.ManifestWork{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			UID:             kubetypes.UID(resourceID),
 			ResourceVersion: resourceVersion,
-			Name:            resourceID,
-			Namespace:       clusterName,
-			Labels: map[string]string{
-				common.CloudEventsOriginalSourceLabelKey: evt.Source(),
-			},
-			Annotations: map[string]string{
-				common.CloudEventsDataTypeAnnotationKey: eventType.CloudEventsDataType.String(),
-			},
 		},
 	}
 
-	if _, ok := evtExtensions[types.ExtensionDeletionTimestamp]; ok {
-		deletionTimestamp, err := cloudeventstypes.ToTime(evtExtensions[types.ExtensionDeletionTimestamp])
-		if err != nil {
-			return nil, fmt.Errorf("failed to get deletiontimestamp, %v", err)
-		}
-
-		work.DeletionTimestamp = &metav1.Time{Time: deletionTimestamp}
-		return work, nil
-	}
-
-	manifests := &payload.ManifestBundle{}
-	if err := evt.DataAs(manifests); err != nil {
+	manifestStatus := &payload.ManifestBundleStatus{}
+	if err := evt.DataAs(manifestStatus); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
 	}
 
-	work.Spec = workv1.ManifestWorkSpec{
-		Workload: workv1.ManifestsTemplate{
-			Manifests: manifests.Manifests,
+	work.Status = workv1.ManifestWorkStatus{
+		Conditions: manifestStatus.Conditions,
+		ResourceStatus: workv1.ManifestResourceStatus{
+			Manifests: manifestStatus.ResourceStatus,
 		},
-		DeleteOption:    manifests.DeleteOption,
-		ManifestConfigs: manifests.ManifestConfigs,
-	}
-
-	// validate the manifests
-	if err := validator.ManifestValidator.ValidateManifests(work.Spec.Workload.Manifests); err != nil {
-		return nil, fmt.Errorf("manifests are invalid, %v", err)
 	}
 
 	return work, nil

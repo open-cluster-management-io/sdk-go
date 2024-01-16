@@ -76,3 +76,11 @@ func TestPatch(t *testing.T) {
 		})
 	}
 }
+
+func TestUID(t *testing.T) {
+	first := UID("source1", "ns", "name")
+	second := UID("source1", "ns", "name")
+	if first != second {
+		t.Errorf("expected two uid equal, but %v, %v", first, second)
+	}
+}
