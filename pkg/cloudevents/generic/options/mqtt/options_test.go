@@ -5,6 +5,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 func TestBuildMQTTOptionsFromFlags(t *testing.T) {
@@ -36,6 +38,11 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			expectedErrorMsg: "setting clientCertFile and clientKeyFile requires caFile",
 		},
 		{
+			name:             "without topics",
+			config:           "{\"brokerHost\":\"test\",\"topics\":{}}",
+			expectedErrorMsg: "topics must be set",
+		},
+		{
 			name:   "default options",
 			config: "{\"brokerHost\":\"test\"}",
 			expectedOptions: &MQTTOptions{
@@ -43,6 +50,12 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  60,
 				PubQoS:     1,
 				SubQoS:     1,
+				Topics: types.Topics{
+					Spec:         "sources/+/clusters/+/spec",
+					Status:       "sources/+/clusters/+/status",
+					SpecResync:   "sources/clusters/+/specresync",
+					StatusResync: "sources/+/clusters/statusresync",
+				},
 			},
 		},
 		{
@@ -53,6 +66,12 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  60,
 				PubQoS:     1,
 				SubQoS:     1,
+				Topics: types.Topics{
+					Spec:         "sources/+/clusters/+/spec",
+					Status:       "sources/+/clusters/+/status",
+					SpecResync:   "sources/clusters/+/specresync",
+					StatusResync: "sources/+/clusters/statusresync",
+				},
 			},
 		},
 		{
@@ -63,6 +82,12 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  30,
 				PubQoS:     0,
 				SubQoS:     2,
+				Topics: types.Topics{
+					Spec:         "sources/+/clusters/+/spec",
+					Status:       "sources/+/clusters/+/status",
+					SpecResync:   "sources/clusters/+/specresync",
+					StatusResync: "sources/+/clusters/statusresync",
+				},
 			},
 		},
 	}

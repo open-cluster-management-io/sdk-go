@@ -82,6 +82,18 @@ const (
 	Deleted ResourceAction = "DELETED"
 )
 
+// Topics represents required messaging system topics for a source or agent.
+type Topics struct {
+	// Spec is a topic for resource spec
+	Spec string `json:"spec" yaml:"spec"`
+	// Status is a  topic for resource status
+	Status string `json:"status" yaml:"status"`
+	// SpecResync is a topic for resource spec resync
+	SpecResync string `json:"specResync" yaml:"specResync"`
+	// StatusResync is a MQTT topic for resource status resync
+	StatusResync string `json:"statusResync" yaml:"statusResync"`
+}
+
 // ListOptions is the query options for listing the resource objects from the source/agent.
 type ListOptions struct {
 	// Source use the cluster name to restrict the list of returned objects by their cluster name.
