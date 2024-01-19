@@ -38,7 +38,7 @@ type ClientHolder struct {
 var _ workv1client.ManifestWorksGetter = &ClientHolder{}
 
 // WorkInterface returns a workclientset Interface
-func (h *ClientHolder) WorkInterface(namespace string) workclientset.Interface {
+func (h *ClientHolder) WorkInterface() workclientset.Interface {
 	return h.workClientSet
 }
 
