@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/diff"
 	clienttesting "k8s.io/client-go/testing"
 )
 
@@ -178,6 +178,6 @@ func AssertFinalizers(t *testing.T, obj runtime.Object, finalizers []string) {
 		return
 	}
 	if !equality.Semantic.DeepEqual(actual, finalizers) {
-		t.Fatal(diff.ObjectDiff(actual, finalizers))
+		t.Fatal(cmp.Diff(actual, finalizers))
 	}
 }
