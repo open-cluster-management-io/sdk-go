@@ -82,14 +82,14 @@ func (b *kafkaMessageWriter) SetAttribute(attribute spec.Attribute, value interf
 			b.removeProperty(contentTypeKey)
 			return nil
 		}
-		b.addProperty(contentTypeKey, value)
+		_ = b.addProperty(contentTypeKey, value)
 	} else {
 		key := prefix + attribute.Name()
 		if value == nil {
 			b.removeProperty(key)
 			return nil
 		}
-		b.addProperty(key, value)
+		_ = b.addProperty(key, value)
 	}
 	return nil
 }

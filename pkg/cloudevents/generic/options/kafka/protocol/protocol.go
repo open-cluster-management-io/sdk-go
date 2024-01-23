@@ -96,7 +96,9 @@ func (p *Protocol) Send(ctx context.Context, in binding.Message, transformers ..
 	if p.producer == nil {
 		return fmt.Errorf("the producer client must not be nil")
 	}
-	defer in.Finish(err)
+	defer func() {
+		_ = in.Finish(err)
+	}()
 
 	kafkaMsg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{
