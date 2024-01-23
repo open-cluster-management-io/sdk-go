@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	kafkaoption "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -20,6 +22,13 @@ topics:
 `
 	grpcConfig = `
 url: grpc
+`
+	kafkaConfig = `
+brokerHost: broker1
+groupID: id
+clientCertFile: cert
+clientKeyFile: key
+caFile: ca
 `
 )
 
@@ -36,11 +45,21 @@ func TestLoadConfig(t *testing.T) {
 	}
 	defer os.Remove(grpcConfigFile.Name())
 
-	if err := os.WriteFile(mqttConfigFile.Name(), []byte(mqttConfig), 0644); err != nil {
+	kafkaConfigFile, err := os.CreateTemp("", "kafka-config-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(kafkaConfigFile.Name())
+
+	if err := os.WriteFile(mqttConfigFile.Name(), []byte(mqttConfig), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(grpcConfigFile.Name(), []byte(grpcConfig), 0644); err != nil {
+	if err := os.WriteFile(grpcConfigFile.Name(), []byte(grpcConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(kafkaConfigFile.Name(), []byte(kafkaConfig), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,6 +90,31 @@ func TestLoadConfig(t *testing.T) {
 			configType:     "grpc",
 			configFilePath: grpcConfigFile.Name(),
 			expectedConfig: &grpc.GRPCOptions{URL: "grpc"},
+		},
+		{
+			name:           "kafka config",
+			configType:     "kafka",
+			configFilePath: kafkaConfigFile.Name(),
+			expectedConfig: &kafkaoption.KafkaOptions{
+				ConfigMap: &kafka.ConfigMap{
+					"acks":                                  "1",
+					"auto.offset.reset":                     "earliest",
+					"bootstrap.servers":                     "broker1",
+					"enable.auto.commit":                    true,
+					"enable.auto.offset.store":              false,
+					"go.events.channel.size":                1000,
+					"group.id":                              "id",
+					"log.connection.close":                  false,
+					"queued.max.messages.kbytes":            32768,
+					"retries":                               "0",
+					"security.protocol":                     "ssl",
+					"socket.keepalive.enable":               true,
+					"ssl.ca.location":                       "ca",
+					"ssl.certificate.location":              "cert",
+					"ssl.endpoint.identification.algorithm": "none",
+					"ssl.key.location":                      "key",
+				},
+			},
 		},
 	}
 
