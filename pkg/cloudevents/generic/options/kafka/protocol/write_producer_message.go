@@ -12,6 +12,8 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
+//TODO: the implementation will be removed once the this pr is merged: https://github.com/cloudevents/sdk-go/pull/988
+
 // extends the kafka.Message to support the interfaces for the converting it to binding.Message
 type kafkaMessageWriter kafka.Message
 

@@ -13,6 +13,8 @@ import (
 	cecontext "github.com/cloudevents/sdk-go/v2/context"
 )
 
+//TODO: the implementation will be removed once the this pr is merged: https://github.com/cloudevents/sdk-go/pull/988
+
 var (
 	_ protocol.Sender   = (*Protocol)(nil)
 	_ protocol.Opener   = (*Protocol)(nil)

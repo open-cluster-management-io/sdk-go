@@ -7,6 +7,8 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
+//TODO: the implementation will be removed once the this pr is merged: https://github.com/cloudevents/sdk-go/pull/988
+
 // Option is the function signature required to be considered an kafka_confluent.Option.
 type Option func(*Protocol) error
 

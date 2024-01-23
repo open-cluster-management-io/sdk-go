@@ -1,6 +1,9 @@
 package kafka
 
 import (
+	"os"
+
+	"gopkg.in/yaml.v2"
 	kafka_confluent "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka/protocol"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 
@@ -9,19 +12,6 @@ import (
 )
 
 const (
-	// defaultSpecTopic is a default kafka topic for resource spec.
-	// defaultSpecTopic = "sources/+/clusters/+/spec"
-	// defaultSpecTopic = "sources/+/clusters/+/spec"
-
-	// defaultStatusTopic is a default kafka topic for resource status.
-	// defaultStatusTopic = "sources/+/clusters/+/status"
-
-	// // defaultSpecResyncTopic is a default kafka topic for resource spec resync.
-	// defaultSpecResyncTopic = "sources/clusters/+/specresync"
-
-	// // defaultStatusResyncTopic is a default kafka topic for resource status resync.
-	// defaultStatusResyncTopic = "sources/+/clusters/statusresync"
-
 	defaultSpecTopic         = "spec"
 	defaultStatusTopic       = "status"
 	defaultSpecResyncTopic   = "specresync"
@@ -29,10 +19,9 @@ const (
 )
 
 type KafkaOptions struct {
+	// the configMap: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
 	configMap *kafka.ConfigMap
 	Topics    types.Topics
-	// Producer  *kafka.Producer
-	// Consumer  *kafka.Consumer
 }
 
 func NewKafkaOptions() *KafkaOptions {
@@ -52,4 +41,28 @@ func (o *KafkaOptions) GetCloudEventsClient(clientOpts ...kafka_confluent.Option
 		return nil, err
 	}
 	return cloudevents.NewClient(protocol)
+}
+
+// BuildKafkaOptionsFromFlags builds configs from a config filepath.
+func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	config := &kafka.ConfigMap{}
+	if err := yaml.Unmarshal(configData, config); err != nil {
+		return nil, err
+	}
+
+	options := &KafkaOptions{
+		configMap: config,
+		Topics: types.Topics{
+			Spec:         defaultSpecTopic,
+			Status:       defaultStatusTopic,
+			SpecResync:   defaultSpecResyncTopic,
+			StatusResync: defaultStatusResyncTopic,
+		},
+	}
+	return options, nil
 }

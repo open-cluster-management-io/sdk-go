@@ -12,11 +12,14 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
+//TODO: the implementation will be removed once the this pr is merged: https://github.com/cloudevents/sdk-go/pull/988
+
 const (
 	prefix         = "ce-"
 	contentTypeKey = "Content-Type"
 )
 
+// the following property will be added to the cloudevents extension by the receiver
 const (
 	KafkaOffsetKey    = "kafkaoffset"
 	KafkaPartitionKey = "kafkapartition"
