@@ -22,6 +22,10 @@ github.com/cloudevents/sdk-go/v2/protocol
 github.com/cloudevents/sdk-go/v2/protocol/http
 github.com/cloudevents/sdk-go/v2/test
 github.com/cloudevents/sdk-go/v2/types
+# github.com/confluentinc/confluent-kafka-go/v2 v2.3.0
+## explicit; go 1.17
+github.com/confluentinc/confluent-kafka-go/v2/kafka
+github.com/confluentinc/confluent-kafka-go/v2/kafka/librdkafka_vendor
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
