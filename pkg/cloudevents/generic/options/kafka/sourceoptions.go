@@ -36,7 +36,7 @@ func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 
 	eventType, err := types.ParseCloudEventsType(evtCtx.GetType())
 	if err != nil {
-		return nil, fmt.Errorf("unsupported event type %s, %v", eventType, err)
+		return nil, err
 	}
 
 	if eventType.Action == types.ResyncRequestAction {
@@ -59,7 +59,7 @@ func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 
 func (o *kafkaSourceOptions) Client(ctx context.Context) (cloudevents.Client, error) {
 	c, err := o.GetCloudEventsClient(
-		kafka_confluent.WithConfigMap(o.configMap),
+		kafka_confluent.WithConfigMap(o.ConfigMap),
 		kafka_confluent.WithReceiverTopics([]string{o.Topics.Status, o.Topics.SpecResync}),
 		kafka_confluent.WithSenderTopic(o.Topics.Spec),
 	)

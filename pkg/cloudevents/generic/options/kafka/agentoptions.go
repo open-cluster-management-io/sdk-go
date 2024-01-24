@@ -36,7 +36,7 @@ func NewAgentOptions(kafkaOptions *KafkaOptions, clusterName, agentID string) *o
 func (o *kafkaAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.EventContext) (context.Context, error) {
 	eventType, err := types.ParseCloudEventsType(evtCtx.GetType())
 	if err != nil {
-		return nil, fmt.Errorf("unsupported event type %s, %v", eventType, err)
+		return nil, err
 	}
 
 	if eventType.Action == types.ResyncRequestAction {
@@ -58,7 +58,7 @@ func (o *kafkaAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 
 func (o *kafkaAgentOptions) Client(ctx context.Context) (cloudevents.Client, error) {
 	c, err := o.GetCloudEventsClient(
-		kafka_confluent.WithConfigMap(o.configMap),
+		kafka_confluent.WithConfigMap(o.ConfigMap),
 		kafka_confluent.WithReceiverTopics([]string{o.Topics.Spec, o.Topics.StatusResync}),
 		kafka_confluent.WithSenderTopic(o.Topics.Status),
 	)

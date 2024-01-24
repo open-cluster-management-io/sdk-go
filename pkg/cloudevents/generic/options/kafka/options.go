@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v2"
@@ -20,13 +21,13 @@ const (
 
 type KafkaOptions struct {
 	// the configMap: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
-	configMap *kafka.ConfigMap
-	Topics    types.Topics
+	ConfigMap *kafka.ConfigMap `json:"configs,omitempty" yaml:"configs,omitempty"`
+	Topics    *types.Topics    `json:"topics,omitempty" yaml:"topics,omitempty"`
 }
 
 func NewKafkaOptions() *KafkaOptions {
 	return &KafkaOptions{
-		Topics: types.Topics{
+		Topics: &types.Topics{
 			Spec:         defaultSpecTopic,
 			Status:       defaultStatusTopic,
 			SpecResync:   defaultSpecResyncTopic,
@@ -50,19 +51,39 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 		return nil, err
 	}
 
-	config := &kafka.ConfigMap{}
-	if err := yaml.Unmarshal(configData, config); err != nil {
+	var opts KafkaOptions
+	if err := yaml.Unmarshal(configData, &opts); err != nil {
 		return nil, err
 	}
 
+	if opts.ConfigMap == nil {
+		return nil, fmt.Errorf("the configs should be set")
+	}
+
+	val, err := opts.ConfigMap.Get("bootstrap.servers", "")
+	if err != nil {
+		return nil, err
+	}
+	if val == "" {
+		return nil, fmt.Errorf("bootstrap.servers is required")
+	}
+
+	if opts.Topics != nil && (opts.Topics.Spec == "" || opts.Topics.Status == "" ||
+		opts.Topics.SpecResync == "" || opts.Topics.StatusResync == "") {
+		return nil, fmt.Errorf("topics must be set")
+	}
+
 	options := &KafkaOptions{
-		configMap: config,
-		Topics: types.Topics{
+		ConfigMap: opts.ConfigMap,
+		Topics: &types.Topics{
 			Spec:         defaultSpecTopic,
 			Status:       defaultStatusTopic,
 			SpecResync:   defaultSpecResyncTopic,
 			StatusResync: defaultStatusResyncTopic,
 		},
+	}
+	if opts.Topics != nil {
+		options.Topics = opts.Topics
 	}
 	return options, nil
 }
