@@ -2,8 +2,8 @@ package mqtt
 
 import (
 	"context"
+	"errors"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -165,7 +165,7 @@ func TestConnectionTimeout(t *testing.T) {
 		clusterName: "cluster1",
 	}
 	_, err = agentOptions.Client(context.TODO())
-	if !strings.Contains(err.Error(), "i/o timeout") {
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Fatal(err)
 	}
 }

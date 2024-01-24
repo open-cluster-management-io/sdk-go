@@ -226,7 +226,10 @@ func (o *MQTTOptions) GetCloudEventsClient(
 	if err != nil {
 		return nil, err
 	}
-	netConn.SetDeadline(time.Now().Add(o.Timeout))
+	err = netConn.SetDeadline(time.Now().Add(o.Timeout))
+	if err != nil {
+		return nil, err
+	}
 
 	config := &paho.ClientConfig{
 		ClientID:      clientID,
