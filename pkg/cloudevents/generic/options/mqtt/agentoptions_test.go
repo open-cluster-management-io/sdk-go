@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -150,7 +151,10 @@ func TestConnectionTimeout(t *testing.T) {
 	}
 	defer os.Remove(file.Name())
 
-	if err := os.WriteFile(file.Name(), []byte("{\"brokerHost\":\"example.com:443\"}"), 0644); err != nil {
+	ln := newLocalListener(t)
+	defer ln.Close()
+
+	if err := os.WriteFile(file.Name(), []byte("{\"brokerHost\":\""+ln.Addr().String()+"\"}"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -168,4 +172,15 @@ func TestConnectionTimeout(t *testing.T) {
 	if !errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Fatal(err)
 	}
+}
+
+func newLocalListener(t *testing.T) net.Listener {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		ln, err = net.Listen("tcp6", "[::1]:0")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ln
 }
