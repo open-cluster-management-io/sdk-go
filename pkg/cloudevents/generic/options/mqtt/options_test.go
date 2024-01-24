@@ -1,10 +1,14 @@
 package mqtt
 
 import (
+	"context"
+	"errors"
 	"log"
+	"net"
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -50,6 +54,7 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  60,
 				PubQoS:     1,
 				SubQoS:     1,
+				Timeout:    30 * time.Second,
 				Topics: types.Topics{
 					Spec:         "sources/+/clusters/+/spec",
 					Status:       "sources/+/clusters/+/status",
@@ -66,6 +71,7 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  60,
 				PubQoS:     1,
 				SubQoS:     1,
+				Timeout:    30 * time.Second,
 				Topics: types.Topics{
 					Spec:         "sources/+/clusters/+/spec",
 					Status:       "sources/+/clusters/+/status",
@@ -76,12 +82,13 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 		},
 		{
 			name:   "customized options",
-			config: "{\"brokerHost\":\"test\",\"keepAlive\":30,\"pubQoS\":0,\"subQoS\":2}",
+			config: "{\"brokerHost\":\"test\",\"keepAlive\":30,\"pubQoS\":0,\"subQoS\":2,\"timeout\":30s,}",
 			expectedOptions: &MQTTOptions{
 				BrokerHost: "test",
 				KeepAlive:  30,
 				PubQoS:     0,
 				SubQoS:     2,
+				Timeout:    30 * time.Second,
 				Topics: types.Topics{
 					Spec:         "sources/+/clusters/+/spec",
 					Status:       "sources/+/clusters/+/status",
@@ -110,4 +117,45 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConnectionTimeout(t *testing.T) {
+	file, err := os.CreateTemp("", "mqtt-config-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(file.Name())
+
+	ln := newLocalListener(t)
+	defer ln.Close()
+
+	if err := os.WriteFile(file.Name(), []byte("{\"brokerHost\":\""+ln.Addr().String()+"\"}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	options, err := BuildMQTTOptionsFromFlags(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.Timeout = 10 * time.Millisecond
+
+	agentOptions := &mqttAgentOptions{
+		MQTTOptions: *options,
+		clusterName: "cluster1",
+	}
+	_, err = agentOptions.Client(context.TODO())
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal(err)
+	}
+}
+
+func newLocalListener(t *testing.T) net.Listener {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		ln, err = net.Listen("tcp6", "[::1]:0")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ln
 }
