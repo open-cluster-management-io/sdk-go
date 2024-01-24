@@ -84,7 +84,7 @@ func TestAgentContext(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			expectErrMsg: fmt.Sprintf("\"originalsource\" not found"),
+			expectErrMsg: "\"originalsource\" not found",
 		},
 		{
 			name: "send status",

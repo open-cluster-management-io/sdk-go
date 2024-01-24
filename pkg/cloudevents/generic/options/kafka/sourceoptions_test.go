@@ -76,7 +76,7 @@ func TestSourceContext(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			expectErrMsg: fmt.Sprintf("\"clustername\" not found"),
+			expectErrMsg: "\"clustername\" not found",
 		},
 		{
 			name: "send spec",
