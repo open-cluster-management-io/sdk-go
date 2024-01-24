@@ -2,7 +2,9 @@ package cloudevents
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	mochimqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/auth"
@@ -13,11 +15,13 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	grpcoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 )
 
 const mqttBrokerHost = "127.0.0.1:1883"
 const grpcServerHost = "127.0.0.1:8881"
+const sourceID = "integration-test"
 
 var mqttBroker *mochimqtt.Server
 var mqttOptions *mqtt.MQTTOptions
@@ -75,9 +79,19 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	ginkgo.By("start the resource mqtt source client")
-	mqttOptions = mqtt.NewMQTTOptions()
-	mqttOptions.BrokerHost = mqttBrokerHost
-	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, eventHub)
+	mqttOptions = &mqtt.MQTTOptions{
+		BrokerHost: mqttBrokerHost,
+		KeepAlive:  60,
+		PubQoS:     1,
+		SubQoS:     1,
+		Timeout:    30 * time.Second,
+		Topics: types.Topics{
+			SourceEvents: fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
+			AgentEvents:  fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
+		},
+	}
+
+	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, eventHub)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	close(done)
