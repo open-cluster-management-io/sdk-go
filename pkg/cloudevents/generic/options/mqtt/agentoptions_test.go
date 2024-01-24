@@ -3,7 +3,9 @@ package mqtt
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventscontext "github.com/cloudevents/sdk-go/v2/context"
@@ -138,5 +140,32 @@ func TestAgentContext(t *testing.T) {
 				t.Errorf("expected %s, but got %s", c.expectedTopic, topic)
 			}
 		})
+	}
+}
+
+func TestConnectionTimeout(t *testing.T) {
+	file, err := os.CreateTemp("", "mqtt-config-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(file.Name())
+
+	if err := os.WriteFile(file.Name(), []byte("{\"brokerHost\":\"example.com:443\"}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	options, err := BuildMQTTOptionsFromFlags(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.Timeout = 10 * time.Millisecond
+
+	agentOptions := &mqttAgentOptions{
+		MQTTOptions: *options,
+		clusterName: "cluster1",
+	}
+	_, err = agentOptions.Client(context.TODO())
+	if !strings.Contains(err.Error(), "i/o timeout") {
+		t.Fatal(err)
 	}
 }

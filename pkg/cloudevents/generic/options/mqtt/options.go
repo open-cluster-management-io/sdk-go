@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	cloudeventsmqtt "github.com/cloudevents/sdk-go/protocol/mqtt_paho/v2"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -41,6 +42,7 @@ type MQTTOptions struct {
 	ClientCertFile string
 	ClientKeyFile  string
 	KeepAlive      uint16
+	Timeout        time.Duration
 	PubQoS         int
 	SubQoS         int
 }
@@ -72,6 +74,9 @@ type MQTTConfig struct {
 
 	// Topics are MQTT topics for resource spec, status and resync.
 	Topics *types.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
+
+	// Timeout sets the read and write timeouts associated with the connection.
+	Timeout *time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 }
 
 func NewMQTTOptions() *MQTTOptions {
@@ -83,6 +88,7 @@ func NewMQTTOptions() *MQTTOptions {
 			StatusResync: defaultStatusResyncTopic,
 		},
 		KeepAlive: 60,
+		Timeout:   30 * time.Second,
 		PubQoS:    1,
 		SubQoS:    1,
 	}
@@ -117,23 +123,13 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 		return nil, fmt.Errorf("topics must be set")
 	}
 
-	options := &MQTTOptions{
-		BrokerHost:     config.BrokerHost,
-		Username:       config.Username,
-		Password:       config.Password,
-		CAFile:         config.CAFile,
-		ClientCertFile: config.ClientCertFile,
-		ClientKeyFile:  config.ClientKeyFile,
-		KeepAlive:      60,
-		PubQoS:         1,
-		SubQoS:         1,
-		Topics: types.Topics{
-			Spec:         defaultSpecTopic,
-			Status:       defaultStatusTopic,
-			SpecResync:   defaultSpecResyncTopic,
-			StatusResync: defaultStatusResyncTopic,
-		},
-	}
+	options := NewMQTTOptions()
+	options.BrokerHost = config.BrokerHost
+	options.Username = config.Username
+	options.Password = config.Password
+	options.CAFile = config.CAFile
+	options.ClientCertFile = config.ClientCertFile
+	options.ClientKeyFile = config.ClientKeyFile
 
 	if config.KeepAlive != nil {
 		options.KeepAlive = *config.KeepAlive
@@ -149,6 +145,10 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 
 	if config.Topics != nil {
 		options.Topics = *config.Topics
+	}
+
+	if config.Timeout != nil {
+		options.Timeout = *config.Timeout
 	}
 
 	return options, nil
@@ -226,6 +226,7 @@ func (o *MQTTOptions) GetCloudEventsClient(
 	if err != nil {
 		return nil, err
 	}
+	netConn.SetDeadline(time.Now().Add(o.Timeout))
 
 	config := &paho.ClientConfig{
 		ClientID:      clientID,
