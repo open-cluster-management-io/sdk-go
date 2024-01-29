@@ -11,6 +11,13 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
+const testSourceConfig = `
+brokerHost: test
+topics:
+  sourceEvents: sources/hub1/clusters/+/sourceevents
+  agentEvents: sources/hub1/clusters/+/agentevents
+`
+
 func TestSourceContext(t *testing.T) {
 	file, err := os.CreateTemp("", "mqtt-config-test-")
 	if err != nil {
@@ -18,7 +25,7 @@ func TestSourceContext(t *testing.T) {
 	}
 	defer os.Remove(file.Name())
 
-	if err := os.WriteFile(file.Name(), []byte("{\"brokerHost\":\"test\"}"), 0644); err != nil {
+	if err := os.WriteFile(file.Name(), []byte(testSourceConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -57,9 +64,10 @@ func TestSourceContext(t *testing.T) {
 
 				evt := cloudevents.NewEvent()
 				evt.SetType(eventType.String())
+				evt.SetExtension("clustername", "cluster1")
 				return evt
 			}(),
-			expectedTopic: "sources/hub1/clusters/statusresync",
+			expectedTopic: "sources/hub1/clusters/cluster1/sourceevents",
 			assertError: func(err error) {
 				if err != nil {
 					t.Errorf("unexpected error %v", err)
@@ -99,7 +107,7 @@ func TestSourceContext(t *testing.T) {
 				evt.SetExtension("clustername", "cluster1")
 				return evt
 			}(),
-			expectedTopic: "sources/hub1/clusters/cluster1/spec",
+			expectedTopic: "sources/hub1/clusters/cluster1/sourceevents",
 			assertError: func(err error) {
 				if err != nil {
 					t.Errorf("unexpected error %v", err)

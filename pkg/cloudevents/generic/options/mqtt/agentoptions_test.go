@@ -11,6 +11,14 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
+const testAgentConfig = `
+brokerHost: test
+topics:
+  sourceEvents: sources/hub1/clusters/+/sourceevents
+  agentEvents: sources/hub1/clusters/+/agentevents
+  agentBroadcast: clusters/+/agentbroadcast
+`
+
 var mockEventDataType = types.CloudEventsDataType{
 	Group:    "resources.test",
 	Version:  "v1",
@@ -24,7 +32,7 @@ func TestAgentContext(t *testing.T) {
 	}
 	defer os.Remove(file.Name())
 
-	if err := os.WriteFile(file.Name(), []byte("{\"brokerHost\":\"test\"}"), 0644); err != nil {
+	if err := os.WriteFile(file.Name(), []byte(testAgentConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -63,10 +71,11 @@ func TestAgentContext(t *testing.T) {
 
 				evt := cloudevents.NewEvent()
 				evt.SetType(eventType.String())
+				evt.SetExtension("originalsource", types.SourceAll)
 				evt.SetExtension("clustername", "cluster1")
 				return evt
 			}(),
-			expectedTopic: "sources/clusters/cluster1/specresync",
+			expectedTopic: "clusters/cluster1/agentbroadcast",
 			assertError: func(err error) {
 				if err != nil {
 					t.Errorf("unexpected error %v", err)
@@ -108,7 +117,7 @@ func TestAgentContext(t *testing.T) {
 				evt.SetExtension("originalsource", "hub1")
 				return evt
 			}(),
-			expectedTopic: "sources/hub1/clusters/cluster1/status",
+			expectedTopic: "sources/hub1/clusters/cluster1/agentevents",
 			assertError: func(err error) {
 				if err != nil {
 					t.Errorf("unexpected error %v", err)

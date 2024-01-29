@@ -49,7 +49,7 @@ func TestSourceResync(t *testing.T) {
 				t.Errorf("unexpected error %v", err)
 			}
 
-			if err := source.Resync(context.TODO(), types.ListOptions{}); err != nil {
+			if err := source.Resync(context.TODO(), "cluster1"); err != nil {
 				t.Errorf("unexpected error %v", err)
 			}
 

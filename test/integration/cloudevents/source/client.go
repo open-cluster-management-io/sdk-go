@@ -110,8 +110,7 @@ func statusHashGetter(obj *Resource) (string, error) {
 	return fmt.Sprintf("%x", sha256.Sum256(statusBytes)), nil
 }
 
-func StartMQTTResourceSourceClient(ctx context.Context, config *mqtt.MQTTOptions, eventHub *EventHub) (generic.CloudEventsClient[*Resource], error) {
-	sourceID := "integration-test"
+func StartMQTTResourceSourceClient(ctx context.Context, config *mqtt.MQTTOptions, sourceID string, eventHub *EventHub) (generic.CloudEventsClient[*Resource], error) {
 	client, err := generic.NewCloudEventSourceClient[*Resource](
 		ctx,
 		mqtt.NewSourceOptions(config, fmt.Sprintf("%s-client", sourceID), sourceID),
