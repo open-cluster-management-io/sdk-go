@@ -62,9 +62,6 @@ type MQTTConfig struct {
 
 	// Topics are MQTT topics for resource spec, status and resync.
 	Topics *types.Topics `json:"topics,omitempty" yaml:"topics,omitempty"`
-
-	// Timeout sets the read and write timeouts associated with the connection.
-	Timeout *time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 }
 
 // BuildMQTTOptionsFromFlags builds configs from a config filepath.
@@ -105,12 +102,14 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 		KeepAlive:      60,
 		PubQoS:         1,
 		SubQoS:         1,
-		Timeout:        30 * time.Second,
+		Timeout:        180 * time.Second,
 		Topics:         *config.Topics,
 	}
 
 	if config.KeepAlive != nil {
 		options.KeepAlive = *config.KeepAlive
+		// Setting the mqtt tcp connection read and write timeouts to three times the mqtt keepalive
+		options.Timeout = 3 * time.Duration(*config.KeepAlive) * time.Second
 	}
 
 	if config.PubQoS != nil {
@@ -119,10 +118,6 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 
 	if config.SubQoS != nil {
 		options.SubQoS = *config.SubQoS
-	}
-
-	if config.Timeout != nil {
-		options.Timeout = *config.Timeout
 	}
 
 	return options, nil
