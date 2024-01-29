@@ -83,7 +83,7 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  60,
 				PubQoS:     1,
 				SubQoS:     1,
-				Timeout:    30 * time.Second,
+				Timeout:    180 * time.Second,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
@@ -98,7 +98,7 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  60,
 				PubQoS:     1,
 				SubQoS:     1,
-				Timeout:    30 * time.Second,
+				Timeout:    180 * time.Second,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
@@ -113,7 +113,7 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				KeepAlive:  30,
 				PubQoS:     0,
 				SubQoS:     2,
-				Timeout:    30 * time.Second,
+				Timeout:    90 * time.Second,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
