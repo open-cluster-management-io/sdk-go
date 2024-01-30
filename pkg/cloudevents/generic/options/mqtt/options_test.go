@@ -26,7 +26,6 @@ brokerHost: test
 keepAlive: 30
 pubQoS: 0
 subQoS: 2
-timeout: 30s
 topics:
   sourceEvents: sources/hub1/clusters/+/sourceevents
   agentEvents: sources/hub1/clusters/+/agentevents
@@ -276,6 +275,48 @@ func TestValidateTopics(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestGetSourceFromEventsTopic(t *testing.T) {
+	cases := []struct {
+		name           string
+		topic          string
+		expectedSource string
+	}{
+		{
+			name:           "get source from agent events share topic",
+			topic:          "$share/group/sources/source1/consumers/+/agentevents",
+			expectedSource: "source1",
+		},
+		{
+			name:           "get source from agent events topic",
+			topic:          "sources/source2/consumers/+/agentevents",
+			expectedSource: "source2",
+		},
+		{
+			name:           "get source from source events share topic",
+			topic:          "$share/group/sources/source3/consumers/+/sourceevents",
+			expectedSource: "source3",
+		},
+		{
+			name:           "get source from source events topic",
+			topic:          "sources/source4/consumers/+/sourceevents",
+			expectedSource: "source4",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			source, err := getSourceFromEventsTopic(c.topic)
+			if err != nil {
+				t.Errorf("unexpected error %v", err)
+			}
+
+			if source != c.expectedSource {
+				t.Errorf("expected source %q, but %q", c.expectedSource, source)
 			}
 		})
 	}
