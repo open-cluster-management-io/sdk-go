@@ -55,6 +55,9 @@ func (o *gRPCSourceOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 func (o *gRPCSourceOptions) Client(ctx context.Context) (cloudevents.Client, error) {
 	receiver, err := o.GetCloudEventsClient(
 		ctx,
+		func(err error) {
+			o.errorChan <- err
+		},
 		protocol.WithPublishOption(&protocol.PublishOption{}),
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
 			Topics: []string{

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v2"
@@ -132,11 +134,30 @@ func (o *GRPCOptions) GetGRPCClientConn() (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
-func (o *GRPCOptions) GetCloudEventsClient(ctx context.Context, clientOpts ...protocol.Option) (cloudevents.Client, error) {
+func (o *GRPCOptions) GetCloudEventsClient(ctx context.Context, errorHandler func(error), clientOpts ...protocol.Option) (cloudevents.Client, error) {
 	conn, err := o.GetGRPCClientConn()
 	if err != nil {
 		return nil, err
 	}
+
+	// Periodically (every 100ms) check the connection status and reconnect if necessary.
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				conn.Close()
+			case <-ticker.C:
+				if conn.GetState() == connectivity.TransientFailure {
+					errorHandler(fmt.Errorf("grpc connection is disconnected"))
+					ticker.Stop()
+					conn.Close()
+					return // exit the goroutine as the error handler function will handle the reconnection.
+				}
+			}
+		}
+	}()
 
 	opts := []protocol.Option{}
 	opts = append(opts, clientOpts...)
