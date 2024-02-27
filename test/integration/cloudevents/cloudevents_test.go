@@ -17,6 +17,7 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
@@ -40,7 +41,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start an agent on cluster1")
-			clientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions)
+			clientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			informer := clientHolder.ManifestWorkInformer()
@@ -130,7 +131,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start an agent on cluster2")
-			clientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions)
+			clientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			lister := clientHolder.ManifestWorkInformer().Lister().ManifestWorks(clusterName)

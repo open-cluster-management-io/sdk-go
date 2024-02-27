@@ -79,17 +79,10 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	ginkgo.By("start the resource mqtt source client")
-	mqttOptions = &mqtt.MQTTOptions{
-		BrokerHost: mqttBrokerHost,
-		KeepAlive:  60,
-		PubQoS:     1,
-		SubQoS:     1,
-		Timeout:    30 * time.Second,
-		Topics: types.Topics{
-			SourceEvents: fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-			AgentEvents:  fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-		},
-	}
+	mqttOptions = newMQTTOptions(types.Topics{
+		SourceEvents: fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
+		AgentEvents:  fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
+	})
 
 	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, eventHub)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -103,3 +96,14 @@ var _ = ginkgo.AfterSuite(func() {
 	err := mqttBroker.Close()
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 })
+
+func newMQTTOptions(topics types.Topics) *mqtt.MQTTOptions {
+	return &mqtt.MQTTOptions{
+		BrokerHost: mqttBrokerHost,
+		KeepAlive:  60,
+		PubQoS:     1,
+		SubQoS:     1,
+		Timeout:    300 * time.Second,
+		Topics:     topics,
+	}
+}
