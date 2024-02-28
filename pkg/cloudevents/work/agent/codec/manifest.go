@@ -110,7 +110,7 @@ func (c *ManifestCodec) Decode(evt *cloudevents.Event) (*workv1.ManifestWork, er
 		return nil, fmt.Errorf("failed to get resourceid extension: %v", err)
 	}
 
-	resourceVersion, err := cloudeventstypes.ToString(evtExtensions[types.ExtensionResourceVersion])
+	resourceVersion, err := cloudeventstypes.ToInteger(evtExtensions[types.ExtensionResourceVersion])
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resourceversion extension: %v", err)
 	}
@@ -124,7 +124,7 @@ func (c *ManifestCodec) Decode(evt *cloudevents.Event) (*workv1.ManifestWork, er
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			UID:             kubetypes.UID(resourceID),
-			ResourceVersion: resourceVersion,
+			ResourceVersion: fmt.Sprintf("%d", resourceVersion),
 			Name:            resourceID,
 			Namespace:       clusterName,
 			Labels: map[string]string{
