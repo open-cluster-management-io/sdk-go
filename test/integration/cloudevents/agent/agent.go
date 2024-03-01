@@ -11,10 +11,11 @@ import (
 )
 
 func StartWorkAgent(ctx context.Context, clusterName string, config *mqtt.MQTTOptions, codecs ...generic.Codec[*workv1.ManifestWork]) (*work.ClientHolder, error) {
-	clientHolder, err := work.NewClientHolderBuilder(clusterName, config).
+	clientHolder, err := work.NewClientHolderBuilder(config).
+		WithClientID(clusterName).
 		WithClusterName(clusterName).
 		WithCodecs(codecs...).
-		NewClientHolder(ctx)
+		NewAgentClientHolder(ctx)
 	if err != nil {
 		return nil, err
 	}

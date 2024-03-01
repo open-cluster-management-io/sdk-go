@@ -71,20 +71,28 @@ type ClientHolderBuilder struct {
 //   - Kubeconfig (*rest.Config): builds a manifestwork client with kubeconfig
 //   - MQTTOptions (*mqtt.MQTTOptions): builds a manifestwork client based on cloudevents with MQTT
 //   - GRPCOptions (*grpc.GRPCOptions): builds a manifestwork client based on cloudevents with GRPC
-func NewClientHolderBuilder(clientID string, config any) *ClientHolderBuilder {
+//
+// TODO using a specified config instead of any
+func NewClientHolderBuilder(config any) *ClientHolderBuilder {
 	return &ClientHolderBuilder{
-		clientID:           clientID,
 		config:             config,
 		informerResyncTime: defaultInformerResyncTime,
 	}
 }
 
+// WithClientID set the client ID for source/agent cloudevents client.
+func (b *ClientHolderBuilder) WithClientID(clientID string) *ClientHolderBuilder {
+	b.clientID = clientID
+	return b
+}
+
+// WithSourceID set the source ID when building a manifestwork client for a source.
 func (b *ClientHolderBuilder) WithSourceID(sourceID string) *ClientHolderBuilder {
 	b.sourceID = sourceID
 	return b
 }
 
-// WithClusterName set the managed cluster name when building a  manifestwork client for an agent.
+// WithClusterName set the managed cluster name when building a manifestwork client for an agent.
 func (b *ClientHolderBuilder) WithClusterName(clusterName string) *ClientHolderBuilder {
 	b.clusterName = clusterName
 	return b
@@ -105,39 +113,43 @@ func (b *ClientHolderBuilder) WithInformerConfig(
 	return b
 }
 
-// NewClientHolder returns a ClientHolder for works.
-func (b *ClientHolderBuilder) NewClientHolder(ctx context.Context) (*ClientHolder, error) {
+// NewSourceClientHolder returns a ClientHolder for source
+func (b *ClientHolderBuilder) NewSourceClientHolder(ctx context.Context) (*ClientHolder, error) {
 	switch config := b.config.(type) {
 	case *rest.Config:
-		kubeWorkClientSet, err := workclientset.NewForConfig(config)
-		if err != nil {
-			return nil, err
-		}
-
-		factory := workinformers.NewSharedInformerFactoryWithOptions(kubeWorkClientSet, b.informerResyncTime, b.informerOptions...)
-
-		return &ClientHolder{
-			workClientSet:        kubeWorkClientSet,
-			manifestWorkInformer: factory.Work().V1().ManifestWorks(),
-		}, nil
+		return b.newKubeClients(config)
 	case *mqtt.MQTTOptions:
-		if len(b.clusterName) != 0 {
-			return b.newAgentClients(ctx, mqtt.NewAgentOptions(config, b.clusterName, b.clientID))
-		}
-
 		return b.newSourceClients(ctx, mqtt.NewSourceOptions(config, b.clientID, b.sourceID))
 	case *grpc.GRPCOptions:
-		if len(b.clusterName) != 0 {
-			return b.newAgentClients(ctx, grpc.NewAgentOptions(config, b.clusterName, b.clientID))
-		}
-
 		return b.newSourceClients(ctx, grpc.NewSourceOptions(config, b.sourceID))
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}
 }
 
+// NewAgentClientHolder returns a ClientHolder for agent
+func (b *ClientHolderBuilder) NewAgentClientHolder(ctx context.Context) (*ClientHolder, error) {
+	switch config := b.config.(type) {
+	case *rest.Config:
+		return b.newKubeClients(config)
+	case *mqtt.MQTTOptions:
+		return b.newAgentClients(ctx, mqtt.NewAgentOptions(config, b.clusterName, b.clientID))
+	case *grpc.GRPCOptions:
+		return b.newAgentClients(ctx, grpc.NewAgentOptions(config, b.clusterName, b.clientID))
+	default:
+		return nil, fmt.Errorf("unsupported client configuration type %T", config)
+	}
+}
+
 func (b *ClientHolderBuilder) newAgentClients(ctx context.Context, agentOptions *options.CloudEventsAgentOptions) (*ClientHolder, error) {
+	if len(b.clientID) == 0 {
+		return nil, fmt.Errorf("client id is required")
+	}
+
+	if len(b.clusterName) == 0 {
+		return nil, fmt.Errorf("cluster name is required")
+	}
+
 	workLister := &ManifestWorkLister{}
 	watcher := watcher.NewManifestWorkWatcher()
 	cloudEventsClient, err := generic.NewCloudEventAgentClient[*workv1.ManifestWork](
@@ -189,6 +201,14 @@ func (b *ClientHolderBuilder) newAgentClients(ctx context.Context, agentOptions 
 }
 
 func (b *ClientHolderBuilder) newSourceClients(ctx context.Context, sourceOptions *options.CloudEventsSourceOptions) (*ClientHolder, error) {
+	if len(b.clientID) == 0 {
+		return nil, fmt.Errorf("client id is required")
+	}
+
+	if len(b.sourceID) == 0 {
+		return nil, fmt.Errorf("source id is required")
+	}
+
 	workLister := &ManifestWorkLister{}
 	watcher := watcher.NewManifestWorkWatcher()
 	cloudEventsClient, err := generic.NewCloudEventSourceClient[*workv1.ManifestWork](
@@ -233,5 +253,18 @@ func (b *ClientHolderBuilder) newSourceClients(ctx context.Context, sourceOption
 	return &ClientHolder{
 		workClientSet:        workClientSet,
 		manifestWorkInformer: informers,
+	}, nil
+}
+
+func (b *ClientHolderBuilder) newKubeClients(config *rest.Config) (*ClientHolder, error) {
+	kubeWorkClientSet, err := workclientset.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	factory := workinformers.NewSharedInformerFactoryWithOptions(kubeWorkClientSet, b.informerResyncTime, b.informerOptions...)
+	return &ClientHolder{
+		workClientSet:        kubeWorkClientSet,
+		manifestWorkInformer: factory.Work().V1().ManifestWorks(),
 	}, nil
 }

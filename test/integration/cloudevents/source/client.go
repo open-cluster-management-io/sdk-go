@@ -180,10 +180,11 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 }
 
 func StartManifestWorkSourceClient(ctx context.Context, sourceID string, config any) (*work.ClientHolder, error) {
-	clientHolder, err := work.NewClientHolderBuilder(fmt.Sprintf("%s-client", sourceID), config).
+	clientHolder, err := work.NewClientHolderBuilder(config).
+		WithClientID(fmt.Sprintf("%s-client", sourceID)).
 		WithSourceID(sourceID).
 		WithCodecs(codec.NewManifestBundleCodec()).
-		NewClientHolder(ctx)
+		NewSourceClientHolder(ctx)
 	if err != nil {
 		return nil, err
 	}
