@@ -24,6 +24,7 @@ topics:
 	testCustomizedConfig = `
 brokerHost: test
 keepAlive: 30
+dialTimeout: 10m
 pubQoS: 0
 subQoS: 2
 topics:
@@ -78,11 +79,11 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			name:   "default options",
 			config: testConfig,
 			expectedOptions: &MQTTOptions{
-				BrokerHost: "test",
-				KeepAlive:  60,
-				PubQoS:     1,
-				SubQoS:     1,
-				Timeout:    180 * time.Second,
+				BrokerHost:  "test",
+				KeepAlive:   60,
+				PubQoS:      1,
+				SubQoS:      1,
+				DialTimeout: 60 * time.Second,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
@@ -93,11 +94,11 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			name:   "default options with yaml format",
 			config: testYamlConfig,
 			expectedOptions: &MQTTOptions{
-				BrokerHost: "test",
-				KeepAlive:  60,
-				PubQoS:     1,
-				SubQoS:     1,
-				Timeout:    180 * time.Second,
+				BrokerHost:  "test",
+				KeepAlive:   60,
+				PubQoS:      1,
+				SubQoS:      1,
+				DialTimeout: 60 * time.Second,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
@@ -108,11 +109,11 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			name:   "customized options",
 			config: testCustomizedConfig,
 			expectedOptions: &MQTTOptions{
-				BrokerHost: "test",
-				KeepAlive:  30,
-				PubQoS:     0,
-				SubQoS:     2,
-				Timeout:    90 * time.Second,
+				BrokerHost:  "test",
+				KeepAlive:   30,
+				PubQoS:      0,
+				SubQoS:      2,
+				DialTimeout: 10 * time.Minute,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
@@ -341,15 +342,15 @@ func TestConnectionTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	options.Timeout = 10 * time.Millisecond
+	options.DialTimeout = 10 * time.Millisecond
 
 	agentOptions := &mqttAgentOptions{
 		MQTTOptions: *options,
 		clusterName: "cluster1",
 	}
 	_, err = agentOptions.Client(context.TODO())
-	if !errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Fatal(err)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("%T, %v", err, err)
 	}
 }
 
