@@ -30,7 +30,10 @@ type ConfigLoader struct {
 //   - mqtt
 //   - grpc
 func NewConfigLoader(configType, configPath string) *ConfigLoader {
-	return &ConfigLoader{}
+	return &ConfigLoader{
+		configType: configType,
+		configPath: configPath,
+	}
 }
 
 // WithKubeConfig sets a kube config, this config will be used when configuration type is kube and the kube
