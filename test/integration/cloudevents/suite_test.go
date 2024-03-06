@@ -99,11 +99,11 @@ var _ = ginkgo.AfterSuite(func() {
 
 func newMQTTOptions(topics types.Topics) *mqtt.MQTTOptions {
 	return &mqtt.MQTTOptions{
-		BrokerHost: mqttBrokerHost,
-		KeepAlive:  60,
-		PubQoS:     1,
-		SubQoS:     1,
-		Timeout:    300 * time.Second,
-		Topics:     topics,
+		BrokerHost:  mqttBrokerHost,
+		KeepAlive:   60,
+		PubQoS:      1,
+		SubQoS:      1,
+		DialTimeout: 5 * time.Second,
+		Topics:      topics,
 	}
 }
