@@ -58,12 +58,8 @@ func (o *gRPCSourceOptions) Client(ctx context.Context) (cloudevents.Client, err
 		func(err error) {
 			o.errorChan <- err
 		},
-		protocol.WithPublishOption(&protocol.PublishOption{}),
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
-			Topics: []string{
-				strings.Replace(StatusTopic, "+", o.sourceID, 1), // receiving the resources status from agents with status topic
-				SpecResyncTopic, // receiving the resources spec resync request from agents with spec resync topic
-			},
+			Source: o.sourceID,
 		}),
 	)
 	if err != nil {

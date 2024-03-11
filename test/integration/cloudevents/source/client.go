@@ -29,6 +29,10 @@ func (c *resourceCodec) EventDataType() types.CloudEventsDataType {
 }
 
 func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, resource *Resource) (*cloudevents.Event, error) {
+	if resource.Source != "" {
+		source = resource.Source
+	}
+
 	if eventType.CloudEventsDataType != payload.ManifestEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
@@ -79,12 +83,18 @@ func (c *resourceCodec) Decode(evt *cloudevents.Event) (*Resource, error) {
 		return nil, fmt.Errorf("failed to get clustername extension: %v", err)
 	}
 
+	originalSource, err := cloudeventstypes.ToString(evtExtensions[types.ExtensionOriginalSource])
+	if err != nil {
+		return nil, fmt.Errorf("failed to get originalsource extension: %v", err)
+	}
+
 	manifestStatus := &payload.ManifestStatus{}
 	if err := evt.DataAs(manifestStatus); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
 	}
 
 	resource := &Resource{
+		Source:          originalSource,
 		ResourceID:      resourceID,
 		ResourceVersion: int64(resourceVersion),
 		Namespace:       clusterName,
@@ -112,7 +122,7 @@ func statusHashGetter(obj *Resource) (string, error) {
 	return fmt.Sprintf("%x", sha256.Sum256(statusBytes)), nil
 }
 
-func StartMQTTResourceSourceClient(ctx context.Context, config *mqtt.MQTTOptions, sourceID string, eventHub *EventHub) (generic.CloudEventsClient[*Resource], error) {
+func StartMQTTResourceSourceClient(ctx context.Context, config *mqtt.MQTTOptions, sourceID string, resSpecChan <-chan *Resource) (generic.CloudEventsClient[*Resource], error) {
 	client, err := generic.NewCloudEventSourceClient[*Resource](
 		ctx,
 		mqtt.NewSourceOptions(config, fmt.Sprintf("%s-client", sourceID), sourceID),
@@ -129,10 +139,8 @@ func StartMQTTResourceSourceClient(ctx context.Context, config *mqtt.MQTTOptions
 		return store.UpdateStatus(resource)
 	})
 
-	eventClient := NewEventClient("+")
-	eventHub.Register(eventClient)
 	go func() {
-		for res := range eventClient.Receive() {
+		for res := range resSpecChan {
 			action := "test_create_update_request"
 			if !res.DeletionTimestamp.IsZero() {
 				action = "test_delete_request"
@@ -162,7 +170,7 @@ func (consumerResLister *consumerResourceLister) List(listOpts types.ListOptions
 func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions) (generic.CloudEventsClient[*Resource], error) {
 	client, err := generic.NewCloudEventSourceClient[*Resource](
 		ctx,
-		grpc.NewSourceOptions(config, "integration-grpc-test"),
+		grpc.NewSourceOptions(config, "integration-test"),
 		&consumerResourceLister{},
 		statusHashGetter,
 		&resourceCodec{},
@@ -172,7 +180,7 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 		return nil, err
 	}
 
-	client.Subscribe(context.TODO(), func(action types.ResourceAction, resource *Resource) error {
+	client.Subscribe(ctx, func(action types.ResourceAction, resource *Resource) error {
 		return consumerStore.UpdateStatus(resource)
 	})
 

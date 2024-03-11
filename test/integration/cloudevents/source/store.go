@@ -7,19 +7,21 @@ import (
 
 type MemoryStore struct {
 	sync.RWMutex
-	resources map[string]*Resource
-	eventHub  *EventHub
+	resources        map[string]*Resource
+	eventBroadcaster *EventBroadcaster
+	resourceSpecChan chan *Resource
 }
 
 var once sync.Once
 var store *MemoryStore
 var consumerStore *MemoryStore
 
-func InitStore(eventHub *EventHub) (*MemoryStore, *MemoryStore) {
+func InitStore(eventBroadcaster *EventBroadcaster) (*MemoryStore, *MemoryStore) {
 	once.Do(func() {
 		store = &MemoryStore{
-			resources: make(map[string]*Resource),
-			eventHub:  eventHub,
+			resources:        make(map[string]*Resource),
+			eventBroadcaster: eventBroadcaster,
+			resourceSpecChan: make(chan *Resource),
 		}
 		consumerStore = &MemoryStore{
 			resources: make(map[string]*Resource),
@@ -37,8 +39,8 @@ func (s *MemoryStore) Add(resource *Resource) {
 	if !ok {
 		s.resources[resource.ResourceID] = resource
 	}
-	if s.eventHub != nil {
-		s.eventHub.Broadcast(resource)
+	if s.eventBroadcaster != nil {
+		s.resourceSpecChan <- resource
 	}
 }
 
@@ -52,8 +54,8 @@ func (s *MemoryStore) Update(resource *Resource) error {
 	}
 
 	s.resources[resource.ResourceID] = resource
-	if s.eventHub != nil {
-		s.eventHub.Broadcast(resource)
+	if s.eventBroadcaster != nil {
+		s.resourceSpecChan <- resource
 	}
 	return nil
 }
@@ -63,8 +65,8 @@ func (s *MemoryStore) UpSert(resource *Resource) {
 	defer s.Unlock()
 
 	s.resources[resource.ResourceID] = resource
-	if s.eventHub != nil {
-		s.eventHub.Broadcast(resource)
+	if s.eventBroadcaster != nil {
+		s.resourceSpecChan <- resource
 	}
 }
 
@@ -79,8 +81,8 @@ func (s *MemoryStore) UpdateStatus(resource *Resource) error {
 
 	last.Status = resource.Status
 	s.resources[resource.ResourceID] = last
-	if s.eventHub != nil {
-		s.eventHub.Broadcast(resource)
+	if s.eventBroadcaster != nil {
+		s.eventBroadcaster.Broadcast(resource)
 	}
 	return nil
 }
@@ -117,4 +119,8 @@ func (s *MemoryStore) List(namespace string) []*Resource {
 		resources = append(resources, res)
 	}
 	return resources
+}
+
+func (s *MemoryStore) GetResourceSpecChan() <-chan *Resource {
+	return s.resourceSpecChan
 }

@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -167,21 +166,4 @@ func (o *GRPCOptions) GetCloudEventsClient(ctx context.Context, errorHandler fun
 	}
 
 	return cloudevents.NewClient(p)
-}
-
-// Replace the nth occurrence of old in str by new.
-func replaceNth(str, old, new string, n int) string {
-	i := 0
-	for m := 1; m <= n; m++ {
-		x := strings.Index(str[i:], old)
-		if x < 0 {
-			break
-		}
-		i += x
-		if m == n {
-			return str[:i] + new + str[i+len(old):]
-		}
-		i += len(old)
-	}
-	return str
 }

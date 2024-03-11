@@ -60,12 +60,11 @@ func (o *grpcAgentOptions) Client(ctx context.Context) (cloudevents.Client, erro
 		func(err error) {
 			o.errorChan <- err
 		},
-		protocol.WithPublishOption(&protocol.PublishOption{}),
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
-			Topics: []string{
-				replaceNth(SpecTopic, "+", o.clusterName, 2), // receiving the resources spec from sources with spec topic
-				StatusResyncTopic, // receiving the resources status resync request from sources with status resync topic
-			},
+			// TODO: Update this code to determine the subscription source for the agent client.
+			// Currently, the grpc agent client is not utilized, and the 'Source' field serves
+			// as a placeholder with the cluster name.
+			Source: o.clusterName,
 		}),
 	)
 	if err != nil {

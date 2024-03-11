@@ -29,7 +29,7 @@ var mqttSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
 var grpcServer *source.GRPCServer
 var grpcOptions *grpcoptions.GRPCOptions
 var grpcSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
-var eventHub *source.EventHub
+var eventBroadcaster *source.EventBroadcaster
 var store *source.MemoryStore
 var consumerStore *source.MemoryStore
 
@@ -57,16 +57,16 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	}()
 
 	ginkgo.By("init the event hub")
-	eventHub = source.NewEventHub()
+	eventBroadcaster = source.NewEventBroadcaster()
 	go func() {
-		eventHub.Start(ctx)
+		eventBroadcaster.Start(ctx)
 	}()
 
 	ginkgo.By("init the resource store")
-	store, consumerStore = source.InitStore(eventHub)
+	store, consumerStore = source.InitStore(eventBroadcaster)
 
 	ginkgo.By("start the resource grpc server")
-	grpcServer = source.NewGRPCServer(store, eventHub)
+	grpcServer = source.NewGRPCServer(store, eventBroadcaster)
 	go func() {
 		err := grpcServer.Start(grpcServerHost)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -84,7 +84,7 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 		AgentEvents:  fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 	})
 
-	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, eventHub)
+	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, store.GetResourceSpecChan())
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	close(done)
