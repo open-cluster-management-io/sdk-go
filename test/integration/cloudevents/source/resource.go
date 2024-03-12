@@ -17,6 +17,7 @@ type ResourceStatus struct {
 }
 
 type Resource struct {
+	Source            string
 	ResourceID        string
 	ResourceVersion   int64
 	Namespace         string

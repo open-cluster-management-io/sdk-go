@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strings"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
@@ -22,19 +21,19 @@ import (
 
 type GRPCServer struct {
 	pbv1.UnimplementedCloudEventServiceServer
-	store    *MemoryStore
-	eventHub *EventHub
+	store            *MemoryStore
+	eventBroadcaster *EventBroadcaster
 }
 
-func NewGRPCServer(store *MemoryStore, eventHub *EventHub) *GRPCServer {
+func NewGRPCServer(store *MemoryStore, eventBroadcaster *EventBroadcaster) *GRPCServer {
 	return &GRPCServer{
-		store:    store,
-		eventHub: eventHub,
+		store:            store,
+		eventBroadcaster: eventBroadcaster,
 	}
 }
 
 func (svr *GRPCServer) Publish(ctx context.Context, pubReq *pbv1.PublishRequest) (*emptypb.Empty, error) {
-	// pbEvt, err := pb.ToProto(evt)
+	// WARNING: don't use "evt, err := pb.FromProto(pubReq.Event)" to convert protobuf to cloudevent
 	evt, err := binding.ToEvent(ctx, grpcprotocol.NewMessage(pubReq.Event))
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert protobuf to cloudevent: %v", err)
@@ -50,33 +49,35 @@ func (svr *GRPCServer) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 }
 
 func (svr *GRPCServer) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv1.CloudEventService_SubscribeServer) error {
-	topicSplits := strings.Split(subReq.Topic, "/")
-	if len(topicSplits) != 5 {
-		return fmt.Errorf("invalid topic %s", subReq.Topic)
-	}
-
-	clusterName := topicSplits[3]
-	eventClient := NewEventClient(clusterName)
-	svr.eventHub.Register(eventClient)
-	defer svr.eventHub.Unregister(eventClient)
-
-	for res := range eventClient.Receive() {
+	clientID, errChan := svr.eventBroadcaster.Register(subReq.Source, func(res *Resource) error {
 		evt, err := encode(res)
 		if err != nil {
 			return fmt.Errorf("failed to encode resource %s to cloudevent: %v", res.ResourceID, err)
 		}
 
-		// pbEvt, err := pb.ToProto(evt)
+		// WARNING: don't use "pbEvt, err := pb.ToProto(evt)" to convert cloudevent to protobuf
 		pbEvt := &pbv1.CloudEvent{}
 		if err = grpcprotocol.WritePBMessage(context.TODO(), binding.ToMessage(evt), pbEvt); err != nil {
 			return fmt.Errorf("failed to convert cloudevent to protobuf: %v", err)
 		}
+
+		// send the cloudevent to the subscriber
+		// TODO: error handling to address errors beyond network issues.
 		if err := subServer.Send(pbEvt); err != nil {
 			return err
 		}
-	}
 
-	return nil
+		return nil
+	})
+
+	select {
+	case err := <-errChan:
+		svr.eventBroadcaster.Unregister(clientID)
+		return err
+	case <-subServer.Context().Done():
+		svr.eventBroadcaster.Unregister(clientID)
+		return nil
+	}
 }
 
 func (svr *GRPCServer) Start(addr string) error {
@@ -145,6 +146,7 @@ func decode(evt *cloudevents.Event) (*Resource, error) {
 	}
 
 	resource := &Resource{
+		Source:          evt.Source(),
 		ResourceID:      resourceID,
 		ResourceVersion: int64(resourceVersion),
 		Namespace:       clusterName,
