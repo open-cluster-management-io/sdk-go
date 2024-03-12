@@ -19,20 +19,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 )
 
-const (
-	// SpecTopic is a pubsub topic for resource spec.
-	SpecTopic = "sources/+/clusters/+/spec"
-
-	// StatusTopic is a pubsub topic for resource status.
-	StatusTopic = "sources/+/clusters/+/status"
-
-	// SpecResyncTopic is a pubsub topic for resource spec resync.
-	SpecResyncTopic = "sources/clusters/+/specresync"
-
-	// StatusResyncTopic is a pubsub topic for resource status resync.
-	StatusResyncTopic = "sources/+/clusters/statusresync"
-)
-
 // GRPCOptions holds the options that are used to build gRPC client.
 type GRPCOptions struct {
 	URL            string

@@ -2,11 +2,8 @@ package grpc
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
-	cecontext "github.com/cloudevents/sdk-go/v2/context"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
@@ -32,26 +29,8 @@ func NewAgentOptions(grpcOptions *GRPCOptions, clusterName, agentID string) *opt
 }
 
 func (o *grpcAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.EventContext) (context.Context, error) {
-	eventType, err := types.ParseCloudEventsType(evtCtx.GetType())
-	if err != nil {
-		return nil, fmt.Errorf("unsupported event type %s, %v", eventType, err)
-	}
-
-	if eventType.Action == types.ResyncRequestAction {
-		// agent publishes event to spec resync topic to request to get resources spec from all sources
-		topic := strings.Replace(SpecResyncTopic, "+", o.clusterName, -1)
-		return cecontext.WithTopic(ctx, topic), nil
-	}
-
-	// agent publishes event to status topic to send the resource status from a specified cluster
-	originalSource, err := evtCtx.GetExtension(types.ExtensionOriginalSource)
-	if err != nil {
-		return nil, err
-	}
-
-	statusTopic := strings.Replace(StatusTopic, "+", fmt.Sprintf("%s", originalSource), 1)
-	statusTopic = strings.Replace(statusTopic, "+", o.clusterName, -1)
-	return cecontext.WithTopic(ctx, statusTopic), nil
+	// grpc agent client doesn't need to update topic in the context
+	return ctx, nil
 }
 
 func (o *grpcAgentOptions) Client(ctx context.Context) (cloudevents.Client, error) {
@@ -63,8 +42,8 @@ func (o *grpcAgentOptions) Client(ctx context.Context) (cloudevents.Client, erro
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
 			// TODO: Update this code to determine the subscription source for the agent client.
 			// Currently, the grpc agent client is not utilized, and the 'Source' field serves
-			// as a placeholder with the cluster name.
-			Source: o.clusterName,
+			// as a placeholder with all the sources.
+			Source: types.SourceAll,
 		}),
 	)
 	if err != nil {
