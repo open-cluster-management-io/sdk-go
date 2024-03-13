@@ -43,12 +43,14 @@ func TestAgentContext(t *testing.T) {
 
 	cases := []struct {
 		name          string
+		ctx           context.Context
 		event         cloudevents.Event
 		expectedTopic string
 		assertError   func(error)
 	}{
 		{
 			name: "unsupported event",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				evt := cloudevents.NewEvent()
 				evt.SetType("unsupported")
@@ -61,7 +63,30 @@ func TestAgentContext(t *testing.T) {
 			},
 		},
 		{
+			name:          "get topic from context",
+			ctx:           context.WithValue(context.TODO(), MQTT_AGENT_PUB_TOPIC_KEY, PubTopic("sources/hub1/clusters/cluster1/agentevents")),
+			event:         cloudevents.NewEvent(),
+			expectedTopic: "sources/hub1/clusters/cluster1/agentevents",
+			assertError: func(err error) {
+				if err != nil {
+					t.Errorf("unexpected error %v", err)
+				}
+			},
+		},
+		{
+			name:          "get resync topic from context",
+			ctx:           context.WithValue(context.TODO(), MQTT_AGENT_PUB_TOPIC_KEY, PubTopic("clusters/cluster1/agentbroadcast")),
+			event:         cloudevents.NewEvent(),
+			expectedTopic: "clusters/cluster1/agentbroadcast",
+			assertError: func(err error) {
+				if err != nil {
+					t.Errorf("unexpected error %v", err)
+				}
+			},
+		},
+		{
 			name: "resync specs",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
 					CloudEventsDataType: mockEventDataType,
@@ -84,6 +109,7 @@ func TestAgentContext(t *testing.T) {
 		},
 		{
 			name: "send status no original source",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
 					CloudEventsDataType: mockEventDataType,
@@ -104,6 +130,7 @@ func TestAgentContext(t *testing.T) {
 		},
 		{
 			name: "send status",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
 					CloudEventsDataType: mockEventDataType,
@@ -132,7 +159,7 @@ func TestAgentContext(t *testing.T) {
 				MQTTOptions: *options,
 				clusterName: "cluster1",
 			}
-			ctx, err := agentOptions.WithContext(context.TODO(), c.event.Context)
+			ctx, err := agentOptions.WithContext(c.ctx, c.event.Context)
 			c.assertError(err)
 
 			topic := func(ctx context.Context) string {

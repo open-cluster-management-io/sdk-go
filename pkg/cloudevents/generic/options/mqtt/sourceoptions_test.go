@@ -36,12 +36,14 @@ func TestSourceContext(t *testing.T) {
 
 	cases := []struct {
 		name          string
+		ctx           context.Context
 		event         cloudevents.Event
 		expectedTopic string
 		assertError   func(error)
 	}{
 		{
 			name: "unsupported event",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				evt := cloudevents.NewEvent()
 				evt.SetType("unsupported")
@@ -54,7 +56,30 @@ func TestSourceContext(t *testing.T) {
 			},
 		},
 		{
+			name:          "get topic from context",
+			ctx:           context.WithValue(context.TODO(), MQTT_SOURCE_PUB_TOPIC_KEY, PubTopic("sources/hub1/clusters/cluster1/sourceevents")),
+			event:         cloudevents.NewEvent(),
+			expectedTopic: "sources/hub1/clusters/cluster1/sourceevents",
+			assertError: func(err error) {
+				if err != nil {
+					t.Errorf("unexpected error %v", err)
+				}
+			},
+		},
+		{
+			name:          "get resync topic from context",
+			ctx:           context.WithValue(context.TODO(), MQTT_SOURCE_PUB_TOPIC_KEY, PubTopic("sources/source1/sourcebroadcast")),
+			event:         cloudevents.NewEvent(),
+			expectedTopic: "sources/source1/sourcebroadcast",
+			assertError: func(err error) {
+				if err != nil {
+					t.Errorf("unexpected error %v", err)
+				}
+			},
+		},
+		{
 			name: "resync status",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
 					CloudEventsDataType: mockEventDataType,
@@ -76,6 +101,7 @@ func TestSourceContext(t *testing.T) {
 		},
 		{
 			name: "unsupported send resource no cluster name",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
 					CloudEventsDataType: mockEventDataType,
@@ -95,6 +121,7 @@ func TestSourceContext(t *testing.T) {
 		},
 		{
 			name: "send spec",
+			ctx:  context.TODO(),
 			event: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
 					CloudEventsDataType: mockEventDataType,
@@ -122,7 +149,7 @@ func TestSourceContext(t *testing.T) {
 				MQTTOptions: *options,
 				sourceID:    "hub1",
 			}
-			ctx, err := sourceOptions.WithContext(context.TODO(), c.event.Context)
+			ctx, err := sourceOptions.WithContext(c.ctx, c.event.Context)
 			c.assertError(err)
 
 			topic := func(ctx context.Context) string {
