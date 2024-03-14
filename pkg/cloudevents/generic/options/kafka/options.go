@@ -13,10 +13,8 @@ import (
 )
 
 const (
-	defaultSpecTopic         = "spec"
-	defaultStatusTopic       = "status"
-	defaultSpecResyncTopic   = "specresync"
-	defaultStatusResyncTopic = "statusreync"
+	defaultSpecTopic   = "spec"
+	defaultStatusTopic = "status"
 )
 
 type KafkaOptions struct {
@@ -28,10 +26,8 @@ type KafkaOptions struct {
 func NewKafkaOptions() *KafkaOptions {
 	return &KafkaOptions{
 		Topics: &types.Topics{
-			Spec:         defaultSpecTopic,
-			Status:       defaultStatusTopic,
-			SpecResync:   defaultSpecResyncTopic,
-			StatusResync: defaultStatusResyncTopic,
+			SourceEvents: defaultSpecTopic,
+			AgentEvents:  defaultStatusTopic,
 		},
 	}
 }
@@ -68,22 +64,19 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 		return nil, fmt.Errorf("bootstrap.servers is required")
 	}
 
-	if opts.Topics != nil && (opts.Topics.Spec == "" || opts.Topics.Status == "" ||
-		opts.Topics.SpecResync == "" || opts.Topics.StatusResync == "") {
-		return nil, fmt.Errorf("topics must be set")
-	}
-
 	options := &KafkaOptions{
 		ConfigMap: opts.ConfigMap,
 		Topics: &types.Topics{
-			Spec:         defaultSpecTopic,
-			Status:       defaultStatusTopic,
-			SpecResync:   defaultSpecResyncTopic,
-			StatusResync: defaultStatusResyncTopic,
+			SourceEvents: defaultSpecTopic,
+			AgentEvents:  defaultStatusTopic,
 		},
 	}
 	if opts.Topics != nil {
 		options.Topics = opts.Topics
+	}
+
+	if options.Topics.SourceEvents == "" || options.Topics.AgentEvents == "" {
+		return nil, fmt.Errorf("the topic value should be set")
 	}
 	return options, nil
 }

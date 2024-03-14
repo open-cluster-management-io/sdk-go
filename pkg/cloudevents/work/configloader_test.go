@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	kafkaoption "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -20,6 +22,13 @@ topics:
 `
 	grpcConfig = `
 url: grpc
+`
+	kafkaConfig = `
+configs:
+  bootstrap.servers: test
+topics:
+  sourceEvents: spec1
+  agentEvents: status1
 `
 )
 
@@ -36,11 +45,21 @@ func TestLoadConfig(t *testing.T) {
 	}
 	defer os.Remove(grpcConfigFile.Name())
 
+	kafkaConfigFile, err := os.CreateTemp("", "kafka-config-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(kafkaConfigFile.Name())
+
 	if err := os.WriteFile(mqttConfigFile.Name(), []byte(mqttConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := os.WriteFile(grpcConfigFile.Name(), []byte(grpcConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(kafkaConfigFile.Name(), []byte(kafkaConfig), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,6 +90,20 @@ func TestLoadConfig(t *testing.T) {
 			configType:     "grpc",
 			configFilePath: grpcConfigFile.Name(),
 			expectedConfig: &grpc.GRPCOptions{URL: "grpc"},
+		},
+		{
+			name:           "kafka config",
+			configType:     "kafka",
+			configFilePath: kafkaConfigFile.Name(),
+			expectedConfig: &kafkaoption.KafkaOptions{
+				ConfigMap: &kafka.ConfigMap{
+					"bootstrap.servers": "test",
+				},
+				Topics: &types.Topics{
+					SourceEvents: "spec1",
+					AgentEvents:  "status1",
+				},
+			},
 		},
 	}
 

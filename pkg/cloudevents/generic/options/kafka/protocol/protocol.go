@@ -30,6 +30,8 @@ type Protocol struct {
 	consumerRebalanceCb kafka.RebalanceCb // optional
 	consumerPollTimeout int               // optional
 	consumerMux         sync.Mutex
+	errorChan           chan error
+	autoRecover         bool
 
 	producer                 *kafka.Producer
 	producerDeliveryChan     chan kafka.Event // optional
@@ -44,6 +46,7 @@ func New(opts ...Option) (*Protocol, error) {
 	p := &Protocol{
 		producerDefaultPartition: kafka.PartitionAny,
 		consumerPollTimeout:      100,
+		autoRecover:              true,
 		incoming:                 make(chan *kafka.Message),
 	}
 	if err := p.applyOptions(opts...); err != nil {
@@ -163,11 +166,17 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 		return err
 	}
 
-	run := true
-	for run {
+	defer func() {
+		logger.Infof("Closing consumer %v", p.consumerTopics)
+		if err := p.consumer.Close(); err != nil {
+			logger.Warn("failed to close the consumer: %v", err)
+		}
+	}()
+
+	for {
 		select {
 		case <-ctx.Done():
-			run = false
+			return nil
 		default:
 			ev := p.consumer.Poll(p.consumerPollTimeout)
 			if ev == nil {
@@ -177,17 +186,23 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 			case *kafka.Message:
 				p.incoming <- e
 			case kafka.Error:
-				// Errors should generally be considered informational, the client
-				// will try to automatically recover.
-				// logger.Warnf("Consumer get a kafka error %v: %v\n", e.Code(), e)
+				// Errors should generally be considered
+				// informational, the client will try to
+				// automatically recover.
+				// But in here, we choose to terminate
+				// the application if all brokers are down.
+				logger.Infof("Kafka error(%v) %v", e.Code(), e)
+				if !p.autoRecover || e.Code() == kafka.ErrAllBrokersDown {
+					if p.errorChan != nil {
+						p.errorChan <- e
+					}
+					return e
+				}
 			default:
-				// logger.Infof("Ignored %v\n", e)
+				fmt.Printf("Ignored %v\n", e)
 			}
 		}
 	}
-
-	logger.Infof("Closing consumer %v", p.consumerTopics)
-	return p.consumer.Close()
 }
 
 // Receive implements Receiver.Receive

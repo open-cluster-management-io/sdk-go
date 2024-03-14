@@ -67,7 +67,7 @@ func TestAgentContext(t *testing.T) {
 				evt.SetExtension("clustername", clusterName)
 				return evt
 			}(),
-			expectedTopic: defaultSpecResyncTopic,
+			expectedTopic: defaultStatusTopic,
 			expectedKey:   clusterName,
 		},
 		{

@@ -60,7 +60,7 @@ func TestSourceContext(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			expectedTopic: defaultStatusResyncTopic,
+			expectedTopic: defaultSpecTopic,
 			expectedKey:   sourceID,
 		},
 		{

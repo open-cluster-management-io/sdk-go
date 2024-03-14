@@ -16,6 +16,7 @@ type kafkaAgentOptions struct {
 	KafkaOptions
 	clusterName string
 	agentID     string
+	errorChan   chan error
 }
 
 func NewAgentOptions(kafkaOptions *KafkaOptions, clusterName, agentID string) *options.CloudEventsAgentOptions {
@@ -23,6 +24,7 @@ func NewAgentOptions(kafkaOptions *KafkaOptions, clusterName, agentID string) *o
 		KafkaOptions: *kafkaOptions,
 		clusterName:  clusterName,
 		agentID:      agentID,
+		errorChan:    make(chan error),
 	}
 
 	return &options.CloudEventsAgentOptions{
@@ -39,9 +41,8 @@ func (o *kafkaAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 		return nil, err
 	}
 
+	topicCtx := cloudeventscontext.WithTopic(ctx, o.Topics.AgentEvents)
 	if eventType.Action == types.ResyncRequestAction {
-		// agent publishes event to spec resync topic to request to get resources spec from all sources
-		topicCtx := cloudeventscontext.WithTopic(ctx, o.Topics.SpecResync)
 		return kafka_confluent.WithMessageKey(topicCtx, o.clusterName), nil
 	}
 
@@ -51,7 +52,6 @@ func (o *kafkaAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 		return nil, err
 	}
 
-	topicCtx := cloudeventscontext.WithTopic(ctx, o.Topics.Status)
 	messageKey := fmt.Sprintf("%s@%s", originalSource, o.clusterName)
 	return kafka_confluent.WithMessageKey(topicCtx, messageKey), nil
 }
@@ -59,8 +59,10 @@ func (o *kafkaAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 func (o *kafkaAgentOptions) Client(ctx context.Context) (cloudevents.Client, error) {
 	c, err := o.GetCloudEventsClient(
 		kafka_confluent.WithConfigMap(o.ConfigMap),
-		kafka_confluent.WithReceiverTopics([]string{o.Topics.Spec, o.Topics.StatusResync}),
-		kafka_confluent.WithSenderTopic(o.Topics.Status),
+		kafka_confluent.WithReceiverTopics([]string{o.Topics.SourceEvents}),
+		kafka_confluent.WithSenderTopic(o.Topics.AgentEvents),
+		kafka_confluent.WithAutoRecover(false),
+		kafka_confluent.WithErrorChan(o.errorChan),
 	)
 	if err != nil {
 		return nil, err
@@ -69,5 +71,5 @@ func (o *kafkaAgentOptions) Client(ctx context.Context) (cloudevents.Client, err
 }
 
 func (o *kafkaAgentOptions) ErrorChan() <-chan error {
-	return nil
+	return o.errorChan
 }

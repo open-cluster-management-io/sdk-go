@@ -33,6 +33,22 @@ func WithSenderTopic(defaultTopic string) Option {
 	}
 }
 
+// WithErrorChan sets the error chan for the kafka.Consumer. This option is not required.
+func WithErrorChan(errChan chan error) Option {
+	return func(p *Protocol) error {
+		p.errorChan = errChan
+		return nil
+	}
+}
+
+// WithAutoRecover set whether to enable the kafka.Consumer recover automatically. This option is not required.
+func WithAutoRecover(enable bool) Option {
+	return func(p *Protocol) error {
+		p.autoRecover = enable
+		return nil
+	}
+}
+
 // WithDeliveryChan sets the deliveryChan for the kafka.Producer. This option is not required.
 func WithDeliveryChan(deliveryChan chan kafka.Event) Option {
 	return func(p *Protocol) error {
