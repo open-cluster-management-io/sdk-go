@@ -9,9 +9,15 @@ import (
 
 //TODO: the implementation will be removed once the this pr is merged: https://github.com/cloudevents/sdk-go/pull/988
 
+const (
+	OffsetEventSource = "io.cloudevents.kafka.confluent.consumer"
+	OffsetEventType   = "io.cloudevents.kafka.confluent.consumer.offsets"
+)
+
 // Option is the function signature required to be considered an kafka_confluent.Option.
 type Option func(*Protocol) error
 
+// WithConfigMap sets the configMap to init the kafka client. This option is not required.
 func WithConfigMap(config *kafka.ConfigMap) Option {
 	return func(p *Protocol) error {
 		if config == nil {
@@ -33,22 +39,6 @@ func WithSenderTopic(defaultTopic string) Option {
 	}
 }
 
-// WithErrorChan sets the error chan for the kafka.Consumer. This option is not required.
-func WithErrorChan(errChan chan error) Option {
-	return func(p *Protocol) error {
-		p.errorChan = errChan
-		return nil
-	}
-}
-
-// WithAutoRecover set whether to enable the kafka.Consumer recover automatically. This option is not required.
-func WithAutoRecover(enable bool) Option {
-	return func(p *Protocol) error {
-		p.autoRecover = enable
-		return nil
-	}
-}
-
 // WithDeliveryChan sets the deliveryChan for the kafka.Producer. This option is not required.
 func WithDeliveryChan(deliveryChan chan kafka.Event) Option {
 	return func(p *Protocol) error {
@@ -60,6 +50,7 @@ func WithDeliveryChan(deliveryChan chan kafka.Event) Option {
 	}
 }
 
+// WithReceiverTopics sets the topics for the kafka.Consumer. This option is not required.
 func WithReceiverTopics(topics []string) Option {
 	return func(p *Protocol) error {
 		if topics == nil {
@@ -70,6 +61,7 @@ func WithReceiverTopics(topics []string) Option {
 	}
 }
 
+// WithRebalanceCallBack sets the callback for rebalancing of the consumer group. This option is not required.
 func WithRebalanceCallBack(rebalanceCb kafka.RebalanceCb) Option {
 	return func(p *Protocol) error {
 		if rebalanceCb == nil {
@@ -80,6 +72,7 @@ func WithRebalanceCallBack(rebalanceCb kafka.RebalanceCb) Option {
 	}
 }
 
+// WithPollTimeout sets timeout of the consumer polling for message or events, return nil on timeout. This option is not required.
 func WithPollTimeout(timeoutMs int) Option {
 	return func(p *Protocol) error {
 		p.consumerPollTimeout = timeoutMs
@@ -87,6 +80,7 @@ func WithPollTimeout(timeoutMs int) Option {
 	}
 }
 
+// WithSender set a kafka.Producer instance to init the client directly. This option is not required.
 func WithSender(producer *kafka.Producer) Option {
 	return func(p *Protocol) error {
 		if producer == nil {
@@ -97,6 +91,15 @@ func WithSender(producer *kafka.Producer) Option {
 	}
 }
 
+// WithErrorHandler provide a func on how to handle the kafka.Error which the kafka.Consumer has polled. This option is not required.
+func WithErrorHandler(handler func(err kafka.Error)) Option {
+	return func(p *Protocol) error {
+		p.consumerErrorHandler = handler
+		return nil
+	}
+}
+
+// WithSender set a kafka.Consumer instance to init the client directly. This option is not required.
 func WithReceiver(consumer *kafka.Consumer) Option {
 	return func(p *Protocol) error {
 		if consumer == nil {
@@ -107,18 +110,29 @@ func WithReceiver(consumer *kafka.Consumer) Option {
 	}
 }
 
-// Opaque key type used to store offsets: assgin offset from ctx, commit offset from context
-type commitOffsetType struct{}
+// Opaque key type used to store topicPartitionOffsets: assign them from ctx. This option is not required.
+type topicPartitionOffsetsType struct{}
 
-var offsetKey = commitOffsetType{}
+var offsetKey = topicPartitionOffsetsType{}
 
-// CommitOffsetCtx will return the topic partitions to commit offsets for.
-func CommitOffsetCtx(ctx context.Context, topicPartitions []kafka.TopicPartition) context.Context {
-	return context.WithValue(ctx, offsetKey, topicPartitions)
+// WithTopicPartitionOffsets will set the positions where the consumer starts consuming from. This option is not required.
+func WithTopicPartitionOffsets(ctx context.Context, topicPartitionOffsets []kafka.TopicPartition) context.Context {
+	if len(topicPartitionOffsets) == 0 {
+		panic("the topicPartitionOffsets cannot be empty")
+	}
+	for _, offset := range topicPartitionOffsets {
+		if offset.Topic == nil || *(offset.Topic) == "" {
+			panic("the kafka topic cannot be nil or empty")
+		}
+		if offset.Partition < 0 || offset.Offset < 0 {
+			panic("the kafka partition/offset must be non-negative")
+		}
+	}
+	return context.WithValue(ctx, offsetKey, topicPartitionOffsets)
 }
 
-// CommitOffsetCtx looks in the given context and returns `[]kafka.TopicPartition` if found and valid, otherwise nil.
-func CommitOffsetFrom(ctx context.Context) []kafka.TopicPartition {
+// TopicPartitionOffsetsFrom looks in the given context and returns []kafka.TopicPartition or nil if not set
+func TopicPartitionOffsetsFrom(ctx context.Context) []kafka.TopicPartition {
 	c := ctx.Value(offsetKey)
 	if c != nil {
 		if s, ok := c.([]kafka.TopicPartition); ok {
@@ -128,38 +142,12 @@ func CommitOffsetFrom(ctx context.Context) []kafka.TopicPartition {
 	return nil
 }
 
-const (
-	OffsetEventSource = "io.cloudevents.kafka.confluent.consumer"
-	OffsetEventType   = "io.cloudevents.kafka.confluent.consumer.offsets"
-)
-
-// Opaque key type used to store topic partition
-type topicPartitionKeyType struct{}
-
-var topicPartitionKey = topicPartitionKeyType{}
-
-// WithTopicPartition returns back a new context with the given partition.
-func WithTopicPartition(ctx context.Context, partition int32) context.Context {
-	return context.WithValue(ctx, topicPartitionKey, partition)
-}
-
-// TopicPartitionFrom looks in the given context and returns `partition` as a int64 if found and valid, otherwise -1.
-func TopicPartitionFrom(ctx context.Context) int32 {
-	c := ctx.Value(topicPartitionKey)
-	if c != nil {
-		if s, ok := c.(int32); ok {
-			return s
-		}
-	}
-	return -1
-}
-
 // Opaque key type used to store message key
 type messageKeyType struct{}
 
 var keyForMessageKey = messageKeyType{}
 
-// WithMessageKey returns back a new context with the given messageKey.
+// WithMessageKey returns back a new context with the given messageKey. This option is not required.
 func WithMessageKey(ctx context.Context, messageKey string) context.Context {
 	return context.WithValue(ctx, keyForMessageKey, messageKey)
 }

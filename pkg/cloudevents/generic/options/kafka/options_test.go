@@ -48,24 +48,6 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 			},
 		},
 		{
-			name:             "empty topics",
-			config:           `{"configs":{"bootstrap.servers":"test"},"topics":{}}`,
-			expectedErrorMsg: "the topic value should be set",
-		},
-		{
-			name:   "with topics",
-			config: `{"configs":{"bootstrap.servers":"test"},"topics":{"sourceEvents":"spec1","agentEvents":"status1"}}`,
-			expectedOptions: &KafkaOptions{
-				ConfigMap: &kafka.ConfigMap{
-					"bootstrap.servers": "test",
-				},
-				Topics: &types.Topics{
-					SourceEvents: "spec1",
-					AgentEvents:  "status1",
-				},
-			},
-		},
-		{
 			name:   "customized options",
 			config: `{"configs":{"bootstrap.servers":"test","enable.auto.commit":"true","group.id":"testid"}}`,
 			expectedOptions: &KafkaOptions{

@@ -20,7 +20,7 @@ const (
 type KafkaOptions struct {
 	// the configMap: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
 	ConfigMap *kafka.ConfigMap `json:"configs,omitempty" yaml:"configs,omitempty"`
-	Topics    *types.Topics    `json:"topics,omitempty" yaml:"topics,omitempty"`
+	Topics    *types.Topics    `json:"-" yaml:"-"`
 }
 
 func NewKafkaOptions() *KafkaOptions {
@@ -70,13 +70,6 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 			SourceEvents: defaultSpecTopic,
 			AgentEvents:  defaultStatusTopic,
 		},
-	}
-	if opts.Topics != nil {
-		options.Topics = opts.Topics
-	}
-
-	if options.Topics.SourceEvents == "" || options.Topics.AgentEvents == "" {
-		return nil, fmt.Errorf("the topic value should be set")
 	}
 	return options, nil
 }

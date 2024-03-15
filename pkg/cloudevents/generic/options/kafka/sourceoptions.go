@@ -6,6 +6,7 @@ import (
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventscontext "github.com/cloudevents/sdk-go/v2/context"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	kafka_confluent "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka/protocol"
@@ -59,8 +60,7 @@ func (o *kafkaSourceOptions) Client(ctx context.Context) (cloudevents.Client, er
 		kafka_confluent.WithConfigMap(o.ConfigMap),
 		kafka_confluent.WithReceiverTopics([]string{o.Topics.AgentEvents}),
 		kafka_confluent.WithSenderTopic(o.Topics.SourceEvents),
-		kafka_confluent.WithAutoRecover(false),
-		kafka_confluent.WithErrorChan(o.errorChan),
+		kafka_confluent.WithErrorHandler(o.errorHandler),
 	)
 	if err != nil {
 		return nil, err
@@ -70,4 +70,8 @@ func (o *kafkaSourceOptions) Client(ctx context.Context) (cloudevents.Client, er
 
 func (o *kafkaSourceOptions) ErrorChan() <-chan error {
 	return o.errorChan
+}
+
+func (o *kafkaSourceOptions) errorHandler(err kafka.Error) {
+	o.errorChan <- err
 }

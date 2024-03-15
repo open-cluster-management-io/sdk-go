@@ -25,18 +25,16 @@ var (
 type Protocol struct {
 	kafkaConfigMap *kafka.ConfigMap
 
-	consumer            *kafka.Consumer
-	consumerTopics      []string
-	consumerRebalanceCb kafka.RebalanceCb // optional
-	consumerPollTimeout int               // optional
-	consumerMux         sync.Mutex
-	errorChan           chan error
-	autoRecover         bool
+	consumer             *kafka.Consumer
+	consumerTopics       []string
+	consumerRebalanceCb  kafka.RebalanceCb     // optional
+	consumerPollTimeout  int                   // optional
+	consumerErrorHandler func(err kafka.Error) //optional
+	consumerMux          sync.Mutex
 
-	producer                 *kafka.Producer
-	producerDeliveryChan     chan kafka.Event // optional
-	producerDefaultTopic     string           // optional
-	producerDefaultPartition int32            // optional
+	producer             *kafka.Producer
+	producerDeliveryChan chan kafka.Event // optional
+	producerDefaultTopic string           // optional
 
 	// receiver
 	incoming chan *kafka.Message
@@ -44,10 +42,8 @@ type Protocol struct {
 
 func New(opts ...Option) (*Protocol, error) {
 	p := &Protocol{
-		producerDefaultPartition: kafka.PartitionAny,
-		consumerPollTimeout:      100,
-		autoRecover:              true,
-		incoming:                 make(chan *kafka.Message),
+		consumerPollTimeout: 100,
+		incoming:            make(chan *kafka.Message),
 	}
 	if err := p.applyOptions(opts...); err != nil {
 		return nil, err
@@ -69,10 +65,13 @@ func New(opts ...Option) (*Protocol, error) {
 			p.producer = producer
 			p.producerDeliveryChan = make(chan kafka.Event)
 		}
+		if p.producer == nil && p.consumer == nil {
+			return nil, fmt.Errorf("at least set one of the receiver or sender topic")
+		}
 	}
 
 	if p.kafkaConfigMap == nil && p.producer == nil && p.consumer == nil {
-		return nil, fmt.Errorf("At least one of the following to initialize the protocol: config, producer, or consumer.")
+		return nil, fmt.Errorf("at least one of the following to initialize the protocol: config, producer, or consumer")
 	}
 
 	return p, nil
@@ -88,36 +87,20 @@ func (p *Protocol) applyOptions(opts ...Option) error {
 }
 
 func (p *Protocol) Send(ctx context.Context, in binding.Message, transformers ...binding.Transformer) (err error) {
-	// support the commit offset from the context
-	offsets := CommitOffsetFrom(ctx)
-	if offsets != nil {
-		if p.consumer == nil {
-			return fmt.Errorf("the consumer client must not be nil")
-		}
-		_, err = p.consumer.CommitOffsets(offsets)
-		return err
-	}
-
 	if p.producer == nil {
 		return fmt.Errorf("the producer client must not be nil")
 	}
-	defer func() {
-		_ = in.Finish(err)
-	}()
+	defer in.Finish(err)
 
 	kafkaMsg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{
 			Topic:     &p.producerDefaultTopic,
-			Partition: p.producerDefaultPartition,
+			Partition: kafka.PartitionAny,
 		},
 	}
 
 	if topic := cecontext.TopicFrom(ctx); topic != "" {
 		kafkaMsg.TopicPartition.Topic = &topic
-	}
-
-	if partition := TopicPartitionFrom(ctx); partition != -1 {
-		kafkaMsg.TopicPartition.Partition = partition
 	}
 
 	if messageKey := MessageKeyFrom(ctx); messageKey != "" {
@@ -154,7 +137,7 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 	logger := cecontext.LoggerFrom(ctx)
 
 	// Query committed offsets for each partition
-	if positions := CommitOffsetFrom(ctx); positions != nil {
+	if positions := TopicPartitionOffsetsFrom(ctx); positions != nil {
 		if err := p.consumer.Assign(positions); err != nil {
 			return err
 		}
@@ -166,17 +149,11 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 		return err
 	}
 
-	defer func() {
-		logger.Infof("Closing consumer %v", p.consumerTopics)
-		if err := p.consumer.Close(); err != nil {
-			logger.Warn("failed to close the consumer: %v", err)
-		}
-	}()
-
-	for {
+	run := true
+	for run {
 		select {
 		case <-ctx.Done():
-			return nil
+			run = false
 		default:
 			ev := p.consumer.Poll(p.consumerPollTimeout)
 			if ev == nil {
@@ -186,23 +163,22 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 			case *kafka.Message:
 				p.incoming <- e
 			case kafka.Error:
-				// Errors should generally be considered
-				// informational, the client will try to
-				// automatically recover.
-				// But in here, we choose to terminate
-				// the application if all brokers are down.
-				logger.Infof("Kafka error(%v) %v", e.Code(), e)
-				if !p.autoRecover || e.Code() == kafka.ErrAllBrokersDown {
-					if p.errorChan != nil {
-						p.errorChan <- e
-					}
-					return e
+				// Errors should generally be considered informational, the client will try to automatically recover.
+				// But in here, we choose to terminate the application if all brokers are down.
+				if p.consumerErrorHandler != nil {
+					p.consumerErrorHandler(e)
+				}
+				if e.Code() == kafka.ErrAllBrokersDown {
+					run = false
 				}
 			default:
 				fmt.Printf("Ignored %v\n", e)
 			}
 		}
 	}
+
+	logger.Infof("Closing consumer %v", p.consumerTopics)
+	return p.consumer.Close()
 }
 
 // Receive implements Receiver.Receive

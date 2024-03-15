@@ -26,9 +26,6 @@ url: grpc
 	kafkaConfig = `
 configs:
   bootstrap.servers: test
-topics:
-  sourceEvents: spec1
-  agentEvents: status1
 `
 )
 
@@ -100,8 +97,8 @@ func TestLoadConfig(t *testing.T) {
 					"bootstrap.servers": "test",
 				},
 				Topics: &types.Topics{
-					SourceEvents: "spec1",
-					AgentEvents:  "status1",
+					SourceEvents: "spec",
+					AgentEvents:  "status",
 				},
 			},
 		},
