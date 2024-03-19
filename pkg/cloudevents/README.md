@@ -21,7 +21,7 @@ client the developers need to provide
     cluster URL and appending the controller name. Similarly, a RESTful service can select a unique name or generate a
     unique ID in the associated database for its source identification.
     - `CloudEventsOptions`, it provides cloudevents clients to send/receive cloudevents based on different event
-    protocol. We have supported [MQTT protocol (`mqtt.NewSourceOptions`)](./generic/options/mqtt) and [gRPC protocol (`grpc.NewSourceOptions`)](./generic/options/grpc) developers can use it directly.
+    protocol or driver implementations. Check the [Supported Protocols and Drivers](#supported-protocols-and-drivers) for more details.
 
 2. A resource lister (`generic.Lister`), it is used to list the resource objects on the source when resyncing the
 resources between sources and agents, for example, a hub controller can list the resources from the resource informers,
@@ -45,7 +45,7 @@ for example, build a generic client on the source using MQTT protocol with the f
 // build a client for the source1
 client, err := generic.NewCloudEventSourceClient[*CustomerResource](
         ctx,
-        mqtt.NewSourceOptions(mqtt.NewMQTTOptions(), "source1"),
+        mqtt.NewSourceOptions(mqtt.BuildMQTTOptionsFromFlags("path/to/mqtt-config.yaml"), "client1", "source1"),
         customerResourceLister,
 		customerResourceStatusHashGetter,
 		customerResourceCodec,
@@ -71,7 +71,7 @@ this client the developers need to provide
     agent name.
     - `clusterName`, it is the name of a managed cluster on which the agent runs.
     - `CloudEventsOptions`, it provides cloudevents clients to send/receive cloudevents based on different event
-    protocol. We have supported [MQTT protocol (`mqtt.NewAgentOptions`)](./generic/options/mqtt) and [gRPC protocol (`grpc.NewAgentOptions`)](./generic/options/grpc) , developers can use it directly.
+    protocol or driver implementations. Check the [Supported Protocols and Drivers](#supported-protocols-and-drivers) for more details.
 
 2. A resource lister (`generic.Lister`), it is used to list the resource objects on a managed cluster when resyncing the
 resources between sources and agents, for example, a work agent can list its works from its work informers.
@@ -94,7 +94,7 @@ for example, build a generic client on the source using MQTT protocol with the f
 // build a client for a work agent on the cluster1
 client, err := generic.NewCloudEventAgentClient[*CustomerResource](
         ctx,
-        mqtt.NewAgentOptions(mqtt.NewMQTTOptions(), "cluster1", "cluster1-work-agent"),
+        mqtt.NewAgentOptions(mqtt.BuildMQTTOptionsFromFlags("path/to/mqtt-config.yaml"), "cluster1", "cluster1-work-agent"),
         &ManifestWorkLister{},
 		ManifestWorkStatusHash,
 		&ManifestBundleCodec{},
@@ -108,6 +108,43 @@ go func() {
 }()
 ```
 
+## Supported Protocols and Drivers
+
+Currently, the CloudEvents options supports the following protocols/drivers:
+
+- [MQTT Protocol/Driver](./generic/options/mqtt)
+- [gRPC Protocol/Driver](./generic/options/grpc)
+
+To create CloudEvents source/agent options for these supported protocols/drivers, developers need to provide configuration specific to the protocol/driver. The configuration format resembles the kubeconfig for the Kubernetes client-go but has a different schema.
+
+### MQTT Protocol/Driver
+
+Below is an example of a YAML configuration for the MQTT protocol:
+
+```yaml
+broker: broker.example.com:1883
+username: maestro
+password: password
+topics:
+  sourceEvents: sources/maestro/consumers/+/sourceevents
+  agentEvents: $share/statussubscribers/sources/maestro/consumers/+/agentevents
+```
+
+For detailed configuration options for the MQTT driver, refer to the [MQTT driver options package](https://github.com/open-cluster-management-io/sdk-go/blob/00a94671ced1c17d2ca2b5fad2f4baab282a7d3c/pkg/cloudevents/generic/options/mqtt/options.go#L46-L76).
+
+### gRPC Protocol/Driver
+
+Here's an example of a YAML configuration for the gRPC protocol:
+
+```yaml
+url: grpc.example.com:8443
+caFile: /certs/ca.crt
+clientCertFile: /certs/client.crt
+clientKeyFile: /certs/client.key
+```
+
+For detailed configuration options for the gRPC driver, refer to the [gRPC driver options package](https://github.com/open-cluster-management-io/sdk-go/blob/00a94671ced1c17d2ca2b5fad2f4baab282a7d3c/pkg/cloudevents/generic/options/grpc/options.go#L30-L40).
+
 ## Work Clients
 
 We have provided a builder to build the `ManifestWork` client (`ManifestWorkInterface`) and informer (`ManifestWorkInformer`)
@@ -115,23 +152,18 @@ based on the generic client.
 
 ### Building work client for work controllers on the hub cluster
 
-TODO
-
-### Building work client for work agent on the managed cluster
-
-Developers can use the builder to build the `ManifestWork` client and informer with the cluster name.
+Developers can use the builder to build the `ManifestWork` client and informer with the source ID on the hub cluster.
 
 ```golang
-
-clusterName := "cluster1"
+sourceID := "example-controller"
 // Building the clients based on cloudevents with MQTT
-config := mqtt.NewMQTTOptions()
+config := mqtt.BuildMQTTOptionsFromFlags("path/to/mqtt-config.yaml")
 
-clientHolder, err := work.NewClientHolderBuilder(fmt.Sprintf("%s-work-agent", clusterName), config).
-	WithClusterName(clusterName).
-    // Supports two event data types for ManifestWork
-	WithCodecs(codec.NewManifestBundleCodec(), codec.NewManifestCodec(restMapper)).
-	NewClientHolder(ctx)
+clientHolder, err := work.NewClientHolderBuilder(config).
+    WithClientID(fmt.Sprintf("%s-client", sourceID)).
+    WithSourceID(sourceID).
+    WithCodecs(codec.NewManifestBundleCodec()).
+    NewSourceClientHolder(ctx)
 if err != nil {
 	return err
 }
@@ -143,5 +175,32 @@ manifestWorkInformer := clientHolder.ManifestWorkInformer()
 
 // Start the ManifestWork informer
 go manifestWorkInformer.Informer().Run(ctx.Done())
+```
 
+### Building work client for work agent on the managed cluster
+
+Developers can use the builder to build the `ManifestWork` client and informer with the cluster name on the managed cluster.
+
+```golang
+clusterName := "cluster1"
+// Building the clients based on cloudevents with MQTT
+config := mqtt.BuildMQTTOptionsFromFlags("path/to/mqtt-config.yaml")
+
+clientHolder, err := work.NewClientHolderBuilder(config).
+    WithClientID(fmt.Sprintf("%s-work-agent", clusterName)).
+    WithClusterName(clusterName).
+    // Supports two event data types for ManifestWork
+    WithCodecs(codec.NewManifestBundleCodec(), codec.NewManifestCodec(restMapper)).
+    NewAgentClientHolder(ctx)
+if err != nil {
+	return err
+}
+
+manifestWorkClient := clientHolder.ManifestWorks(clusterName)
+manifestWorkInformer := clientHolder.ManifestWorkInformer()
+
+// Building controllers with ManifestWork client and informer ...
+
+// Start the ManifestWork informer
+go manifestWorkInformer.Informer().Run(ctx.Done())
 ```
