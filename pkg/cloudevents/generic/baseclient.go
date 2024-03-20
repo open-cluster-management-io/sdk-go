@@ -210,7 +210,10 @@ func (c *baseClient) sendReceiverSignal(signal int) {
 	defer c.RUnlock()
 
 	if c.receiverChan != nil {
-		c.receiverChan <- signal
+		_, isChannelOpen := <-c.receiverChan
+		if isChannelOpen {
+			c.receiverChan <- signal
+		}
 	}
 }
 
