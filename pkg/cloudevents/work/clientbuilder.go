@@ -16,6 +16,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	agentclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/client"
@@ -122,6 +123,8 @@ func (b *ClientHolderBuilder) NewSourceClientHolder(ctx context.Context) (*Clien
 		return b.newSourceClients(ctx, mqtt.NewSourceOptions(config, b.clientID, b.sourceID))
 	case *grpc.GRPCOptions:
 		return b.newSourceClients(ctx, grpc.NewSourceOptions(config, b.sourceID))
+	case *kafka.KafkaOptions:
+		return b.newSourceClients(ctx, kafka.NewSourceOptions(config, b.sourceID))
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}
@@ -136,6 +139,8 @@ func (b *ClientHolderBuilder) NewAgentClientHolder(ctx context.Context) (*Client
 		return b.newAgentClients(ctx, mqtt.NewAgentOptions(config, b.clusterName, b.clientID))
 	case *grpc.GRPCOptions:
 		return b.newAgentClients(ctx, grpc.NewAgentOptions(config, b.clusterName, b.clientID))
+	case *kafka.KafkaOptions:
+		return b.newAgentClients(ctx, kafka.NewAgentOptions(config, b.clusterName, b.clientID))
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}

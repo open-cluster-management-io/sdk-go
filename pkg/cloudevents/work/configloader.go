@@ -6,13 +6,15 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 )
 
 const (
-	ConfigTypeKube = "kube"
-	ConfigTypeMQTT = "mqtt"
-	ConfigTypeGRPC = "grpc"
+	ConfigTypeKube  = "kube"
+	ConfigTypeMQTT  = "mqtt"
+	ConfigTypeGRPC  = "grpc"
+	ConfigTypeKafka = "kafka"
 )
 
 // ConfigLoader loads a configuration object with a configuration file.
@@ -75,6 +77,21 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 		}
 
 		return grpcOptions.URL, grpcOptions, nil
+
+	case ConfigTypeKafka:
+		kafkaOptions, err := kafka.BuildKafkaOptionsFromFlags(l.configPath)
+		if err != nil {
+			return "", nil, err
+		}
+		val, err := kafkaOptions.ConfigMap.Get("bootstrap.servers", "")
+		if err != nil {
+			return "", nil, err
+		}
+		server, ok := val.(string)
+		if !ok {
+			return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
+		}
+		return server, kafkaOptions, nil
 	}
 
 	return "", nil, fmt.Errorf("unsupported config type %s", l.configType)
