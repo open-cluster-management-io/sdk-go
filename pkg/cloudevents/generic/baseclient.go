@@ -77,6 +77,9 @@ func (c *baseClient) connect(ctx context.Context) error {
 
 			select {
 			case <-ctx.Done():
+				if c.receiverChan != nil {
+					close(c.receiverChan)
+				}
 				return
 			case err, ok := <-c.cloudEventsOptions.ErrorChan():
 				if !ok {
@@ -167,7 +170,6 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 			select {
 			case <-ctx.Done():
 				receiverCancel()
-				close(c.receiverChan)
 				return
 			case signal, ok := <-c.receiverChan:
 				if !ok {
@@ -210,10 +212,7 @@ func (c *baseClient) sendReceiverSignal(signal int) {
 	defer c.RUnlock()
 
 	if c.receiverChan != nil {
-		_, isChannelOpen := <-c.receiverChan
-		if isChannelOpen {
-			c.receiverChan <- signal
-		}
+		c.receiverChan <- signal
 	}
 }
 
