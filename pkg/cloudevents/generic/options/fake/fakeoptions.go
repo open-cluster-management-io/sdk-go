@@ -34,8 +34,8 @@ func (o *CloudEventsFakeOptions) WithContext(ctx context.Context, evtCtx cloudev
 	return ctx, nil
 }
 
-func (o *CloudEventsFakeOptions) Client(ctx context.Context) (cloudevents.Client, error) {
-	return o.client, nil
+func (o *CloudEventsFakeOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
+	return nil, nil
 }
 
 func (o *CloudEventsFakeOptions) ErrorChan() <-chan error {
