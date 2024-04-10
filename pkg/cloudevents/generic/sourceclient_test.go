@@ -3,9 +3,13 @@ package generic
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
+	"github.com/stretchr/testify/require"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/fake"
@@ -41,28 +45,40 @@ func TestSourceResync(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fakeClient := fake.NewCloudEventsFakeClient()
-			sourceOptions := fake.NewSourceOptions(fakeClient, testSourceName)
+			ctx, cancel := context.WithCancel(context.Background())
+
+			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient[*mockResource](context.TODO(), sourceOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			require.NoError(t, err)
 
-			if err := source.Resync(context.TODO(), "cluster1"); err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			eventChan := make(chan receiveEvent)
+			stop := make(chan bool)
+			go func() {
+				err = source.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+					eventChan <- receiveEvent{event: event}
+				})
+				if err != nil {
+					eventChan <- receiveEvent{err: err}
+				}
+				stop <- true
+			}()
 
-			evt := fakeClient.GetSentEvents()[0]
+			err = source.Resync(ctx, "cluster1")
+			require.NoError(t, err)
 
-			resourceList, err := payload.DecodeStatusResyncRequest(evt)
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			receivedEvent := <-eventChan
+			require.NoError(t, receivedEvent.err)
+			require.NotNil(t, receivedEvent.event)
 
-			if len(resourceList.Hashes) != c.expectedItems {
-				t.Errorf("expected %d, but got %v", c.expectedItems, resourceList)
-			}
+			fmt.Println("received event", receivedEvent.event)
+
+			resourceList, err := payload.DecodeStatusResyncRequest(receivedEvent.event)
+			require.NoError(t, err)
+			require.Equal(t, c.expectedItems, len(resourceList.Hashes))
+
+			cancel()
+			<-stop
 		})
 	}
 }
@@ -90,36 +106,44 @@ func TestSourcePublish(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fakeClient := fake.NewCloudEventsFakeClient()
-			sourceOptions := fake.NewSourceOptions(fakeClient, testSourceName)
+			ctx, cancel := context.WithCancel(context.Background())
+
+			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister()
-			source, err := NewCloudEventSourceClient[*mockResource](context.TODO(), sourceOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			require.NoError(t, err)
 
-			if err := source.Publish(context.TODO(), c.eventType, c.resources); err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			eventChan := make(chan receiveEvent)
+			stop := make(chan bool)
+			go func() {
+				err = source.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+					eventChan <- receiveEvent{event: event}
+				})
+				if err != nil {
+					eventChan <- receiveEvent{err: err}
+				}
+				stop <- true
+			}()
 
-			evt := fakeClient.GetSentEvents()[0]
-			resourceID, err := evt.Context.GetExtension("resourceid")
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			err = source.Publish(ctx, c.eventType, c.resources)
+			require.NoError(t, err)
 
-			if c.resources.UID != kubetypes.UID(fmt.Sprintf("%s", resourceID)) {
-				t.Errorf("expected %s, but got %v", c.resources.UID, evt.Context)
-			}
+			receivedEvent := <-eventChan
+			require.NoError(t, receivedEvent.err)
+			require.NotNil(t, receivedEvent.event)
 
-			resourceVersion, err := evt.Context.GetExtension("resourceversion")
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			eventOut := receivedEvent.event
 
-			if c.resources.ResourceVersion != resourceVersion {
-				t.Errorf("expected %s, but got %v", c.resources.ResourceVersion, evt.Context)
-			}
+			resourceID, err := eventOut.Context.GetExtension("resourceid")
+			require.NoError(t, err)
+			require.Equal(t, c.resources.UID, kubetypes.UID(fmt.Sprintf("%s", resourceID)))
+
+			resourceVersion, err := eventOut.Context.GetExtension("resourceversion")
+			require.NoError(t, err)
+			require.Equal(t, c.resources.ResourceVersion, resourceVersion)
+
+			cancel()
+			<-stop
 		})
 	}
 }
@@ -265,17 +289,37 @@ func TestSpecResyncResponse(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fakeClient := fake.NewCloudEventsFakeClient(c.requestEvent)
-			sourceOptions := fake.NewSourceOptions(fakeClient, testSourceName)
+			ctx, cancel := context.WithCancel(context.Background())
+
+			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient[*mockResource](context.TODO(), sourceOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			require.NoError(t, err)
 
-			source.receive(context.TODO(), c.requestEvent)
+			// start receiver
+			receivedEvents := []cloudevents.Event{}
+			stop := make(chan bool)
+			mutex := &sync.Mutex{}
+			go func() {
+				_ = source.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+					mutex.Lock()
+					defer mutex.Unlock()
+					receivedEvents = append(receivedEvents, event)
+				})
+				stop <- true
+			}()
 
-			c.validate(fakeClient.GetSentEvents())
+			// receive resync request and publish associated resources
+			source.receive(ctx, c.requestEvent)
+			// wait 1 seconds to receive the response resources
+			time.Sleep(1 * time.Second)
+
+			mutex.Lock()
+			c.validate(receivedEvents)
+			mutex.Unlock()
+
+			cancel()
+			<-stop
 		})
 	}
 }
@@ -396,13 +440,10 @@ func TestReceiveResourceStatus(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			fakeClient := fake.NewCloudEventsFakeClient(c.requestEvent)
-			sourceOptions := fake.NewSourceOptions(fakeClient, testSourceName)
+			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister(c.resources...)
 			source, err := NewCloudEventSourceClient[*mockResource](context.TODO(), sourceOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			require.NoError(t, err)
 
 			var actualEvent types.ResourceAction
 			var actualRes *mockResource

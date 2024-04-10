@@ -29,7 +29,6 @@ type CloudEventsOptions interface {
 // Reference: https://cloudevents.github.io/sdk-go/protocol_implementations.html#protocol-interfaces
 type CloudEventsProtocol interface {
 	protocol.Sender
-	protocol.Opener
 	protocol.Receiver
 	protocol.Closer
 }
