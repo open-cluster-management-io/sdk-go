@@ -106,11 +106,11 @@ func (c *baseClient) connect(ctx context.Context) error {
 				// client to nil and retry
 				c.sendReceiverSignal(stopReceiverSignal)
 
-				cloudEventsClient = nil
 				err = c.cloudEventsProtocol.Close(ctx)
 				if err != nil {
 					runtime.HandleError(fmt.Errorf("failed to close the cloudevents protocol, %v", err))
 				}
+				cloudEventsClient = nil
 
 				c.resetClient(cloudEventsClient)
 
