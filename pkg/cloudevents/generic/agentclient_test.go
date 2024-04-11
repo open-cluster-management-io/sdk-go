@@ -3,11 +3,14 @@ package generic
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
@@ -54,36 +57,44 @@ func TestAgentResync(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			client := fake.NewCloudEventsFakeClient()
-			agentOptions := fake.NewAgentOptions(client, c.clusterName, testAgentName)
+			ctx, cancel := context.WithCancel(context.Background())
+
 			lister := newMockResourceLister(c.resources...)
-			agent, err := NewCloudEventAgentClient[*mockResource](context.TODO(), agentOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			agent, err := NewCloudEventAgentClient[*mockResource](ctx, fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName), lister, statusHash, newMockResourceCodec())
+			require.NoError(t, err)
 
-			if err := agent.Resync(context.TODO(), types.SourceAll); err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			// start a cloudevents receiver client go to receive the event
+			eventChan := make(chan receiveEvent)
+			stop := make(chan bool)
 
-			evt := client.GetSentEvents()[0]
-			clusterName, err := evt.Context.GetExtension("clustername")
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			go func() {
+				err = agent.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+					eventChan <- receiveEvent{event: event}
+				})
+				if err != nil {
+					eventChan <- receiveEvent{err: err}
+				}
+				stop <- true
+			}()
 
-			if c.clusterName != clusterName {
-				t.Errorf("expected %s, but got %v", c.clusterName, evt.Context)
-			}
+			err = agent.Resync(ctx, types.SourceAll)
+			require.NoError(t, err)
 
-			resourceList, err := payload.DecodeSpecResyncRequest(evt)
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			receivedEvent := <-eventChan
+			require.NoError(t, receivedEvent.err)
+			require.NotNil(t, receivedEvent.event)
 
-			if len(resourceList.Versions) != c.expectedItems {
-				t.Errorf("expected %d, but got %v", c.expectedItems, resourceList)
-			}
+			eventOut := receivedEvent.event
+			clusterName, err := eventOut.Context.GetExtension("clustername")
+			require.NoError(t, err)
+			require.Equal(t, c.clusterName, clusterName)
+
+			resourceList, err := payload.DecodeSpecResyncRequest(eventOut)
+			require.NoError(t, err)
+			require.Equal(t, c.expectedItems, len(resourceList.Versions))
+
+			cancel()
+			<-stop
 		})
 	}
 }
@@ -114,45 +125,47 @@ func TestAgentPublish(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			client := fake.NewCloudEventsFakeClient()
-			agentOptions := fake.NewAgentOptions(client, c.clusterName, testAgentName)
+			ctx, cancel := context.WithCancel(context.Background())
+
+			agentOptions := fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName)
 			lister := newMockResourceLister()
 			agent, err := NewCloudEventAgentClient[*mockResource](context.TODO(), agentOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			require.Nil(t, err)
 
-			if err := agent.Publish(context.TODO(), c.eventType, c.resources); err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			// start a cloudevents receiver client go to receive the event
+			eventChan := make(chan receiveEvent)
+			stop := make(chan bool)
+			go func() {
+				err = agent.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+					eventChan <- receiveEvent{event: event}
+				})
+				if err != nil {
+					eventChan <- receiveEvent{err: err}
+				}
+				stop <- true
+			}()
 
-			evt := client.GetSentEvents()[0]
-			resourceID, err := evt.Context.GetExtension("resourceid")
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			err = agent.Publish(ctx, c.eventType, c.resources)
+			require.Nil(t, err)
 
-			if c.resources.UID != kubetypes.UID(fmt.Sprintf("%s", resourceID)) {
-				t.Errorf("expected %s, but got %v", c.resources.UID, evt.Context)
-			}
+			receivedEvent := <-eventChan
+			require.NoError(t, receivedEvent.err)
+			require.NotNil(t, receivedEvent.event)
 
-			resourceVersion, err := evt.Context.GetExtension("resourceversion")
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			eventOut := receivedEvent.event
+			resourceID, err := eventOut.Context.GetExtension("resourceid")
+			require.Equal(t, c.resources.UID, kubetypes.UID(fmt.Sprintf("%s", resourceID)))
 
-			if c.resources.ResourceVersion != resourceVersion {
-				t.Errorf("expected %s, but got %v", c.resources.ResourceVersion, evt.Context)
-			}
+			resourceVersion, err := eventOut.Context.GetExtension("resourceversion")
+			require.NoError(t, err)
+			require.Equal(t, c.resources.ResourceVersion, resourceVersion)
 
-			clusterName, err := evt.Context.GetExtension("clustername")
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			clusterName, err := eventOut.Context.GetExtension("clustername")
+			require.NoError(t, err)
+			require.Equal(t, c.clusterName, clusterName)
 
-			if c.clusterName != clusterName {
-				t.Errorf("expected %s, but got %v", c.clusterName, evt.Context)
-			}
+			cancel()
+			<-stop
 		})
 	}
 }
@@ -265,17 +278,39 @@ func TestStatusResyncResponse(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			client := fake.NewCloudEventsFakeClient(c.requestEvent)
-			agentOptions := fake.NewAgentOptions(client, c.clusterName, testAgentName)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			agentOptions := fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName)
 			lister := newMockResourceLister(c.resources...)
-			agent, err := NewCloudEventAgentClient[*mockResource](context.TODO(), agentOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			agent, err := NewCloudEventAgentClient[*mockResource](ctx, agentOptions, lister, statusHash, newMockResourceCodec())
+			require.NoError(t, err)
 
-			agent.receive(context.TODO(), c.requestEvent)
+			// start receiver
+			receivedEvents := []cloudevents.Event{}
+			stop := make(chan bool)
+			mutex := &sync.Mutex{}
 
-			c.validate(client.GetSentEvents())
+			go func() {
+				_ = agent.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+					mutex.Lock()
+					defer mutex.Unlock()
+					receivedEvents = append(receivedEvents, event)
+				})
+				stop <- true
+			}()
+
+			// receive resync request and publish associated resources
+			agent.receive(ctx, c.requestEvent)
+			// wait 1 seconds to receive the response resources
+			time.Sleep(1 * time.Second)
+
+			mutex.Lock()
+			c.validate(receivedEvents)
+			mutex.Unlock()
+
+			cancel()
+			<-stop
 		})
 	}
 }
@@ -428,13 +463,10 @@ func TestReceiveResourceSpec(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			client := fake.NewCloudEventsFakeClient(c.requestEvent)
-			agentOptions := fake.NewAgentOptions(client, c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName)
 			lister := newMockResourceLister(c.resources...)
 			agent, err := NewCloudEventAgentClient[*mockResource](context.TODO(), agentOptions, lister, statusHash, newMockResourceCodec())
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
+			require.NoError(t, err)
 
 			var actualEvent types.ResourceAction
 			var actualRes *mockResource
@@ -447,6 +479,11 @@ func TestReceiveResourceSpec(t *testing.T) {
 			c.validate(actualEvent, actualRes)
 		})
 	}
+}
+
+type receiveEvent struct {
+	event cloudevents.Event
+	err   error
 }
 
 type mockResource struct {
