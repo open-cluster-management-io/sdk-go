@@ -36,11 +36,7 @@ type baseClient struct {
 
 func (c *baseClient) connect(ctx context.Context) error {
 	var err error
-	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx)
-	if err != nil {
-		return err
-	}
-	c.cloudEventsClient, err = cloudevents.NewClient(c.cloudEventsProtocol)
+	c.cloudEventsClient, err = c.newCloudEventsClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -63,19 +59,12 @@ func (c *baseClient) connect(ctx context.Context) error {
 			if cloudEventsClient == nil {
 				klog.V(4).Infof("reconnecting the cloudevents client")
 
-				c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx)
+				c.cloudEventsClient, err = c.newCloudEventsClient(ctx)
 				// TODO enhance the cloudevents SKD to avoid wrapping the error type to distinguish the net connection
 				// errors
 				if err != nil {
 					// failed to reconnect, try agin
 					runtime.HandleError(fmt.Errorf("the cloudevents client reconnect failed, %v", err))
-					<-wait.RealTimer(delayFn()).C()
-					continue
-				}
-
-				cloudEventsClient, err = cloudevents.NewClient(c.cloudEventsProtocol)
-				if err != nil {
-					runtime.HandleError(fmt.Errorf("the cloudevents client initialize failed, %v", err))
 					<-wait.RealTimer(delayFn()).C()
 					continue
 				}
@@ -238,4 +227,17 @@ func (c *baseClient) sendReconnectedSignal() {
 	c.RLock()
 	defer c.RUnlock()
 	c.reconnectedChan <- struct{}{}
+}
+
+func (c *baseClient) newCloudEventsClient(ctx context.Context) (cloudevents.Client, error) {
+	var err error
+	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c.cloudEventsClient, err = cloudevents.NewClient(c.cloudEventsProtocol)
+	if err != nil {
+		return nil, err
+	}
+	return c.cloudEventsClient, nil
 }
