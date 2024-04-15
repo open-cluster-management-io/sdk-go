@@ -110,9 +110,7 @@ func TestAgentContext(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			agentOptions := &kafkaAgentOptions{
-				KafkaOptions: KafkaOptions{
-					ConfigMap: configMap,
-				},
+				configMap:   configMap,
 				clusterName: clusterName,
 			}
 

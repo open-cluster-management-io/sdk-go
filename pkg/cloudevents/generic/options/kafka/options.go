@@ -24,9 +24,6 @@ const (
 )
 
 type KafkaOptions struct {
-	// the configMap: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
-	ConfigMap *kafka.ConfigMap `json:"-" yaml:"-"`
-
 	// BrokerHost is the host of the Kafka broker (hostname:port).
 	BrokerHost string `json:"brokerHost" yaml:"brokerHost"`
 
@@ -37,7 +34,8 @@ type KafkaOptions struct {
 	// ClientKeyFile is the file path to a client key file for TLS.
 	ClientKeyFile string `json:"clientKeyFile,omitempty" yaml:"clientKeyFile,omitempty"`
 
-	// Consumer
+	// GroupID is a string that uniquely identifies the group of consumer processes to which this consumer belongs.
+	// Each different application will have a unique consumer GroupID. The default value is agentID for agent, sourceID for source
 	GroupID string `json:"groupID,omitempty" yaml:"groupID,omitempty"`
 }
 

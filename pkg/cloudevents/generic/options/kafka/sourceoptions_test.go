@@ -102,10 +102,8 @@ func TestSourceContext(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sourceOptions := &kafkaSourceOptions{
-				KafkaOptions: KafkaOptions{
-					ConfigMap: configMap,
-				},
-				sourceID: sourceID,
+				configMap: configMap,
+				sourceID:  sourceID,
 			}
 
 			ctx, err := sourceOptions.WithContext(context.TODO(), c.event.Context)

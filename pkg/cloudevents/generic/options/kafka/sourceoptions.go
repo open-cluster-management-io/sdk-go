@@ -15,20 +15,21 @@ import (
 )
 
 type kafkaSourceOptions struct {
-	KafkaOptions
+	configMap *kafka.ConfigMap
 	sourceID  string
 	errorChan chan error
 }
 
-func NewSourceOptions(opts *KafkaOptions, sourceID string) *options.CloudEventsSourceOptions {
+func NewSourceOptions(configMap *kafka.ConfigMap, sourceID string) *options.CloudEventsSourceOptions {
 	sourceOptions := &kafkaSourceOptions{
-		KafkaOptions: *opts,
-		sourceID:     sourceID,
-		errorChan:    make(chan error),
+		configMap: configMap,
+		sourceID:  sourceID,
+		errorChan: make(chan error),
 	}
 
-	if sourceOptions.GroupID == "" {
-		_ = sourceOptions.ConfigMap.SetKey("group.id", sourceID)
+	groupID, err := configMap.Get("group.id", "")
+	if groupID == "" || err != nil {
+		_ = configMap.SetKey("group.id", sourceID)
 	}
 
 	return &options.CloudEventsSourceOptions{
@@ -64,7 +65,7 @@ func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 }
 
 func (o *kafkaSourceOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
-	protocol, err := confluent.New(confluent.WithConfigMap(o.ConfigMap),
+	protocol, err := confluent.New(confluent.WithConfigMap(o.configMap),
 		confluent.WithReceiverTopics([]string{
 			fmt.Sprintf("^%s", strings.Replace(agentEventsTopic, "*", o.sourceID, 1)),
 			fmt.Sprintf("^%s", agentBroadcastTopic),
