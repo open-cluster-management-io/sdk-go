@@ -19,18 +19,13 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 	cases := []struct {
 		name             string
 		config           string
-		expectedOptions  *KafkaOptions
+		expectedOptions  *kafka.ConfigMap
 		expectedErrorMsg string
 	}{
 		{
 			name:             "empty configs",
 			config:           "",
 			expectedErrorMsg: "brokerHost is required",
-		},
-		{
-			name:             "without consumer group id",
-			config:           `{"brokerHost":"test"}`,
-			expectedErrorMsg: "groupID is required for consumer",
 		},
 		{
 			name:             "tls config without clientCertFile",
@@ -45,46 +40,42 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 		{
 			name:   "options without ssl",
 			config: `{"brokerHost":"testBroker","groupID":"testGroupID"}`,
-			expectedOptions: &KafkaOptions{
-				ConfigMap: &kafka.ConfigMap{
-					"acks":                                  "1",
-					"auto.offset.reset":                     "earliest",
-					"bootstrap.servers":                     "testBroker",
-					"enable.auto.commit":                    true,
-					"enable.auto.offset.store":              false,
-					"go.events.channel.size":                1000,
-					"group.id":                              "testGroupID",
-					"log.connection.close":                  false,
-					"queued.max.messages.kbytes":            32768,
-					"retries":                               "0",
-					"socket.keepalive.enable":               true,
-					"ssl.endpoint.identification.algorithm": "none",
-				},
+			expectedOptions: &kafka.ConfigMap{
+				"acks":                                  "1",
+				"auto.offset.reset":                     "earliest",
+				"bootstrap.servers":                     "testBroker",
+				"enable.auto.commit":                    true,
+				"enable.auto.offset.store":              false,
+				"go.events.channel.size":                1000,
+				"group.id":                              "testGroupID",
+				"log.connection.close":                  false,
+				"queued.max.messages.kbytes":            32768,
+				"retries":                               "0",
+				"socket.keepalive.enable":               true,
+				"ssl.endpoint.identification.algorithm": "none",
 			},
 		},
 
 		{
 			name:   "options with ssl",
 			config: `{"brokerHost":"broker1","groupID":"id","clientCertFile":"cert","clientKeyFile":"key","caFile":"ca"}`,
-			expectedOptions: &KafkaOptions{
-				ConfigMap: &kafka.ConfigMap{
-					"acks":                                  "1",
-					"auto.offset.reset":                     "earliest",
-					"bootstrap.servers":                     "broker1",
-					"enable.auto.commit":                    true,
-					"enable.auto.offset.store":              false,
-					"go.events.channel.size":                1000,
-					"group.id":                              "id",
-					"log.connection.close":                  false,
-					"queued.max.messages.kbytes":            32768,
-					"retries":                               "0",
-					"security.protocol":                     "ssl",
-					"socket.keepalive.enable":               true,
-					"ssl.ca.location":                       "ca",
-					"ssl.certificate.location":              "cert",
-					"ssl.endpoint.identification.algorithm": "none",
-					"ssl.key.location":                      "key",
-				},
+			expectedOptions: &kafka.ConfigMap{
+				"acks":                                  "1",
+				"auto.offset.reset":                     "earliest",
+				"bootstrap.servers":                     "broker1",
+				"enable.auto.commit":                    true,
+				"enable.auto.offset.store":              false,
+				"go.events.channel.size":                1000,
+				"group.id":                              "id",
+				"log.connection.close":                  false,
+				"queued.max.messages.kbytes":            32768,
+				"retries":                               "0",
+				"security.protocol":                     "ssl",
+				"socket.keepalive.enable":               true,
+				"ssl.ca.location":                       "ca",
+				"ssl.certificate.location":              "cert",
+				"ssl.endpoint.identification.algorithm": "none",
+				"ssl.key.location":                      "key",
 			},
 		},
 	}
@@ -98,10 +89,10 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 			if c.expectedErrorMsg != "" {
 				require.Equal(t, c.expectedErrorMsg, err.Error())
 			} else {
-				require.Nil(t, err)
+				require.Nil(t, err, "failed to get kafkaOptions")
 			}
 			if c.expectedOptions != nil {
-				require.EqualValues(t, c.expectedOptions.ConfigMap, options.ConfigMap)
+				require.EqualValues(t, c.expectedOptions, options)
 			}
 		})
 	}

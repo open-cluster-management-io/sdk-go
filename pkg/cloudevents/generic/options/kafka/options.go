@@ -24,9 +24,6 @@ const (
 )
 
 type KafkaOptions struct {
-	// TODO don't use this directly
-	// We may only need the necessary configurations, e.g. bootstrap.servers, ssl.ca.location, ssl.certificate.location and ssl.key.location
-	// We should also have a fixed group.id
 	// the configMap: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
 	ConfigMap *kafka.ConfigMap `json:"-" yaml:"-"`
 
@@ -69,7 +66,7 @@ func handleProduceEvents(producerEvents chan kafka.Event, errChan chan error) {
 }
 
 // BuildKafkaOptionsFromFlags builds configs from a config filepath.
-func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
+func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -82,10 +79,6 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 
 	if config.BrokerHost == "" {
 		return nil, fmt.Errorf("brokerHost is required")
-	}
-
-	if config.GroupID == "" {
-		return nil, fmt.Errorf("groupID is required for consumer")
 	}
 
 	if (config.ClientCertFile == "" && config.ClientKeyFile != "") ||
@@ -125,8 +118,5 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 		_ = configMap.SetKey("ssl.key.location", config.ClientKeyFile)
 	}
 
-	options := &KafkaOptions{
-		ConfigMap: configMap,
-	}
-	return options, nil
+	return configMap, nil
 }

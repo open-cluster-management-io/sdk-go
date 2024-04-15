@@ -8,7 +8,6 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
-	kafkaoption "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -95,25 +94,23 @@ func TestLoadConfig(t *testing.T) {
 			name:           "kafka config",
 			configType:     "kafka",
 			configFilePath: kafkaConfigFile.Name(),
-			expectedConfig: &kafkaoption.KafkaOptions{
-				ConfigMap: &kafka.ConfigMap{
-					"acks":                                  "1",
-					"auto.offset.reset":                     "earliest",
-					"bootstrap.servers":                     "broker1",
-					"enable.auto.commit":                    true,
-					"enable.auto.offset.store":              false,
-					"go.events.channel.size":                1000,
-					"group.id":                              "id",
-					"log.connection.close":                  false,
-					"queued.max.messages.kbytes":            32768,
-					"retries":                               "0",
-					"security.protocol":                     "ssl",
-					"socket.keepalive.enable":               true,
-					"ssl.ca.location":                       "ca",
-					"ssl.certificate.location":              "cert",
-					"ssl.endpoint.identification.algorithm": "none",
-					"ssl.key.location":                      "key",
-				},
+			expectedConfig: &kafka.ConfigMap{
+				"acks":                                  "1",
+				"auto.offset.reset":                     "earliest",
+				"bootstrap.servers":                     "broker1",
+				"enable.auto.commit":                    true,
+				"enable.auto.offset.store":              false,
+				"go.events.channel.size":                1000,
+				"group.id":                              "id",
+				"log.connection.close":                  false,
+				"queued.max.messages.kbytes":            32768,
+				"retries":                               "0",
+				"security.protocol":                     "ssl",
+				"socket.keepalive.enable":               true,
+				"ssl.ca.location":                       "ca",
+				"ssl.certificate.location":              "cert",
+				"ssl.endpoint.identification.algorithm": "none",
+				"ssl.key.location":                      "key",
 			},
 		},
 	}

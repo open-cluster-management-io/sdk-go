@@ -27,6 +27,10 @@ func NewSourceOptions(opts *KafkaOptions, sourceID string) *options.CloudEventsS
 		errorChan:    make(chan error),
 	}
 
+	if sourceOptions.GroupID == "" {
+		_ = sourceOptions.ConfigMap.SetKey("group.id", sourceID)
+	}
+
 	return &options.CloudEventsSourceOptions{
 		CloudEventsOptions: sourceOptions,
 		SourceID:           sourceID,

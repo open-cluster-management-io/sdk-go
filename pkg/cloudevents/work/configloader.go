@@ -80,11 +80,11 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 		return grpcOptions.URL, grpcOptions, nil
 
 	case ConfigTypeKafka:
-		kafkaOptions, err := kafka.BuildKafkaOptionsFromFlags(l.configPath)
+		configMap, err := kafka.BuildKafkaOptionsFromFlags(l.configPath)
 		if err != nil {
 			return "", nil, err
 		}
-		val, err := kafkaOptions.ConfigMap.Get("bootstrap.servers", "")
+		val, err := configMap.Get("bootstrap.servers", "")
 		if err != nil {
 			return "", nil, err
 		}
@@ -92,7 +92,7 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 		if !ok {
 			return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
 		}
-		return server, kafkaOptions, nil
+		return server, configMap, nil
 	}
 
 	return "", nil, fmt.Errorf("unsupported config type %s", l.configType)

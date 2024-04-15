@@ -32,7 +32,7 @@ func TestAgentContext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	options, err := BuildKafkaOptionsFromFlags(file.Name())
+	configMap, err := BuildKafkaOptionsFromFlags(file.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,8 +110,10 @@ func TestAgentContext(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			agentOptions := &kafkaAgentOptions{
-				KafkaOptions: *options,
-				clusterName:  clusterName,
+				KafkaOptions: KafkaOptions{
+					ConfigMap: configMap,
+				},
+				clusterName: clusterName,
 			}
 
 			ctx, err := agentOptions.WithContext(context.TODO(), c.event.Context)

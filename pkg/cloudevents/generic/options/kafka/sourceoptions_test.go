@@ -26,7 +26,7 @@ func TestSourceContext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	options, err := BuildKafkaOptionsFromFlags(file.Name())
+	configMap, err := BuildKafkaOptionsFromFlags(file.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,8 +102,10 @@ func TestSourceContext(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sourceOptions := &kafkaSourceOptions{
-				KafkaOptions: *options,
-				sourceID:     sourceID,
+				KafkaOptions: KafkaOptions{
+					ConfigMap: configMap,
+				},
+				sourceID: sourceID,
 			}
 
 			ctx, err := sourceOptions.WithContext(context.TODO(), c.event.Context)
