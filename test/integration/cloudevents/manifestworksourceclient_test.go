@@ -200,6 +200,177 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 		})
 	})
 
+	ginkgo.Context("Publish a manifestwork without version", func() {
+		var sourceID string
+		var clusterName string
+		var workName string
+		var sourceClientHolder *work.ClientHolder
+		var agentClientHolder *work.ClientHolder
+
+		ginkgo.BeforeEach(func() {
+			sourceID = "integration-mw-test"
+			clusterName = "cluster-a"
+			workName = "test"
+
+			var err error
+			sourceMQTTOptions := newMQTTOptions(types.Topics{
+				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
+				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
+				SourceBroadcast: "sources/+/sourcebroadcast",
+			})
+			sourceClientHolder, err = source.StartManifestWorkSourceClient(context.TODO(), sourceID, sourceMQTTOptions)
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			// wait for cache ready
+			<-time.After(time.Second)
+
+			agentMqttOptions := newMQTTOptions(types.Topics{
+				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
+				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
+				SourceBroadcast: "sources/+/sourcebroadcast",
+			})
+			agentClientHolder, err = agent.StartWorkAgent(context.TODO(), clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			// wait for cache ready
+			<-time.After(time.Second)
+		})
+
+		ginkgo.It("CRUD a manifestwork with manifestwork source client and agent client", func() {
+			ginkgo.By("create a work with source client", func() {
+				_, err := sourceClientHolder.ManifestWorks(clusterName).Create(context.TODO(), newManifestWorkWithoutVersion(clusterName, workName), metav1.CreateOptions{})
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			})
+
+			ginkgo.By("agent update the work status", func() {
+				gomega.Eventually(func() error {
+					workID := utils.UID(sourceID, clusterName, workName)
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					// add finalizers
+					newWork := work.DeepCopy()
+					newWork.Finalizers = []string{"test-finalizer"}
+					patchBytes := patchWork(work, newWork)
+					updateWork, err := agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					// update the work status
+					newWork = updateWork.DeepCopy()
+					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}}
+					patchBytes = patchWork(updateWork, newWork)
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+
+			ginkgo.By("source update the work again", func() {
+				gomega.Eventually(func() error {
+					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					// ensure the resource status is synced
+					if !meta.IsStatusConditionTrue(work.Status.Conditions, "Created") {
+						return fmt.Errorf("unexpected status %v", work.Status.Conditions)
+					}
+
+					// source update the work
+					newWork := work.DeepCopy()
+					newWork.Spec.Workload.Manifests = []workv1.Manifest{
+						newManifest("test1"),
+						newManifest("test2"),
+					}
+					patchBytes := patchWork(work, newWork)
+					_, err = sourceClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+
+			ginkgo.By("agent update the work status again", func() {
+				gomega.Eventually(func() error {
+					workID := utils.UID(sourceID, clusterName, workName)
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					if len(work.Spec.Workload.Manifests) != 2 {
+						return fmt.Errorf("unexpected work spec %v", work.Spec.Workload.Manifests)
+					}
+
+					newWork := work.DeepCopy()
+					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Updated", Status: metav1.ConditionTrue}}}
+					patchBytes := patchWork(work, newWork)
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+
+			ginkgo.By("source mark the work is deleting", func() {
+				gomega.Eventually(func() error {
+					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					// ensure the resource status is synced
+					if !meta.IsStatusConditionTrue(work.Status.Conditions, "Updated") {
+						return fmt.Errorf("unexpected status %v", work.Status.Conditions)
+					}
+
+					err = sourceClientHolder.ManifestWorks(clusterName).Delete(context.Background(), workName, metav1.DeleteOptions{})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+
+			ginkgo.By("agent delete the work", func() {
+				gomega.Eventually(func() error {
+					workID := utils.UID(sourceID, clusterName, workName)
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					if work.DeletionTimestamp.IsZero() {
+						return fmt.Errorf("work deletion timestamp is zero")
+					}
+
+					newWork := work.DeepCopy()
+					newWork.Finalizers = []string{}
+					patchBytes := patchWork(work, newWork)
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), workID, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+
+			ginkgo.By("source delete the work", func() {
+				gomega.Eventually(func() error {
+					work, err := sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					if errors.IsNotFound(err) {
+						return nil
+					}
+
+					if err != nil {
+						return err
+					}
+
+					return fmt.Errorf("the work is not deleted, %v", work.Status)
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+		})
+	})
+
 	ginkgo.Context("Resync manifestworks", func() {
 		var sourceID string
 		var clusterName string
@@ -292,6 +463,25 @@ func newManifestWork(namespace, name string) *workv1.ManifestWork {
 			Annotations: map[string]string{
 				common.CloudEventsDataTypeAnnotationKey:   payload.ManifestBundleEventDataType.String(),
 				common.CloudEventsGenerationAnnotationKey: "1",
+			},
+		},
+		Spec: workv1.ManifestWorkSpec{
+			Workload: workv1.ManifestsTemplate{
+				Manifests: []workv1.Manifest{
+					newManifest("test"),
+				},
+			},
+		},
+	}
+}
+
+func newManifestWorkWithoutVersion(namespace, name string) *workv1.ManifestWork {
+	return &workv1.ManifestWork{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String(),
 			},
 		},
 		Spec: workv1.ManifestWorkSpec{
