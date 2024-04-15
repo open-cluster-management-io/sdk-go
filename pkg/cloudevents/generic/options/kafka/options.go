@@ -70,6 +70,8 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 		return nil, err
 	}
 
+	// TODO: failed to unmarshal the data to kafka.ConfigMap directly.
+	// Further investigation is required to understand the reasons behind it.
 	config := &KafkaOptions{}
 	if err := yaml.Unmarshal(configData, config); err != nil {
 		return nil, err
