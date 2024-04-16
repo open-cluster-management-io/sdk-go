@@ -111,7 +111,7 @@ func TestWorkApplierWithTypedClient(t *testing.T) {
 		t.Errorf("failed to add work to store with err %v", err)
 	}
 
-	// Update work annotation to update it
+	// update work annotation
 	newWork = appliedWork.DeepCopy()
 	newWork.SetAnnotations(map[string]string{workapiv1.ManifestConfigSpecHashAnnotationKey: "hash"})
 	fakeWorkClient.ClearActions()
@@ -119,10 +119,29 @@ func TestWorkApplierWithTypedClient(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to apply work with err %v", err)
 	}
+	assertActions(t, fakeWorkClient.Actions(), "patch")
 	if !apiequality.Semantic.DeepEqual(appliedWork.Annotations, newWork.Annotations) {
 		t.Errorf("unexpected applied work %v", appliedWork.Annotations)
 	}
+	if err := workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Update(newWork); err != nil {
+		t.Errorf("failed to add work to store with err %v", err)
+	}
+
+	// remove work annotation
+	newWork = appliedWork.DeepCopy()
+	newWork.Annotations = nil
+	fakeWorkClient.ClearActions()
+	appliedWork, err = workApplier.Apply(context.TODO(), newWork)
+	if err != nil {
+		t.Errorf("failed to apply work with err %v", err)
+	}
 	assertActions(t, fakeWorkClient.Actions(), "patch")
+	if !apiequality.Semantic.DeepEqual(appliedWork.Annotations, newWork.Annotations) {
+		t.Errorf("unexpected applied work %v", appliedWork.Annotations)
+	}
+	if err := workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Update(newWork); err != nil {
+		t.Errorf("failed to add work to store with err %v", err)
+	}
 
 	// Do not update if generation is not changed
 	work.Spec.DeleteOption = &workapiv1.DeleteOption{PropagationPolicy: workapiv1.DeletePropagationPolicyTypeForeground}
@@ -237,24 +256,47 @@ func Test_ManifestWorkEqual(t *testing.T) {
 		expected     bool
 	}{
 		{
-			name: "required and existing without update labels",
+			name: "required and existing with same labels",
 			requiredWork: func() *workapiv1.ManifestWork {
 				work := newFakeWork("test", "test", NewManifestFromJson())
 				work.SetLabels(map[string]string{"test": "test"})
-				work.SetAnnotations(map[string]string{"test": "test"})
 				return work
 			},
 			existingWork: func() *workapiv1.ManifestWork {
 				work := newFakeWork("test", "test", NewManifestFromDecoder())
-				work.SetLabels(map[string]string{"addonname": "test"})
 				work.SetLabels(map[string]string{"test": "test"})
-				work.SetAnnotations(map[string]string{"test": "test"})
 				return work
 			},
 			expected: true,
 		},
 		{
-			name: "required and existing with different labels",
+			name: "required and existing add labels",
+			requiredWork: func() *workapiv1.ManifestWork {
+				work := newFakeWork("test", "test", NewManifestFromJson())
+				work.SetLabels(map[string]string{"addonname": "test"})
+				return work
+			},
+			existingWork: func() *workapiv1.ManifestWork {
+				work := newFakeWork("test", "test", NewManifestFromDecoder())
+				return work
+			},
+			expected: false,
+		},
+		{
+			name: "required and existing remove labels",
+			requiredWork: func() *workapiv1.ManifestWork {
+				work := newFakeWork("test", "test", NewManifestFromJson())
+				return work
+			},
+			existingWork: func() *workapiv1.ManifestWork {
+				work := newFakeWork("test", "test", NewManifestFromDecoder())
+				work.SetLabels(map[string]string{"addonname": "test"})
+				return work
+			},
+			expected: false,
+		},
+		{
+			name: "required and existing update labels",
 			requiredWork: func() *workapiv1.ManifestWork {
 				work := newFakeWork("test", "test", NewManifestFromJson())
 				work.SetLabels(map[string]string{"test": "test"})
