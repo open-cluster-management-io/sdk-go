@@ -25,6 +25,15 @@ import (
 
 var _ = ginkgo.Describe("Cloudevents clients test", func() {
 	ginkgo.Context("Resync resources", func() {
+		var ctx context.Context
+		var cancel context.CancelFunc
+		ginkgo.BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
+		})
+		ginkgo.AfterEach(func() {
+			// cancel the context to gracefully shutdown the agent
+			cancel()
+		})
 		ginkgo.It("publish resource from consumer and resync resources between source and agent", func() {
 			ginkgo.By("Publish a resource from consumer")
 			resourceName := "resource1"
@@ -32,7 +41,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("create resource1 for cluster1 on the consumer and publish it to the source", func() {
 				res := source.NewResource(clusterName, resourceName)
 				consumerStore.Add(res)
-				err := grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err := grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_create_request",
@@ -41,7 +50,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start an agent on cluster1")
-			clientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			informer := clientHolder.ManifestWorkInformer()
@@ -56,7 +65,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 
 				if len(list) == 0 {
 					// no work synced yet, resync it now
-					if _, err := agentWorkClient.List(context.TODO(), metav1.ListOptions{}); err != nil {
+					if _, err := agentWorkClient.List(ctx, metav1.ListOptions{}); err != nil {
 						return err
 					}
 					return fmt.Errorf("no work was synced")
@@ -69,7 +78,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 
 				// ensure the work can be get by work client
 				workName := source.ResourceID(clusterName, resourceName)
-				work, err := agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+				work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 				if err != nil {
 					return err
 				}
@@ -87,7 +96,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 
 			ginkgo.By("resync the status from source")
-			err = mqttSourceCloudEventsClient.Resync(context.TODO(), clusterName)
+			err = mqttSourceCloudEventsClient.Resync(ctx, clusterName)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			gomega.Eventually(func() error {
@@ -123,6 +132,15 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 	})
 
 	ginkgo.Context("Publish a resource", func() {
+		var ctx context.Context
+		var cancel context.CancelFunc
+		ginkgo.BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
+		})
+		ginkgo.AfterEach(func() {
+			// cancel the context to gracefully shutdown the agent
+			cancel()
+		})
 		ginkgo.It("publish resource from consumer and ensure resource can be received by source and agent", func() {
 			ginkgo.By("Publish a resource from consumer")
 			resourceName := "resource1"
@@ -130,7 +148,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("create resource1 for cluster2 on the consumer and publish it to the source", func() {
 				res := source.NewResource(clusterName, resourceName)
 				consumerStore.Add(res)
-				err := grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err := grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_create_request",
@@ -139,7 +157,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start an agent on cluster2")
-			clientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			lister := clientHolder.ManifestWorkInformer().Lister().ManifestWorks(clusterName)
@@ -151,6 +169,14 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					return err
 				}
 
+				if len(list) == 0 {
+					// no work synced yet, resync it now
+					if _, err := agentWorkClient.List(ctx, metav1.ListOptions{}); err != nil {
+						return err
+					}
+					return fmt.Errorf("no work was synced")
+				}
+
 				// ensure there is only one work was synced on the cluster2
 				if len(list) != 1 {
 					return fmt.Errorf("unexpected work list %v", list)
@@ -158,7 +184,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 
 				// ensure the work can be get by work client
 				workName := source.ResourceID(clusterName, resourceName)
-				_, err = agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+				_, err = agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 				if err != nil {
 					return err
 				}
@@ -170,7 +196,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("create resource2 for cluster2 on the consumer and publish it to the source", func() {
 				newResource := source.NewResource(clusterName, newResourceName)
 				consumerStore.Add(newResource)
-				err := grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err := grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_create_request",
@@ -181,7 +207,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("receive resource2 on cluster2", func() {
 				gomega.Eventually(func() error {
 					workName := source.ResourceID(clusterName, newResourceName)
-					work, err := agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -196,10 +222,10 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					_, err = agentWorkClient.Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					work, err = agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err = agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -221,7 +247,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					patchBytes, err = jsonpatch.CreateMergePatch(oldData, newData)
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					_, err = agentWorkClient.Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -266,7 +292,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 				err = consumerStore.Update(resource)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				err = grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err = grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_update_request",
@@ -277,7 +303,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("receive updated resource2 on the cluster2", func() {
 				gomega.Eventually(func() error {
 					workName := source.ResourceID(clusterName, newResourceName)
-					work, err := agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -309,7 +335,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 				err = consumerStore.Update(resource)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				err = grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err = grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_delete_request",
@@ -320,7 +346,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("receive deleting resource2 on the cluster2", func() {
 				gomega.Eventually(func() error {
 					workName := source.ResourceID(clusterName, newResourceName)
-					work, err := agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -339,7 +365,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					_, err = agentWorkClient.Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -374,13 +400,22 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 	})
 
 	ginkgo.Context("Publish a resource without version", func() {
+		var ctx context.Context
+		var cancel context.CancelFunc
+		ginkgo.BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
+		})
+		ginkgo.AfterEach(func() {
+			// cancel the context to gracefully shutdown the agent
+			cancel()
+		})
 		ginkgo.It("publish resource withou version from consumer and ensure resource can be received by source and agent", func() {
 			ginkgo.By("Publish a resource from consumer")
 			resourceName := "resource1"
 			clusterName := "cluster3"
 
 			ginkgo.By("start an agent on cluster3")
-			clientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			lister := clientHolder.ManifestWorkInformer().Lister().ManifestWorks(clusterName)
@@ -390,7 +425,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 				res := source.NewResource(clusterName, resourceName)
 				res.ResourceVersion = 0
 				consumerStore.Add(res)
-				err := grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err := grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_create_request",
@@ -404,6 +439,14 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					return err
 				}
 
+				if len(list) == 0 {
+					// no work synced yet, resync it now
+					if _, err := agentWorkClient.List(ctx, metav1.ListOptions{}); err != nil {
+						return err
+					}
+					return fmt.Errorf("no work was synced")
+				}
+
 				// ensure there is only one work was synced on the cluster3
 				if len(list) != 1 {
 					return fmt.Errorf("unexpected work list %v", list)
@@ -411,7 +454,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 
 				// ensure the work can be get by work client
 				workName := source.ResourceID(clusterName, resourceName)
-				_, err = agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+				_, err = agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 				if err != nil {
 					return err
 				}
@@ -424,7 +467,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 				newResource := source.NewResource(clusterName, newResourceName)
 				newResource.ResourceVersion = 0
 				consumerStore.Add(newResource)
-				err := grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err := grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_create_request",
@@ -435,7 +478,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("receive resource2 on cluster3", func() {
 				gomega.Eventually(func() error {
 					workName := source.ResourceID(clusterName, newResourceName)
-					work, err := agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -450,10 +493,10 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					_, err = agentWorkClient.Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					work, err = agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err = agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -475,7 +518,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					patchBytes, err = jsonpatch.CreateMergePatch(oldData, newData)
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					_, err = agentWorkClient.Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -520,7 +563,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 				err = consumerStore.Update(resource)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				err = grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err = grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_update_request",
@@ -531,7 +574,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("receive updated resource2 on the cluster3", func() {
 				gomega.Eventually(func() error {
 					workName := source.ResourceID(clusterName, newResourceName)
-					work, err := agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -563,7 +606,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 				err = consumerStore.Update(resource)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				err = grpcSourceCloudEventsClient.Publish(context.TODO(), types.CloudEventsType{
+				err = grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
 					CloudEventsDataType: payload.ManifestEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_delete_request",
@@ -574,7 +617,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			ginkgo.By("receive deleting resource2 on the cluster3", func() {
 				gomega.Eventually(func() error {
 					workName := source.ResourceID(clusterName, newResourceName)
-					work, err := agentWorkClient.Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -593,7 +636,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					_, err = agentWorkClient.Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil

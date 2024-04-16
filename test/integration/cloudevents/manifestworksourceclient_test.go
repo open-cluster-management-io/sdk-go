@@ -28,6 +28,8 @@ import (
 
 var _ = ginkgo.Describe("ManifestWork source client test", func() {
 	ginkgo.Context("Publish a manifestwork", func() {
+		var ctx context.Context
+		var cancel context.CancelFunc
 		var sourceID string
 		var clusterName string
 		var workName string
@@ -35,6 +37,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 		var agentClientHolder *work.ClientHolder
 
 		ginkgo.BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
 			sourceID = "integration-mw-test"
 			clusterName = "cluster-a"
 			workName = "test"
@@ -45,7 +48,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(context.TODO(), sourceID, sourceMQTTOptions)
+			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -55,22 +58,27 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			agentClientHolder, err = agent.StartWorkAgent(context.TODO(), clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
+			agentClientHolder, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
 		})
 
+		ginkgo.AfterEach(func() {
+			// cancel the context to stop the source client gracefully
+			cancel()
+		})
+
 		ginkgo.It("CRUD a manifestwork with manifestwork source client and agent client", func() {
 			ginkgo.By("create a work with source client", func() {
-				_, err := sourceClientHolder.ManifestWorks(clusterName).Create(context.TODO(), newManifestWork(clusterName, workName), metav1.CreateOptions{})
+				_, err := sourceClientHolder.ManifestWorks(clusterName).Create(ctx, newManifestWork(clusterName, workName), metav1.CreateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
 			ginkgo.By("agent update the work status", func() {
 				gomega.Eventually(func() error {
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -79,14 +87,14 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 					newWork := work.DeepCopy()
 					newWork.Finalizers = []string{"test-finalizer"}
 					patchBytes := patchWork(work, newWork)
-					updateWork, err := agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					updateWork, err := agentClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					// update the work status
 					newWork = updateWork.DeepCopy()
 					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}}
 					patchBytes = patchWork(updateWork, newWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -95,7 +103,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("source update the work again", func() {
 				gomega.Eventually(func() error {
-					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -113,7 +121,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 						newManifest("test2"),
 					}
 					patchBytes := patchWork(work, newWork)
-					_, err = sourceClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = sourceClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -123,7 +131,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			ginkgo.By("agent update the work status again", func() {
 				gomega.Eventually(func() error {
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -135,7 +143,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 					newWork := work.DeepCopy()
 					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Updated", Status: metav1.ConditionTrue}}}
 					patchBytes := patchWork(work, newWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 					return nil
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
@@ -143,7 +151,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("source mark the work is deleting", func() {
 				gomega.Eventually(func() error {
-					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -153,7 +161,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 						return fmt.Errorf("unexpected status %v", work.Status.Conditions)
 					}
 
-					err = sourceClientHolder.ManifestWorks(clusterName).Delete(context.Background(), workName, metav1.DeleteOptions{})
+					err = sourceClientHolder.ManifestWorks(clusterName).Delete(ctx, workName, metav1.DeleteOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -163,7 +171,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			ginkgo.By("agent delete the work", func() {
 				gomega.Eventually(func() error {
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -175,7 +183,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 					newWork := work.DeepCopy()
 					newWork.Finalizers = []string{}
 					patchBytes := patchWork(work, newWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), workID, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -184,7 +192,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("source delete the work", func() {
 				gomega.Eventually(func() error {
-					work, err := sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
 					if errors.IsNotFound(err) {
 						return nil
 					}
@@ -200,6 +208,8 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 	})
 
 	ginkgo.Context("Publish a manifestwork without version", func() {
+		var ctx context.Context
+		var cancel context.CancelFunc
 		var sourceID string
 		var clusterName string
 		var workName string
@@ -207,6 +217,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 		var agentClientHolder *work.ClientHolder
 
 		ginkgo.BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
 			sourceID = "integration-mw-test"
 			clusterName = "cluster-a"
 			workName = "test"
@@ -217,7 +228,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(context.TODO(), sourceID, sourceMQTTOptions)
+			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -227,22 +238,27 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			agentClientHolder, err = agent.StartWorkAgent(context.TODO(), clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
+			agentClientHolder, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
 		})
 
+		ginkgo.AfterEach(func() {
+			// cancel the context to stop the source client gracefully
+			cancel()
+		})
+
 		ginkgo.It("CRUD a manifestwork with manifestwork source client and agent client", func() {
 			ginkgo.By("create a work with source client", func() {
-				_, err := sourceClientHolder.ManifestWorks(clusterName).Create(context.TODO(), newManifestWorkWithoutVersion(clusterName, workName), metav1.CreateOptions{})
+				_, err := sourceClientHolder.ManifestWorks(clusterName).Create(ctx, newManifestWorkWithoutVersion(clusterName, workName), metav1.CreateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
 			ginkgo.By("agent update the work status", func() {
 				gomega.Eventually(func() error {
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -251,14 +267,14 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 					newWork := work.DeepCopy()
 					newWork.Finalizers = []string{"test-finalizer"}
 					patchBytes := patchWork(work, newWork)
-					updateWork, err := agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					updateWork, err := agentClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					// update the work status
 					newWork = updateWork.DeepCopy()
 					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}}
 					patchBytes = patchWork(updateWork, newWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -267,7 +283,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("source update the work again", func() {
 				gomega.Eventually(func() error {
-					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -284,7 +300,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 						newManifest("test2"),
 					}
 					patchBytes := patchWork(work, newWork)
-					_, err = sourceClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = sourceClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -294,7 +310,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			ginkgo.By("agent update the work status again", func() {
 				gomega.Eventually(func() error {
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -306,7 +322,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 					newWork := work.DeepCopy()
 					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Updated", Status: metav1.ConditionTrue}}}
 					patchBytes := patchWork(work, newWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 					return nil
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
@@ -314,7 +330,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("source mark the work is deleting", func() {
 				gomega.Eventually(func() error {
-					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := sourceClientHolder.ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -324,7 +340,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 						return fmt.Errorf("unexpected status %v", work.Status.Conditions)
 					}
 
-					err = sourceClientHolder.ManifestWorks(clusterName).Delete(context.Background(), workName, metav1.DeleteOptions{})
+					err = sourceClientHolder.ManifestWorks(clusterName).Delete(ctx, workName, metav1.DeleteOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -334,7 +350,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			ginkgo.By("agent delete the work", func() {
 				gomega.Eventually(func() error {
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClientHolder.ManifestWorks(clusterName).Get(context.TODO(), workID, metav1.GetOptions{})
+					work, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -346,7 +362,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 					newWork := work.DeepCopy()
 					newWork.Finalizers = []string{}
 					patchBytes := patchWork(work, newWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(context.TODO(), workID, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 					return nil
@@ -355,7 +371,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("source delete the work", func() {
 				gomega.Eventually(func() error {
-					work, err := sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(context.TODO(), workName, metav1.GetOptions{})
+					work, err := sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
 					if errors.IsNotFound(err) {
 						return nil
 					}
@@ -371,11 +387,14 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 	})
 
 	ginkgo.Context("Resync manifestworks", func() {
+		var ctx context.Context
+		var cancel context.CancelFunc
 		var sourceID string
 		var clusterName string
 		var workNamePrefix string
 
 		ginkgo.BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
 			sourceID = "integration-mw-resync-test"
 			clusterName = "cluster-b"
 			workNamePrefix = "resync-test"
@@ -385,7 +404,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
 
-			agentClientHolder, err := agent.StartWorkAgent(context.TODO(), clusterName, mqttOptions, codec.NewManifestBundleCodec())
+			agentClientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			// wait for informer started
@@ -411,6 +430,11 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			<-time.After(time.Second)
 		})
 
+		ginkgo.AfterEach(func() {
+			// cancel the context to stop the source client gracefully
+			cancel()
+		})
+
 		ginkgo.It("resync manifestworks with manifestwork source client", func() {
 
 			mqttOptions := newMQTTOptions(types.Topics{
@@ -420,18 +444,18 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			})
 
 			// simulate a source client restart, recover two works
-			sourceClientHolder, err := source.StartManifestWorkSourceClient(context.TODO(), sourceID, mqttOptions)
+			sourceClientHolder, err := source.StartManifestWorkSourceClient(ctx, sourceID, mqttOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(context.TODO(), newManifestWork(clusterName, fmt.Sprintf("%s-1", workNamePrefix)), metav1.CreateOptions{})
+			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(ctx, newManifestWork(clusterName, fmt.Sprintf("%s-1", workNamePrefix)), metav1.CreateOptions{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(context.TODO(), newManifestWork(clusterName, fmt.Sprintf("%s-2", workNamePrefix)), metav1.CreateOptions{})
+			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(ctx, newManifestWork(clusterName, fmt.Sprintf("%s-2", workNamePrefix)), metav1.CreateOptions{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			ginkgo.By("the manifestworks are synced", func() {
 				gomega.Eventually(func() error {
-					work1, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), fmt.Sprintf("%s-1", workNamePrefix), metav1.GetOptions{})
+					work1, err := sourceClientHolder.ManifestWorks(clusterName).Get(ctx, fmt.Sprintf("%s-1", workNamePrefix), metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -439,7 +463,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 						return fmt.Errorf("unexpected status %v", work1.Status.Conditions)
 					}
 
-					work2, err := sourceClientHolder.ManifestWorks(clusterName).Get(context.TODO(), fmt.Sprintf("%s-2", workNamePrefix), metav1.GetOptions{})
+					work2, err := sourceClientHolder.ManifestWorks(clusterName).Get(ctx, fmt.Sprintf("%s-2", workNamePrefix), metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
