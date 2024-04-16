@@ -21,7 +21,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
@@ -461,7 +460,6 @@ func newManifestWork(namespace, name string) *workv1.ManifestWork {
 			Name:      name,
 			Namespace: namespace,
 			Annotations: map[string]string{
-				common.CloudEventsDataTypeAnnotationKey:   payload.ManifestBundleEventDataType.String(),
 				common.CloudEventsGenerationAnnotationKey: "1",
 			},
 		},
@@ -480,9 +478,6 @@ func newManifestWorkWithoutVersion(namespace, name string) *workv1.ManifestWork 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Annotations: map[string]string{
-				common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String(),
-			},
 		},
 		Spec: workv1.ManifestWorkSpec{
 			Workload: workv1.ManifestsTemplate{

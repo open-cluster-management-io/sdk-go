@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/util/rand"
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
@@ -12,7 +13,7 @@ import (
 
 func StartWorkAgent(ctx context.Context, clusterName string, config *mqtt.MQTTOptions, codecs ...generic.Codec[*workv1.ManifestWork]) (*work.ClientHolder, error) {
 	clientHolder, err := work.NewClientHolderBuilder(config).
-		WithClientID(clusterName).
+		WithClientID(clusterName + "-" + rand.String(5)).
 		WithClusterName(clusterName).
 		WithCodecs(codecs...).
 		NewAgentClientHolder(ctx)
