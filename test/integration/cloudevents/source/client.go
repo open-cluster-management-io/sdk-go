@@ -9,6 +9,7 @@ import (
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
@@ -189,7 +190,7 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 
 func StartManifestWorkSourceClient(ctx context.Context, sourceID string, config any) (*work.ClientHolder, error) {
 	clientHolder, err := work.NewClientHolderBuilder(config).
-		WithClientID(fmt.Sprintf("%s-client", sourceID)).
+		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 		WithSourceID(sourceID).
 		WithCodecs(codec.NewManifestBundleCodec()).
 		NewSourceClientHolder(ctx)

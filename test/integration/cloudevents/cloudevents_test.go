@@ -54,6 +54,14 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 					return err
 				}
 
+				if len(list) == 0 {
+					// no work synced yet, resync it now
+					if _, err := agentWorkClient.List(context.TODO(), metav1.ListOptions{}); err != nil {
+						return err
+					}
+					return fmt.Errorf("no work was synced")
+				}
+
 				// ensure there is only one work was synced on the cluster1
 				if len(list) != 1 {
 					return fmt.Errorf("unexpected work list %v", list)
