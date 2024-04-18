@@ -23,7 +23,7 @@ topics:
 url: grpc
 `
 	kafkaConfig = `
-brokerHost: broker1
+bootstrapServer: broker1
 groupID: id
 clientCertFile: cert
 clientKeyFile: key
