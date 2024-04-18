@@ -22,7 +22,7 @@ func TestSourceContext(t *testing.T) {
 	}
 	defer os.Remove(file.Name())
 
-	if err := os.WriteFile(file.Name(), []byte(`{"brokerHost":"testBroker","groupID":"id"}`), 0o644); err != nil {
+	if err := os.WriteFile(file.Name(), []byte(`{"bootstrapServer":"testBroker","groupID":"id"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

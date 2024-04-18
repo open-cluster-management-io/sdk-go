@@ -24,8 +24,8 @@ const (
 )
 
 type KafkaOptions struct {
-	// BrokerHost is the host of the Kafka broker (hostname:port).
-	BrokerHost string `json:"brokerHost" yaml:"brokerHost"`
+	// BootstrapServer is the host of the Kafka broker (hostname:port).
+	BootstrapServer string `json:"bootstrapServer" yaml:"bootstrapServer"`
 
 	// CAFile is the file path to a cert file for the MQTT broker certificate authority.
 	CAFile string `json:"caFile,omitempty" yaml:"caFile,omitempty"`
@@ -77,8 +77,8 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 		return nil, err
 	}
 
-	if config.BrokerHost == "" {
-		return nil, fmt.Errorf("brokerHost is required")
+	if config.BootstrapServer == "" {
+		return nil, fmt.Errorf("bootstrapServer is required")
 	}
 
 	if (config.ClientCertFile == "" && config.ClientKeyFile != "") ||
@@ -90,7 +90,7 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 	}
 
 	configMap := &kafka.ConfigMap{
-		"bootstrap.servers":       config.BrokerHost,
+		"bootstrap.servers":       config.BootstrapServer,
 		"socket.keepalive.enable": true,
 		// silence spontaneous disconnection logs, kafka recovers by itself.
 		"log.connection.close": false,

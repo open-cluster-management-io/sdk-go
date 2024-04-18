@@ -25,21 +25,21 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 		{
 			name:             "empty configs",
 			config:           "",
-			expectedErrorMsg: "brokerHost is required",
+			expectedErrorMsg: "bootstrapServer is required",
 		},
 		{
 			name:             "tls config without clientCertFile",
-			config:           `{"brokerHost":"test","groupID":"test","clientCertFile":"test"}`,
+			config:           `{"bootstrapServer":"test","groupID":"test","clientCertFile":"test"}`,
 			expectedErrorMsg: "either both or none of clientCertFile and clientKeyFile must be set",
 		},
 		{
 			name:             "tls config without caFile",
-			config:           `{"brokerHost":"test","groupID":"test","clientCertFile":"test","clientKeyFile":"test"}`,
+			config:           `{"bootstrapServer":"test","groupID":"test","clientCertFile":"test","clientKeyFile":"test"}`,
 			expectedErrorMsg: "setting clientCertFile and clientKeyFile requires caFile",
 		},
 		{
 			name:   "options without ssl",
-			config: `{"brokerHost":"testBroker","groupID":"testGroupID"}`,
+			config: `{"bootstrapServer":"testBroker","groupID":"testGroupID"}`,
 			expectedOptions: &kafka.ConfigMap{
 				"acks":                                  "1",
 				"auto.offset.reset":                     "earliest",
@@ -58,7 +58,7 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 
 		{
 			name:   "options with ssl",
-			config: `{"brokerHost":"broker1","groupID":"id","clientCertFile":"cert","clientKeyFile":"key","caFile":"ca"}`,
+			config: `{"bootstrapServer":"broker1","groupID":"id","clientCertFile":"cert","clientKeyFile":"key","caFile":"ca"}`,
 			expectedOptions: &kafka.ConfigMap{
 				"acks":                                  "1",
 				"auto.offset.reset":                     "earliest",
