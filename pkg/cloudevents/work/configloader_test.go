@@ -96,10 +96,11 @@ func TestLoadConfig(t *testing.T) {
 			configFilePath: kafkaConfigFile.Name(),
 			expectedConfig: &kafka.ConfigMap{
 				"acks":                                  "1",
-				"auto.offset.reset":                     "earliest",
+				"auto.commit.interval.ms":               5000,
+				"auto.offset.reset":                     "latest",
 				"bootstrap.servers":                     "broker1",
 				"enable.auto.commit":                    true,
-				"enable.auto.offset.store":              false,
+				"enable.auto.offset.store":              true,
 				"go.events.channel.size":                1000,
 				"group.id":                              "id",
 				"log.connection.close":                  false,
