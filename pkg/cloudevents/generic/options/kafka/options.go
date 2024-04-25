@@ -43,7 +43,7 @@ type KafkaOptions struct {
 // It's important to read these events otherwise the events channel will eventually fill up
 // Detail: https://github.com/cloudevents/sdk-go/blob/main/protocol/kafka_confluent/v2/protocol.go#L90
 func handleProduceEvents(producerEvents chan kafka.Event, errChan chan error) {
-	if producerEvents != nil {
+	if producerEvents == nil {
 		return
 	}
 	go func() {
@@ -104,11 +104,23 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 		"retries": "0",
 
 		// consumer
-		"group.id":                   config.GroupID,
-		"enable.auto.commit":         true,
-		"enable.auto.offset.store":   false,
+		"group.id": config.GroupID,
+
+		// If true the consumer’s offset will be periodically committed in the background.
+		"enable.auto.commit": true,
+
+		// If true (default) the client will automatically store the offset+1 of the message just prior to passing the message to the application.
+		// The offset is stored in memory and will be used by the next call to commit() (without explicit offsets specified) or the next auto commit.
+		// If false and enable.auto.commit=true, the application will manually have to call rd_kafka_offset_store() to store the offset to auto commit. (optional)
+		"enable.auto.offset.store":   true,
 		"queued.max.messages.kbytes": 32768, // 32 MB
-		"auto.offset.reset":          "earliest",
+
+		// earliest: automatically reset the offset to the earliest offset
+		// latest: automatically reset the offset to the latest offset
+		"auto.offset.reset": "latest",
+
+		// The frequency in milliseconds that the consumer offsets are commited (written) to offset storage
+		"auto.commit.interval.ms": 5000,
 	}
 
 	if config.ClientCertFile != "" {
