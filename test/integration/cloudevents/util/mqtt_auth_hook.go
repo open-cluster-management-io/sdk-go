@@ -1,18 +1,15 @@
-// SPDX-License-Identifier: MIT
-// SPDX-FileCopyrightText: 2022 mochi-mqtt, mochi-co
-// SPDX-FileContributor: mochi-co
-
-package auth
+package util
 
 import (
 	"bytes"
+	"crypto/tls"
+	"fmt"
+	"time"
 
-	"github.com/mochi-mqtt/server/v2"
+	mqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/packets"
 )
 
-// AllowHook is an authentication hook which allows connection access
-// for all users and read and write access to all topics.
 type AllowHook struct {
 	mqtt.HookBase
 }
@@ -37,5 +34,26 @@ func (h *AllowHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) bo
 
 // OnACLCheck returns true/allowed for all checks.
 func (h *AllowHook) OnACLCheck(cl *mqtt.Client, topic string, write bool) bool {
+	tlsConn, ok := cl.Net.Conn.(*tls.Conn)
+	if ok {
+		now := time.Now().UTC()
+		if err := tlsConn.Handshake(); err != nil {
+			fmt.Printf("Error: mqtt handshake failed: %v\n", err)
+			return false
+		}
+		state := tlsConn.ConnectionState()
+		for _, cert := range state.PeerCertificates {
+			if cert.Subject.CommonName != "test-client" {
+				continue
+			}
+
+			if cert.NotAfter.Before(now) {
+				fmt.Printf("Error: mqtt client cert expired (NotAfter=%v, Now=%v)\n", cert.NotAfter, now)
+				return false
+			}
+		}
+
+		return true
+	}
 	return true
 }

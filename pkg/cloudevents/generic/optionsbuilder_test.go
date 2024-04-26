@@ -77,15 +77,17 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 			configType:     "mqtt",
 			configFilePath: mqttConfigFile.Name(),
 			expectedContainedOptions: &mqtt.MQTTOptions{
-				BrokerHost: "mqtt",
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
 				},
-				KeepAlive:   60,
-				PubQoS:      1,
-				SubQoS:      1,
-				DialTimeout: 60 * time.Second,
+				KeepAlive: 60,
+				PubQoS:    1,
+				SubQoS:    1,
+				Dialer: &mqtt.MQTTDialer{
+					BrokerHost: "mqtt",
+					Timeout:    60 * time.Second,
+				},
 			},
 		},
 		{

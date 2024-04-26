@@ -117,7 +117,6 @@ github.com/mailru/easyjson/jwriter
 # github.com/mochi-mqtt/server/v2 v2.4.6
 ## explicit; go 1.21
 github.com/mochi-mqtt/server/v2
-github.com/mochi-mqtt/server/v2/hooks/auth
 github.com/mochi-mqtt/server/v2/hooks/storage
 github.com/mochi-mqtt/server/v2/listeners
 github.com/mochi-mqtt/server/v2/mempool
