@@ -89,7 +89,7 @@ func TestParseCloudEventsType(t *testing.T) {
 		{
 			name:      "wrong format",
 			eventType: "test",
-			err:       fmt.Errorf("unsupported cloudevents type format: %s", "test"),
+			err:       fmt.Errorf("unsupported cloudevents type format"),
 		},
 		{
 			name:      "unsupported subresource",
