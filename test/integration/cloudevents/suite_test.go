@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	mochimqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/auth"
 	"github.com/mochi-mqtt/server/v2/listeners"
@@ -19,19 +20,25 @@ import (
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 )
 
-const mqttBrokerHost = "127.0.0.1:1883"
-const grpcServerHost = "127.0.0.1:8881"
-const sourceID = "integration-test"
+const (
+	mqttBrokerHost = "127.0.0.1:1883"
+	grpcServerHost = "127.0.0.1:8881"
+	sourceID       = "integration-test"
+)
 
-var mqttBroker *mochimqtt.Server
-var mqttOptions *mqtt.MQTTOptions
-var mqttSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
-var grpcServer *source.GRPCServer
-var grpcOptions *grpcoptions.GRPCOptions
-var grpcSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
-var eventBroadcaster *source.EventBroadcaster
-var store *source.MemoryStore
-var consumerStore *source.MemoryStore
+var (
+	mqttBroker                  *mochimqtt.Server
+	mqttOptions                 *mqtt.MQTTOptions
+	mqttSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
+	grpcServer                  *source.GRPCServer
+	grpcOptions                 *grpcoptions.GRPCOptions
+	grpcSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
+	eventBroadcaster            *source.EventBroadcaster
+	store                       *source.MemoryStore
+	consumerStore               *source.MemoryStore
+	kafkaCluster                *kafkav2.MockCluster
+	kafkaConfigMap              *kafkav2.ConfigMap
+)
 
 func TestIntegration(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
@@ -85,6 +92,19 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	})
 
 	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, store.GetResourceSpecChan())
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	ginkgo.By("init the kafka broker and topics")
+	kafkaCluster, err = kafkav2.NewMockCluster(1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	kafkaConfigMap = &kafkav2.ConfigMap{"bootstrap.servers": kafkaCluster.BootstrapServers()}
+	err = kafkaCluster.CreateTopic("sourcebroadcast.source1", 1, 1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	err = kafkaCluster.CreateTopic("sourceevents.source1.cluster1", 1, 1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	err = kafkaCluster.CreateTopic("agentevents.source1.cluster1", 1, 1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	err = kafkaCluster.CreateTopic("agentbroadcast.cluster1", 1, 1)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	close(done)

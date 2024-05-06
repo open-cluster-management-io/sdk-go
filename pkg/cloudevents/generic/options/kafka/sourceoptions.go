@@ -44,27 +44,25 @@ func NewSourceOptions(configMap *map[string]interface{}, sourceID string) *optio
 func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 	evtCtx cloudevents.EventContext,
 ) (context.Context, error) {
-	eventType, err := types.ParseCloudEventsType(evtCtx.GetType())
-	if err != nil {
-		return nil, err
-	}
+	// eventType, err := types.ParseCloudEventsType(evtCtx.GetType())
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	clusterName, err := evtCtx.GetExtension(types.ExtensionClusterName)
 	if err != nil {
 		return nil, err
 	}
 
-	if eventType.Action == types.ResyncRequestAction && clusterName == types.ClusterAll {
+	topic := strings.Replace(sourceEventsTopic, "*.*", fmt.Sprintf("%s.%s", o.sourceID, clusterName), 1)
+	key := fmt.Sprintf("%s@%s", o.sourceID, clusterName)
+	if clusterName == types.ClusterAll {
 		// source request to get resources status from all agents
-		topic := strings.Replace(sourceBroadcastTopic, "*", o.sourceID, 1)
-		return confluent.WithMessageKey(cloudeventscontext.WithTopic(ctx, topic), o.sourceID), nil
+		topic = strings.Replace(sourceBroadcastTopic, "*", o.sourceID, 1)
+		key = o.sourceID
 	}
-
-	// source publishes event to source topic to send the resource spec to a specified cluster
-	messageKey := fmt.Sprintf("%s@%s", o.sourceID, clusterName)
-	topic := strings.Replace(sourceEventsTopic, "*", o.sourceID, 1)
-	topic = strings.Replace(topic, "*", fmt.Sprintf("%s", clusterName), 1)
-	return confluent.WithMessageKey(cloudeventscontext.WithTopic(ctx, topic), messageKey), nil
+	topicCtx := cloudeventscontext.WithTopic(ctx, topic)
+	return confluent.WithMessageKey(topicCtx, key), nil
 }
 
 func (o *kafkaSourceOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
