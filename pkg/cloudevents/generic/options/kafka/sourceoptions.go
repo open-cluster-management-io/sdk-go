@@ -44,11 +44,6 @@ func NewSourceOptions(configMap *map[string]interface{}, sourceID string) *optio
 func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 	evtCtx cloudevents.EventContext,
 ) (context.Context, error) {
-	// eventType, err := types.ParseCloudEventsType(evtCtx.GetType())
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	clusterName, err := evtCtx.GetExtension(types.ExtensionClusterName)
 	if err != nil {
 		return nil, err
