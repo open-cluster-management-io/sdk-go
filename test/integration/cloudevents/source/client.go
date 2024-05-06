@@ -6,17 +6,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
+	"k8s.io/client-go/metadata/metadatainformer"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/controller-manager/pkg/informerfactory"
 
+	cacheddiscovery "k8s.io/client-go/discovery/cached/memory"
+	kubeinformers "k8s.io/client-go/informers"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/garbagecollector"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
 )
@@ -186,7 +197,7 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 	return client, nil
 }
 
-func StartManifestWorkSourceClient(ctx context.Context, sourceID string, config any) (*work.ClientHolder, error) {
+func StartManifestWorkSourceClient(ctx context.Context, kubeConfig *rest.Config, sourceID string, config any) (*work.ClientHolder, error) {
 	clientHolder, err := work.NewClientHolderBuilder(config).
 		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 		WithSourceID(sourceID).
@@ -196,7 +207,31 @@ func StartManifestWorkSourceClient(ctx context.Context, sourceID string, config 
 		return nil, err
 	}
 
-	go clientHolder.ManifestWorkInformer().Informer().Run(ctx.Done())
+	workClient := clientHolder.WorkInterface()
+	workInformers := clientHolder.ManifestWorkInformer()
+
+	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+	metadataClient, err := metadata.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	cachedClient := cacheddiscovery.NewMemCacheClient(kubeClient)
+	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedClient)
+	go wait.Until(func() {
+		restMapper.Reset()
+	}, 30*time.Second, ctx.Done())
+
+	sharedInformers := kubeinformers.NewSharedInformerFactory(kubeClient, 10*time.Minute)
+	metadataInformers := metadatainformer.NewSharedInformerFactory(metadataClient, 10*time.Minute)
+	informerFactory := informerfactory.NewInformerFactory(sharedInformers, metadataInformers)
+	garbageCollector := garbagecollector.NewGarbageCollector(workClient.WorkV1(), metadataClient, restMapper, workInformers, informerFactory)
+	go garbageCollector.Run(ctx, 1)
+
+	go workInformers.Informer().Run(ctx.Done())
 
 	return clientHolder, nil
 }
