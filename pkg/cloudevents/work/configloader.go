@@ -84,15 +84,15 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 		if err != nil {
 			return "", nil, err
 		}
-		val, err := configMap.Get("bootstrap.servers", "")
-		if err != nil {
-			return "", nil, err
+		val, found := (*configMap)["bootstrap.servers"]
+		if found {
+			server, ok := val.(string)
+			if !ok {
+				return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
+			}
+			return server, configMap, nil
 		}
-		server, ok := val.(string)
-		if !ok {
-			return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
-		}
-		return server, configMap, nil
+		return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
 	}
 
 	return "", nil, fmt.Errorf("unsupported config type %s", l.configType)

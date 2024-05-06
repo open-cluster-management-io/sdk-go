@@ -1,3 +1,5 @@
+//go:build kafka
+
 package kafka
 
 import (
@@ -21,7 +23,7 @@ type kafkaAgentOptions struct {
 	errorChan   chan error
 }
 
-func NewAgentOptions(configMap *kafka.ConfigMap, clusterName, agentID string) *options.CloudEventsAgentOptions {
+func NewAgentOptions(configMap *map[string]interface{}, clusterName, agentID string) *options.CloudEventsAgentOptions {
 	kafkaAgentOptions := &kafkaAgentOptions{
 		configMap:   configMap,
 		clusterName: clusterName,

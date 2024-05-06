@@ -1,3 +1,5 @@
+//go:build kafka
+
 package kafka
 
 import (
@@ -20,7 +22,7 @@ type kafkaSourceOptions struct {
 	errorChan chan error
 }
 
-func NewSourceOptions(configMap *kafka.ConfigMap, sourceID string) *options.CloudEventsSourceOptions {
+func NewSourceOptions(configMap *map[string]interface{}, sourceID string) *options.CloudEventsSourceOptions {
 	sourceOptions := &kafkaSourceOptions{
 		configMap: configMap,
 		sourceID:  sourceID,

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
@@ -94,7 +93,7 @@ func TestLoadConfig(t *testing.T) {
 			name:           "kafka config",
 			configType:     "kafka",
 			configFilePath: kafkaConfigFile.Name(),
-			expectedConfig: &kafka.ConfigMap{
+			expectedConfig: &map[string]interface{}{
 				"acks":                                  "1",
 				"auto.offset.reset":                     "earliest",
 				"bootstrap.servers":                     "broker1",
