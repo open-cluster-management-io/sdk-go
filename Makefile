@@ -12,6 +12,8 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 GO_PACKAGES :=$(addsuffix ...,$(addprefix ./,$(filter-out test/, $(filter-out vendor/,$(filter-out hack/,$(wildcard */))))))
 GO_BUILD_PACKAGES :=$(GO_PACKAGES)
 GO_BUILD_PACKAGES_EXPANDED :=$(GO_BUILD_PACKAGES)
+GO_BUILD_FLAGS :=-trimpath -tags=kafka
+GO_TEST_FLAGS :=-race -tags=kafka
 # LDFLAGS are not needed for dummy builds (saving time on calling git commands)
 GO_LD_FLAGS:=
 
