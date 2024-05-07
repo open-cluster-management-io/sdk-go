@@ -1,5 +1,8 @@
 //go:build !kafka
 
+// This is the dummy code to pass the compile when Kafka is not enabled.
+// Cannot enable Kafka by default due to confluent-kafka-go not supporting cross-compilation.
+// Try adding -tags=kafka to build when you need Kafka.
 package kafka
 
 import (
@@ -17,5 +20,5 @@ func NewAgentOptions(configMap *map[string]interface{}, clusterName, agentID str
 }
 
 func BuildKafkaOptionsFromFlags(configPath string) (*map[string]interface{}, error) {
-	return nil, fmt.Errorf("try adding -tags=kafka to build your app")
+	return nil, fmt.Errorf("try adding -tags=kafka to build")
 }

@@ -148,6 +148,8 @@ For detailed configuration options for the gRPC driver, refer to the [gRPC drive
 
 ### Kafka Protocol/Driver
 
+Kafka Protocol/Drive is not enabled by default. You need to add `-tags=kafka` to build when you need Kafka.
+
 Here's an example of a YAML configuration for the Kafka protocol:
 
 ```yaml
