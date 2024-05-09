@@ -7,7 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +20,7 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 	cases := []struct {
 		name             string
 		config           string
-		expectedOptions  *kafka.ConfigMap
+		expectedOptions  *map[string]interface{}
 		expectedErrorMsg string
 	}{
 		{
@@ -42,7 +41,7 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 		{
 			name:   "options without ssl",
 			config: `{"bootstrapServer":"testBroker","groupID":"testGroupID"}`,
-			expectedOptions: &kafka.ConfigMap{
+			expectedOptions: &map[string]interface{}{
 				"acks":                                  "1",
 				"auto.commit.interval.ms":               5000,
 				"auto.offset.reset":                     "latest",
@@ -62,7 +61,7 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 		{
 			name:   "options with ssl",
 			config: `{"bootstrapServer":"broker1","groupID":"id","clientCertFile":"cert","clientKeyFile":"key","caFile":"ca"}`,
-			expectedOptions: &kafka.ConfigMap{
+			expectedOptions: &map[string]interface{}{
 				"acks":                                  "1",
 				"auto.commit.interval.ms":               5000,
 				"auto.offset.reset":                     "latest",
