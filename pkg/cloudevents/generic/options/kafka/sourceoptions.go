@@ -17,7 +17,7 @@ import (
 )
 
 type kafkaSourceOptions struct {
-	configMap *kafka.ConfigMap
+	*kafka.ConfigMap
 	sourceID  string
 	errorChan chan error
 }
@@ -25,7 +25,7 @@ type kafkaSourceOptions struct {
 func NewSourceOptions(configMap *map[string]interface{}, sourceID string) *options.CloudEventsSourceOptions {
 	kafkaConfigMap := convertToKafkaConfigMap(*configMap)
 	sourceOptions := &kafkaSourceOptions{
-		configMap: &kafkaConfigMap,
+		ConfigMap: &kafkaConfigMap,
 		sourceID:  sourceID,
 		errorChan: make(chan error),
 	}
@@ -68,7 +68,7 @@ func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 }
 
 func (o *kafkaSourceOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
-	protocol, err := confluent.New(confluent.WithConfigMap(o.configMap),
+	protocol, err := confluent.New(confluent.WithConfigMap(o.ConfigMap),
 		confluent.WithReceiverTopics([]string{
 			fmt.Sprintf("^%s", strings.Replace(agentEventsTopic, "*", o.sourceID, 1)),
 			fmt.Sprintf("^%s", agentBroadcastTopic),

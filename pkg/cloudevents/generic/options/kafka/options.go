@@ -66,7 +66,7 @@ func handleProduceEvents(producerEvents chan kafka.Event, errChan chan error) {
 }
 
 // BuildKafkaOptionsFromFlags builds configs from a config filepath.
-func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
+func BuildKafkaOptionsFromFlags(configPath string) (*map[string]interface{}, error) {
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 		return nil, fmt.Errorf("setting clientCertFile and clientKeyFile requires caFile")
 	}
 
-	configMap := &kafka.ConfigMap{
+	configMap := map[string]interface{}{
 		"bootstrap.servers":       config.BootstrapServer,
 		"socket.keepalive.enable": true,
 		// silence spontaneous disconnection logs, kafka recovers by itself.
@@ -126,13 +126,13 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 	}
 
 	if config.ClientCertFile != "" {
-		_ = configMap.SetKey("security.protocol", "ssl")
-		_ = configMap.SetKey("ssl.ca.location", config.CAFile)
-		_ = configMap.SetKey("ssl.certificate.location", config.ClientCertFile)
-		_ = configMap.SetKey("ssl.key.location", config.ClientKeyFile)
+		configMap["security.protocol"] = "ssl"
+		configMap["ssl.ca.location"] = config.CAFile
+		configMap["ssl.certificate.location"] = config.ClientCertFile
+		configMap["ssl.key.location"] = config.ClientKeyFile
 	}
 
-	return configMap, nil
+	return &configMap, nil
 }
 
 func convertToKafkaConfigMap(configMap map[string]interface{}) kafka.ConfigMap {

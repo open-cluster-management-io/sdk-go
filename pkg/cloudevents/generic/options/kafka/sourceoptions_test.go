@@ -32,6 +32,7 @@ func TestSourceContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	kafkaConfigMap := convertToKafkaConfigMap(*configMap)
 
 	cases := []struct {
 		name          string
@@ -104,7 +105,7 @@ func TestSourceContext(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sourceOptions := &kafkaSourceOptions{
-				configMap: configMap,
+				ConfigMap: &kafkaConfigMap,
 				sourceID:  sourceID,
 			}
 

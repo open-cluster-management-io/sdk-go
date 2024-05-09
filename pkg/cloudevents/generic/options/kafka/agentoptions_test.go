@@ -38,6 +38,7 @@ func TestAgentContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	kafkaConfigMap := convertToKafkaConfigMap(*configMap)
 
 	cases := []struct {
 		name          string
@@ -112,7 +113,7 @@ func TestAgentContext(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			agentOptions := &kafkaAgentOptions{
-				configMap:   configMap,
+				configMap:   &kafkaConfigMap,
 				clusterName: clusterName,
 			}
 

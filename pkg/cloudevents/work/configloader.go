@@ -5,16 +5,11 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-)
-
-const (
-	ConfigTypeKube  = "kube"
-	ConfigTypeMQTT  = "mqtt"
-	ConfigTypeGRPC  = "grpc"
-	ConfigTypeKafka = "kafka"
+	"open-cluster-management.io/sdk-go/pkg/constants"
 )
 
 // ConfigLoader loads a configuration object with a configuration file.
@@ -49,7 +44,7 @@ func (l *ConfigLoader) WithKubeConfig(kubeConfig *rest.Config) *ConfigLoader {
 // TODO using a specified config instead of any
 func (l *ConfigLoader) LoadConfig() (string, any, error) {
 	switch l.configType {
-	case ConfigTypeKube:
+	case constants.ConfigTypeKube:
 		if l.configPath == "" {
 			if l.kubeConfig == nil {
 				return "", nil, fmt.Errorf("neither the kube config path nor kube config object was specified")
@@ -64,14 +59,14 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 		}
 
 		return kubeConfig.Host, kubeConfig, nil
-	case ConfigTypeMQTT:
+	case constants.ConfigTypeMQTT:
 		mqttOptions, err := mqtt.BuildMQTTOptionsFromFlags(l.configPath)
 		if err != nil {
 			return "", nil, err
 		}
 
 		return mqttOptions.BrokerHost, mqttOptions, nil
-	case ConfigTypeGRPC:
+	case constants.ConfigTypeGRPC:
 		grpcOptions, err := grpc.BuildGRPCOptionsFromFlags(l.configPath)
 		if err != nil {
 			return "", nil, err
@@ -79,7 +74,7 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 
 		return grpcOptions.URL, grpcOptions, nil
 
-	case ConfigTypeKafka:
+	case constants.ConfigTypeKafka:
 		configMap, err := kafka.BuildKafkaOptionsFromFlags(l.configPath)
 		if err != nil {
 			return "", nil, err
