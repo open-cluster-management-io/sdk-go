@@ -11,14 +11,18 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 )
 
-func NewSourceOptions(configMap *map[string]interface{}, sourceID string) *options.CloudEventsSourceOptions {
+type KafkaOptions struct {
+	ConfigMap map[string]interface{}
+}
+
+func NewSourceOptions(configMap *KafkaOptions, sourceID string) *options.CloudEventsSourceOptions {
 	return nil
 }
 
-func NewAgentOptions(configMap *map[string]interface{}, clusterName, agentID string) *options.CloudEventsAgentOptions {
+func NewAgentOptions(configMap *KafkaOptions, clusterName, agentID string) *options.CloudEventsAgentOptions {
 	return nil
 }
 
-func BuildKafkaOptionsFromFlags(configPath string) (*map[string]interface{}, error) {
+func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 	return nil, fmt.Errorf("try adding -tags=kafka to build")
 }

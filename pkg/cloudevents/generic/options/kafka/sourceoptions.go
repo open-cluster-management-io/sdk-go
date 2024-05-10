@@ -17,22 +17,21 @@ import (
 )
 
 type kafkaSourceOptions struct {
-	*kafka.ConfigMap
+	KafkaOptions
 	sourceID  string
 	errorChan chan error
 }
 
-func NewSourceOptions(configMap *map[string]interface{}, sourceID string) *options.CloudEventsSourceOptions {
-	kafkaConfigMap := convertToKafkaConfigMap(*configMap)
+func NewSourceOptions(kafkaOptions *KafkaOptions, sourceID string) *options.CloudEventsSourceOptions {
 	sourceOptions := &kafkaSourceOptions{
-		ConfigMap: &kafkaConfigMap,
-		sourceID:  sourceID,
-		errorChan: make(chan error),
+		KafkaOptions: *kafkaOptions,
+		sourceID:     sourceID,
+		errorChan:    make(chan error),
 	}
 
-	groupID, err := kafkaConfigMap.Get("group.id", "")
+	groupID, err := kafkaOptions.ConfigMap.Get("group.id", "")
 	if groupID == "" || err != nil {
-		_ = kafkaConfigMap.SetKey("group.id", sourceID)
+		_ = kafkaOptions.ConfigMap.SetKey("group.id", sourceID)
 	}
 
 	return &options.CloudEventsSourceOptions{
@@ -68,7 +67,7 @@ func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 }
 
 func (o *kafkaSourceOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
-	protocol, err := confluent.New(confluent.WithConfigMap(o.ConfigMap),
+	protocol, err := confluent.New(confluent.WithConfigMap(&o.KafkaOptions.ConfigMap),
 		confluent.WithReceiverTopics([]string{
 			fmt.Sprintf("^%s", strings.Replace(agentEventsTopic, "*", o.sourceID, 1)),
 			fmt.Sprintf("^%s", agentBroadcastTopic),

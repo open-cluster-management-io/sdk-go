@@ -16,7 +16,7 @@ func BuildCloudEventsSourceOptions(config any, clientId, sourceId string) (*opti
 		return mqtt.NewSourceOptions(config, clientId, sourceId), nil
 	case *grpc.GRPCOptions:
 		return grpc.NewSourceOptions(config, sourceId), nil
-	case *map[string]interface{}:
+	case *kafka.KafkaOptions:
 		return kafka.NewSourceOptions(config, sourceId), nil
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
@@ -30,7 +30,7 @@ func BuildCloudEventsAgentOptions(config any, clusterName, clientId string) (*op
 		return mqtt.NewAgentOptions(config, clusterName, clientId), nil
 	case *grpc.GRPCOptions:
 		return grpc.NewAgentOptions(config, clusterName, clientId), nil
-	case *map[string]interface{}:
+	case *kafka.KafkaOptions:
 		return kafka.NewAgentOptions(config, clusterName, clientId), nil
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
