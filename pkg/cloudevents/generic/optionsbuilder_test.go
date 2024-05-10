@@ -12,6 +12,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/loader"
 )
 
 const (
@@ -120,7 +121,12 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			options, err := BuildCloudEventsSourceOptions(c.configType, c.configFilePath, "client", "source")
+			_, config, err := loader.NewConfigLoader(c.configType, c.configFilePath).
+				LoadConfig()
+			if err != nil {
+				t.Errorf("unexpected error %v", err)
+			}
+			options, err := BuildCloudEventsSourceOptions(config, "client", "source")
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
 			}

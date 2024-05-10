@@ -7,33 +7,32 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-	"open-cluster-management.io/sdk-go/pkg/constants"
 )
 
 // BuildCloudEventsSourceOptions builds the cloudevents source options based on the broker type
-func BuildCloudEventsSourceOptions(messageBrokerType, messageBrokerConfigPath, clientId, sourceId string) (*options.CloudEventsSourceOptions, error) {
-	switch messageBrokerType {
-	case constants.ConfigTypeMQTT:
-		mqttOptions, err := mqtt.BuildMQTTOptionsFromFlags(messageBrokerConfigPath)
-		if err != nil {
-			return nil, err
-		}
-		return mqtt.NewSourceOptions(mqttOptions, clientId, sourceId), nil
-
-	case constants.ConfigTypeKafka:
-		kafkaConfigmap, err := kafka.BuildKafkaOptionsFromFlags(messageBrokerConfigPath)
-		if err != nil {
-			return nil, err
-		}
-		return kafka.NewSourceOptions(kafkaConfigmap, sourceId), nil
-
-	case constants.ConfigTypeGRPC:
-		grpcOptions, err := grpc.BuildGRPCOptionsFromFlags(messageBrokerConfigPath)
-		if err != nil {
-			return nil, err
-		}
-		return grpc.NewSourceOptions(grpcOptions, sourceId), nil
-
+func BuildCloudEventsSourceOptions(config any, clientId, sourceId string) (*options.CloudEventsSourceOptions, error) {
+	switch config := config.(type) {
+	case *mqtt.MQTTOptions:
+		return mqtt.NewSourceOptions(config, clientId, sourceId), nil
+	case *grpc.GRPCOptions:
+		return grpc.NewSourceOptions(config, sourceId), nil
+	case *map[string]interface{}:
+		return kafka.NewSourceOptions(config, sourceId), nil
+	default:
+		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}
-	return nil, fmt.Errorf("unsupported message broker type %s", messageBrokerType)
+}
+
+// BuildCloudEventsAgentOptions builds the cloudevents agent options based on the broker type
+func BuildCloudEventsAgentOptions(config any, clusterName, clientId string) (*options.CloudEventsAgentOptions, error) {
+	switch config := config.(type) {
+	case *mqtt.MQTTOptions:
+		return mqtt.NewAgentOptions(config, clusterName, clientId), nil
+	case *grpc.GRPCOptions:
+		return grpc.NewAgentOptions(config, clusterName, clientId), nil
+	case *map[string]interface{}:
+		return kafka.NewAgentOptions(config, clusterName, clientId), nil
+	default:
+		return nil, fmt.Errorf("unsupported client configuration type %T", config)
+	}
 }
