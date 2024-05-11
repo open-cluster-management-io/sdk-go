@@ -124,6 +124,7 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 			latency, evt))
 	}
 
+	ctx = cloudevents.WithEncodingStructured(ctx)
 	sendingCtx, err := c.cloudEventsOptions.WithContext(ctx, evt.Context)
 	if err != nil {
 		return err
