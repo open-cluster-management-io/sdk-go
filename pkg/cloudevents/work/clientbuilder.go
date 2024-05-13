@@ -15,9 +15,6 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	agentclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/client"
 	agenthandler "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/handler"
@@ -121,14 +118,12 @@ func (b *ClientHolderBuilder) NewSourceClientHolder(ctx context.Context) (*Clien
 	switch config := b.config.(type) {
 	case *rest.Config:
 		return b.newKubeClients(config)
-	case *mqtt.MQTTOptions:
-		return b.newSourceClients(ctx, mqtt.NewSourceOptions(config, b.clientID, b.sourceID))
-	case *grpc.GRPCOptions:
-		return b.newSourceClients(ctx, grpc.NewSourceOptions(config, b.sourceID))
-	case *map[string]interface{}:
-		return b.newSourceClients(ctx, kafka.NewSourceOptions(config, b.sourceID))
 	default:
-		return nil, fmt.Errorf("unsupported client configuration type %T", config)
+		options, err := generic.BuildCloudEventsSourceOptions(config, b.clientID, b.sourceID)
+		if err != nil {
+			return nil, err
+		}
+		return b.newSourceClients(ctx, options)
 	}
 }
 
@@ -137,14 +132,12 @@ func (b *ClientHolderBuilder) NewAgentClientHolder(ctx context.Context) (*Client
 	switch config := b.config.(type) {
 	case *rest.Config:
 		return b.newKubeClients(config)
-	case *mqtt.MQTTOptions:
-		return b.newAgentClients(ctx, mqtt.NewAgentOptions(config, b.clusterName, b.clientID))
-	case *grpc.GRPCOptions:
-		return b.newAgentClients(ctx, grpc.NewAgentOptions(config, b.clusterName, b.clientID))
-	case *map[string]interface{}:
-		return b.newAgentClients(ctx, kafka.NewAgentOptions(config, b.clusterName, b.clientID))
 	default:
-		return nil, fmt.Errorf("unsupported client configuration type %T", config)
+		options, err := generic.BuildCloudEventsAgentOptions(config, b.clusterName, b.clientID)
+		if err != nil {
+			return nil, err
+		}
+		return b.newAgentClients(ctx, options)
 	}
 }
 

@@ -26,6 +26,10 @@ const (
 )
 
 type KafkaOptions struct {
+	ConfigMap kafka.ConfigMap
+}
+
+type KafkaConfig struct {
 	// BootstrapServer is the host of the Kafka broker (hostname:port).
 	BootstrapServer string `json:"bootstrapServer" yaml:"bootstrapServer"`
 
@@ -66,7 +70,7 @@ func handleProduceEvents(producerEvents chan kafka.Event, errChan chan error) {
 }
 
 // BuildKafkaOptionsFromFlags builds configs from a config filepath.
-func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
+func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -74,7 +78,7 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 
 	// TODO: failed to unmarshal the data to kafka.ConfigMap directly.
 	// Further investigation is required to understand the reasons behind it.
-	config := &KafkaOptions{}
+	config := &KafkaConfig{}
 	if err := yaml.Unmarshal(configData, config); err != nil {
 		return nil, err
 	}
@@ -91,7 +95,7 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 		return nil, fmt.Errorf("setting clientCertFile and clientKeyFile requires caFile")
 	}
 
-	configMap := &kafka.ConfigMap{
+	configMap := kafka.ConfigMap{
 		"bootstrap.servers":       config.BootstrapServer,
 		"socket.keepalive.enable": true,
 		// silence spontaneous disconnection logs, kafka recovers by itself.
@@ -132,13 +136,7 @@ func BuildKafkaOptionsFromFlags(configPath string) (*kafka.ConfigMap, error) {
 		_ = configMap.SetKey("ssl.key.location", config.ClientKeyFile)
 	}
 
-	return configMap, nil
-}
-
-func convertToKafkaConfigMap(configMap map[string]interface{}) kafka.ConfigMap {
-	kakfaConfigMap := kafka.ConfigMap{}
-	for k, v := range configMap {
-		kakfaConfigMap.SetKey(k, v)
-	}
-	return kakfaConfigMap
+	return &KafkaOptions{
+		ConfigMap: configMap,
+	}, nil
 }

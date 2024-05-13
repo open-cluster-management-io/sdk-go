@@ -21,7 +21,7 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 	cases := []struct {
 		name             string
 		config           string
-		expectedOptions  *kafka.ConfigMap
+		expectedOptions  *KafkaOptions
 		expectedErrorMsg string
 	}{
 		{
@@ -42,44 +42,48 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 		{
 			name:   "options without ssl",
 			config: `{"bootstrapServer":"testBroker","groupID":"testGroupID"}`,
-			expectedOptions: &kafka.ConfigMap{
-				"acks":                                  "1",
-				"auto.commit.interval.ms":               5000,
-				"auto.offset.reset":                     "latest",
-				"bootstrap.servers":                     "testBroker",
-				"enable.auto.commit":                    true,
-				"enable.auto.offset.store":              true,
-				"go.events.channel.size":                1000,
-				"group.id":                              "testGroupID",
-				"log.connection.close":                  false,
-				"queued.max.messages.kbytes":            32768,
-				"retries":                               "0",
-				"socket.keepalive.enable":               true,
-				"ssl.endpoint.identification.algorithm": "none",
+			expectedOptions: &KafkaOptions{
+				ConfigMap: kafka.ConfigMap{
+					"acks":                                  "1",
+					"auto.commit.interval.ms":               5000,
+					"auto.offset.reset":                     "latest",
+					"bootstrap.servers":                     "testBroker",
+					"enable.auto.commit":                    true,
+					"enable.auto.offset.store":              true,
+					"go.events.channel.size":                1000,
+					"group.id":                              "testGroupID",
+					"log.connection.close":                  false,
+					"queued.max.messages.kbytes":            32768,
+					"retries":                               "0",
+					"socket.keepalive.enable":               true,
+					"ssl.endpoint.identification.algorithm": "none",
+				},
 			},
 		},
 
 		{
 			name:   "options with ssl",
 			config: `{"bootstrapServer":"broker1","groupID":"id","clientCertFile":"cert","clientKeyFile":"key","caFile":"ca"}`,
-			expectedOptions: &kafka.ConfigMap{
-				"acks":                                  "1",
-				"auto.commit.interval.ms":               5000,
-				"auto.offset.reset":                     "latest",
-				"bootstrap.servers":                     "broker1",
-				"enable.auto.commit":                    true,
-				"enable.auto.offset.store":              true,
-				"go.events.channel.size":                1000,
-				"group.id":                              "id",
-				"log.connection.close":                  false,
-				"queued.max.messages.kbytes":            32768,
-				"retries":                               "0",
-				"security.protocol":                     "ssl",
-				"socket.keepalive.enable":               true,
-				"ssl.ca.location":                       "ca",
-				"ssl.certificate.location":              "cert",
-				"ssl.endpoint.identification.algorithm": "none",
-				"ssl.key.location":                      "key",
+			expectedOptions: &KafkaOptions{
+				ConfigMap: kafka.ConfigMap{
+					"acks":                                  "1",
+					"auto.commit.interval.ms":               5000,
+					"auto.offset.reset":                     "latest",
+					"bootstrap.servers":                     "broker1",
+					"enable.auto.commit":                    true,
+					"enable.auto.offset.store":              true,
+					"go.events.channel.size":                1000,
+					"group.id":                              "id",
+					"log.connection.close":                  false,
+					"queued.max.messages.kbytes":            32768,
+					"retries":                               "0",
+					"security.protocol":                     "ssl",
+					"socket.keepalive.enable":               true,
+					"ssl.ca.location":                       "ca",
+					"ssl.certificate.location":              "cert",
+					"ssl.endpoint.identification.algorithm": "none",
+					"ssl.key.location":                      "key",
+				},
 			},
 		},
 	}
