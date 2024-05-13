@@ -8,11 +8,12 @@ import (
 	"time"
 
 	confluentkafka "github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"k8s.io/apimachinery/pkg/api/equality"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/loader"
 )
 
 const (
@@ -97,35 +98,42 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 			name:           "kafka config",
 			configType:     "kafka",
 			configFilePath: kafkaConfigFile.Name(),
-			expectedContainedOptions: &confluentkafka.ConfigMap{
-				"acks":                                  "1",
-				"auto.commit.interval.ms":               5000,
-				"auto.offset.reset":                     "latest",
-				"bootstrap.servers":                     "broker1",
-				"enable.auto.commit":                    true,
-				"enable.auto.offset.store":              true,
-				"go.events.channel.size":                1000,
-				"group.id":                              "id",
-				"log.connection.close":                  false,
-				"queued.max.messages.kbytes":            32768,
-				"retries":                               "0",
-				"security.protocol":                     "ssl",
-				"socket.keepalive.enable":               true,
-				"ssl.ca.location":                       "ca",
-				"ssl.certificate.location":              "cert",
-				"ssl.endpoint.identification.algorithm": "none",
-				"ssl.key.location":                      "key",
+			expectedContainedOptions: &kafka.KafkaOptions{
+				ConfigMap: confluentkafka.ConfigMap{
+					"acks":                                  "1",
+					"auto.commit.interval.ms":               5000,
+					"auto.offset.reset":                     "latest",
+					"bootstrap.servers":                     "broker1",
+					"enable.auto.commit":                    true,
+					"enable.auto.offset.store":              true,
+					"go.events.channel.size":                1000,
+					"group.id":                              "id",
+					"log.connection.close":                  false,
+					"queued.max.messages.kbytes":            32768,
+					"retries":                               "0",
+					"security.protocol":                     "ssl",
+					"socket.keepalive.enable":               true,
+					"ssl.ca.location":                       "ca",
+					"ssl.certificate.location":              "cert",
+					"ssl.endpoint.identification.algorithm": "none",
+					"ssl.key.location":                      "key",
+				},
 			},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, config, err := loader.NewConfigLoader(c.configType, c.configFilePath).
+			_, config, err := NewConfigLoader(c.configType, c.configFilePath).
 				LoadConfig()
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
 			}
+
+			if !equality.Semantic.DeepEqual(config, c.expectedContainedOptions) {
+				t.Errorf("unexpected config %v, %v", config, c.expectedContainedOptions)
+			}
+
 			options, err := BuildCloudEventsSourceOptions(config, "client", "source")
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
