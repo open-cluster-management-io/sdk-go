@@ -10,7 +10,6 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -212,15 +211,13 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 		})
 	})
 
-	ginkgo.Context("Publish a manifestwork with owner", func() {
+	ginkgo.Context("Publish a manifestwork with owner reference", func() {
 		var ctx context.Context
 		var cancel context.CancelFunc
 		var sourceID string
 		var clusterName string
 		var workName1 string
 		var workName2 string
-		var workName3 string
-		var workName4 string
 		var sourceClientHolder *work.ClientHolder
 		var agentClientHolder *work.ClientHolder
 		var kubeClient kubernetes.Interface
@@ -232,8 +229,6 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			clusterName = "cluster-a"
 			workName1 = "test1"
 			workName2 = "test2"
-			workName3 = "test3"
-			workName4 = "test4"
 
 			var err error
 			kubeClient, err = kubernetes.NewForConfig(testEnvConfig)
@@ -273,28 +268,6 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				},
 			}, metav1.CreateOptions{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			cm, err := kubeClient.CoreV1().ConfigMaps(ns.Name).Create(ctx, &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Labels: map[string]string{
-						"test": "test",
-					},
-				},
-				Data: map[string]string{
-					"test": "test",
-				},
-			}, metav1.CreateOptions{})
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			mwc, err := kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().Create(ctx, &admissionregistrationv1.MutatingWebhookConfiguration{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Labels: map[string]string{
-						"test": "test",
-					},
-				},
-				Webhooks: []admissionregistrationv1.MutatingWebhook{},
-			}, metav1.CreateOptions{})
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			mca, err := addonClient.AddonV1alpha1().ManagedClusterAddOns(ns.Name).Create(ctx, &addonapiv1alpha1.ManagedClusterAddOn{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -325,31 +298,15 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			work1 := newManifestWork(clusterName, workName1)
 			work2 := newManifestWork(clusterName, workName2)
-			work3 := newManifestWork(clusterName, workName3)
-			work4 := newManifestWork(clusterName, workName4)
 			pTrue := true
 			ownerReference1 := metav1.OwnerReference{
-				APIVersion:         "v1",
-				Kind:               "ConfigMap",
-				Name:               cm.Name,
-				UID:                cm.UID,
-				BlockOwnerDeletion: &pTrue,
-			}
-			ownerReference2 := metav1.OwnerReference{
-				APIVersion:         "v1",
-				Kind:               "PersistentVolume",
-				Name:               mwc.Name,
-				UID:                mwc.UID,
-				BlockOwnerDeletion: &pTrue,
-			}
-			ownerReference3 := metav1.OwnerReference{
 				APIVersion:         addonapiv1alpha1.GroupVersion.String(),
 				Kind:               "ManagedClusterAddon",
 				Name:               mca.Name,
 				UID:                mca.UID,
 				BlockOwnerDeletion: &pTrue,
 			}
-			ownerReference4 := metav1.OwnerReference{
+			ownerReference2 := metav1.OwnerReference{
 				APIVersion:         addonapiv1alpha1.GroupVersion.String(),
 				Kind:               "ClusterManagementAddOn",
 				Name:               cma.Name,
@@ -358,17 +315,11 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			}
 			work1.SetOwnerReferences([]metav1.OwnerReference{ownerReference1})
 			work2.SetOwnerReferences([]metav1.OwnerReference{ownerReference1, ownerReference2})
-			work3.SetOwnerReferences([]metav1.OwnerReference{ownerReference3})
-			work4.SetOwnerReferences([]metav1.OwnerReference{ownerReference3, ownerReference4})
 
 			ginkgo.By("create work with owner by source client", func() {
 				_, err := sourceClientHolder.ManifestWorks(clusterName).Create(ctx, work1, metav1.CreateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 				_, err = sourceClientHolder.ManifestWorks(clusterName).Create(ctx, work2, metav1.CreateOptions{})
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				_, err = sourceClientHolder.ManifestWorks(clusterName).Create(ctx, work3, metav1.CreateOptions{})
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				_, err = sourceClientHolder.ManifestWorks(clusterName).Create(ctx, work4, metav1.CreateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
@@ -414,46 +365,6 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID2, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
 					gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-					workID3 := utils.UID(sourceID, clusterName, workName3)
-					appliedWork, err = agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID3, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-
-					// add finalizers
-					newAppliedWork = appliedWork.DeepCopy()
-					newAppliedWork.Finalizers = []string{"test-finalizer"}
-					patchBytes = patchWork(appliedWork, newAppliedWork)
-					updateWork, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID3, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					// update the work status
-					newAppliedWork = updateWork.DeepCopy()
-					newAppliedWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}}
-					patchBytes = patchWork(updateWork, newAppliedWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID3, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					workID4 := utils.UID(sourceID, clusterName, workName4)
-					appliedWork, err = agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID4, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-
-					// add finalizers
-					newAppliedWork = appliedWork.DeepCopy()
-					newAppliedWork.Finalizers = []string{"test-finalizer"}
-					patchBytes = patchWork(appliedWork, newAppliedWork)
-					updateWork, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID3, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					// update the work status
-					newAppliedWork = updateWork.DeepCopy()
-					newAppliedWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}}
-					patchBytes = patchWork(updateWork, newAppliedWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID3, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
 					return nil
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
@@ -478,35 +389,17 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 						return fmt.Errorf("unexpected status %v", work2.Status.Conditions)
 					}
 
-					work3, err = sourceClientHolder.ManifestWorks(clusterName).Get(ctx, workName3, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-					// ensure the resource status is synced
-					if !meta.IsStatusConditionTrue(work3.Status.Conditions, "Created") {
-						return fmt.Errorf("unexpected status %v", work3.Status.Conditions)
-					}
-
-					work4, err = sourceClientHolder.ManifestWorks(clusterName).Get(ctx, workName3, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-					// ensure the resource status is synced
-					if !meta.IsStatusConditionTrue(work4.Status.Conditions, "Created") {
-						return fmt.Errorf("unexpected status %v", work4.Status.Conditions)
-					}
-
 					return nil
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
 
-			ginkgo.By("delete work owner 1 from source", func() {
+			ginkgo.By("delete namespace-scoped owner of work from source", func() {
 				// envtest does't have GC controller
-				err = kubeClient.CoreV1().ConfigMaps(ns.Name).Delete(ctx, cm.Name, metav1.DeleteOptions{})
+				err = addonClient.AddonV1alpha1().ManagedClusterAddOns(mca.GetNamespace()).Delete(ctx, mca.GetName(), metav1.DeleteOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
-			ginkgo.By("agent delete the work 1", func() {
+			ginkgo.By("agent delete the first work with single owner", func() {
 				gomega.Eventually(func() error {
 					workID1 := utils.UID(sourceID, clusterName, workName1)
 					appliedWork, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID1, metav1.GetOptions{})
@@ -528,7 +421,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
 
-			ginkgo.By("source check the work 1 deletion", func() {
+			ginkgo.By("source check the work deletion with single owner", func() {
 				gomega.Eventually(func() error {
 					work1, err = sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(ctx, workName1, metav1.GetOptions{})
 					if err == nil || !errors.IsNotFound(err) {
@@ -547,13 +440,13 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
 
-			ginkgo.By("delete work owner 2 from source", func() {
+			ginkgo.By("delete cluster-scoped owner of work from source", func() {
 				// envtest does't have GC controller
-				err = kubeClient.AdmissionregistrationV1().MutatingWebhookConfigurations().Delete(ctx, mwc.Name, metav1.DeleteOptions{})
+				err = addonClient.AddonV1alpha1().ClusterManagementAddOns().Delete(ctx, cma.GetName(), metav1.DeleteOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
-			ginkgo.By("agent delete the work 2", func() {
+			ginkgo.By("agent delete the work with two owners", func() {
 				gomega.Eventually(func() error {
 					workID2 := utils.UID(sourceID, clusterName, workName2)
 					appliedWork, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID2, metav1.GetOptions{})
@@ -575,96 +468,11 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
 
-			ginkgo.By("source check the work 2 deletion", func() {
+			ginkgo.By("source check the work deletion with two owners", func() {
 				gomega.Eventually(func() error {
 					work2, err = sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(ctx, workName2, metav1.GetOptions{})
 					if err == nil || !errors.IsNotFound(err) {
 						return fmt.Errorf("the work %s/%s is not deleted", work2.GetNamespace(), work2.GetName())
-					}
-					return nil
-				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
-			})
-
-			ginkgo.By("delete work owner 3 from source", func() {
-				// envtest does't have GC controller
-				err = addonClient.AddonV1alpha1().ManagedClusterAddOns(mca.GetNamespace()).Delete(ctx, mca.GetName(), metav1.DeleteOptions{})
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			})
-
-			ginkgo.By("agent delete the work 3", func() {
-				gomega.Eventually(func() error {
-					workID3 := utils.UID(sourceID, clusterName, workName3)
-					appliedWork, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID3, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-
-					if appliedWork.DeletionTimestamp.IsZero() {
-						return fmt.Errorf("work deletion timestamp is zero")
-					}
-
-					updatedWork := appliedWork.DeepCopy()
-					updatedWork.Finalizers = []string{}
-					patchBytes := patchWork(appliedWork, updatedWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID3, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					return nil
-				}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
-			})
-
-			ginkgo.By("source check the work 3 deletion", func() {
-				gomega.Eventually(func() error {
-					work3, err = sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(ctx, workName3, metav1.GetOptions{})
-					if err == nil || !errors.IsNotFound(err) {
-						return fmt.Errorf("the work %s/%s is not deleted", work3.GetNamespace(), work3.GetName())
-					}
-
-					work4, err = sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(ctx, workName4, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-					if len(work4.GetOwnerReferences()) != 1 {
-						return fmt.Errorf("unexpected owner references (%v) for the work %s/%s", work4.GetOwnerReferences(), work4.GetNamespace(), work4.GetName())
-					}
-
-					return nil
-				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
-			})
-
-			ginkgo.By("delete work owner 4 from source", func() {
-				// envtest does't have GC controller
-				err = addonClient.AddonV1alpha1().ClusterManagementAddOns().Delete(ctx, cma.GetName(), metav1.DeleteOptions{})
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			})
-
-			ginkgo.By("agent delete the work 4", func() {
-				gomega.Eventually(func() error {
-					workID4 := utils.UID(sourceID, clusterName, workName4)
-					appliedWork, err := agentClientHolder.ManifestWorks(clusterName).Get(ctx, workID4, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-
-					if appliedWork.DeletionTimestamp.IsZero() {
-						return fmt.Errorf("work deletion timestamp is zero")
-					}
-
-					updatedWork := appliedWork.DeepCopy()
-					updatedWork.Finalizers = []string{}
-					patchBytes := patchWork(appliedWork, updatedWork)
-					_, err = agentClientHolder.ManifestWorks(clusterName).Patch(ctx, workID4, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					return nil
-				}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
-			})
-
-			ginkgo.By("source check the work 4 deletion", func() {
-				gomega.Eventually(func() error {
-					work4, err = sourceClientHolder.WorkInterface().WorkV1().ManifestWorks(clusterName).Get(ctx, workName4, metav1.GetOptions{})
-					if err == nil || !errors.IsNotFound(err) {
-						return fmt.Errorf("the work %s/%s is not deleted", work4.GetNamespace(), work4.GetName())
 					}
 					return nil
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())

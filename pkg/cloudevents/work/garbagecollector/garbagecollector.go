@@ -11,13 +11,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/metadata/metadatainformer"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/controller-manager/pkg/informerfactory"
 	"k8s.io/klog/v2"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -51,6 +48,7 @@ const (
 	deleteEvent
 )
 
+// event is a wrapper for the object and the event type.
 type event struct {
 	eventType eventType
 	obj       interface{}
@@ -59,78 +57,69 @@ type event struct {
 	gvr    schema.GroupVersionResource
 }
 
-type monitors map[schema.GroupVersionResource]cache.Controller
+// monitor watches resource changes and enqueues the changes for processing.
+type monitor struct {
+	cache.Controller
+	cache.SharedIndexInformer
+}
 
+type monitors map[schema.GroupVersionResource]*monitor
+
+// dependent is a struct that holds the owner UID and the dependent manifestwork namespaced name.
 type dependent struct {
 	ownerUID       types.UID
 	namespacedName types.NamespacedName
 }
 
-type ownerFilters map[schema.GroupVersionResource]metav1.ListOptions
-
+// The GarbageCollector controller monitors manifestworks and associated owner resources,
+// managing the relationship between them and deleting manifestworks when all owner resources are removed.
+// It currently supports only background deletion policy, lacking support for foreground and orphan policies.
+// To prevent overwhelming the API server, the garbage collector operates with rate limiting.
+// It is designed to run alongside the cloudevents source work client, eg. each addon controller
+// utilizing the cloudevents driver should be accompanied by its own garbage collector.
 type GarbageCollector struct {
 	// workClient from cloudevents client builder
 	workClient workv1.WorkV1Interface
 	// workInformer from cloudevents client builder
 	workInformer workv1informers.ManifestWorkInformer
-
-	// owner resources to monitor
-	ownerGVRs []schema.GroupVersionResource
-
 	// metadataClient to operate on the owner resources
 	metadataClient metadata.Interface
-
-	// objectOrMetadataInformerFactory gives access to informers for typed resources
-	// and dynamic resources by their metadata. All generic controllers currently use
-	// object metadata - if a future controller needs access to the full object this
-	// would become GenericInformerFactory and take a dynamic client.
-	objectOrMetadataInformerFactory informerfactory.InformerFactory
-
+	// owner resource and filter pairs
+	ownerGVRFilters map[schema.GroupVersionResource]*metav1.ListOptions
 	// each monitor list/watches a resource (including manifestwork),
 	// the results are funneled to the ownerChanges
 	monitors monitors
-
 	// monitors are the producer of the ownerChanges queue, garbage collector alters
 	// the in-memory owner relationship according to the changes.
 	ownerChanges workqueue.RateLimitingInterface
-
-	// ownerToDependents is a map of owner UID to the UIDs of the dependent manifestworks.
+	// ownerToDependents is a mapping from owner UID to dependent manifestwork UIDs.
+	// It's not thread-safe and is guarded by ownerToDependentsLock.
 	ownerToDependents     map[types.UID][]types.NamespacedName
 	ownerToDependentsLock sync.RWMutex
-
 	// garbage collector attempts to delete the items in attemptToDelete queue when the time is ripe.
 	attemptToDelete workqueue.RateLimitingInterface
 }
 
+// NewGarbageCollector creates a new garbage collector instance.
 func NewGarbageCollector(
 	workClient workv1.WorkV1Interface,
+	metadataClient metadata.Interface,
 	workInformer workv1informers.ManifestWorkInformer,
-	ownerGVRs []schema.GroupVersionResource,
-	ownerListOptions *metav1.ListOptions,
-	kubeClient kubernetes.Interface,
-	metadataClient metadata.Interface) *GarbageCollector {
-	sharedInformerFactory := informers.NewSharedInformerFactoryWithOptions(kubeClient, 10*time.Minute, informers.WithTweakListOptions(func(options *metav1.ListOptions) {
-		options.FieldSelector = ownerListOptions.FieldSelector
-		options.LabelSelector = ownerListOptions.LabelSelector
-	}))
-	metadataInformerFactory := metadatainformer.NewFilteredSharedInformerFactory(metadataClient, 10*time.Minute, metav1.NamespaceAll, func(options *metav1.ListOptions) {
-		options.FieldSelector = ownerListOptions.FieldSelector
-		options.LabelSelector = ownerListOptions.LabelSelector
-	})
+	ownerGVRFilters map[schema.GroupVersionResource]*metav1.ListOptions) *GarbageCollector {
 	return &GarbageCollector{
-		workClient:                      workClient,
-		workInformer:                    workInformer,
-		ownerGVRs:                       ownerGVRs,
-		metadataClient:                  metadataClient,
-		objectOrMetadataInformerFactory: informerfactory.NewInformerFactory(sharedInformerFactory, metadataInformerFactory),
-		ownerToDependents:               make(map[types.UID][]types.NamespacedName),
-		ownerChanges:                    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_owner_changes"),
-		attemptToDelete:                 workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"),
+		workClient:        workClient,
+		workInformer:      workInformer,
+		metadataClient:    metadataClient,
+		ownerGVRFilters:   ownerGVRFilters,
+		ownerToDependents: make(map[types.UID][]types.NamespacedName),
+		ownerChanges:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_owner_changes"),
+		attemptToDelete:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"),
 	}
 }
 
 // Run starts garbage collector monitors and workers.
 func (gc *GarbageCollector) Run(ctx context.Context, workers int) {
+	defer utilruntime.HandleCrash()
 	defer gc.attemptToDelete.ShutDown()
 	defer gc.ownerChanges.ShutDown()
 
@@ -139,7 +128,10 @@ func (gc *GarbageCollector) Run(ctx context.Context, workers int) {
 	defer logger.Info("Shutting down garbage collector")
 
 	// start monitors
-	gc.startMonitors(ctx, logger)
+	if err := gc.startMonitors(ctx, logger); err != nil {
+		logger.Error(err, "Failed to start monitors")
+		return
+	}
 
 	// wait for the controller cache to sync
 	if !cache.WaitForNamedCacheSync("garbage collector", ctx.Done(), func() bool {
@@ -147,10 +139,9 @@ func (gc *GarbageCollector) Run(ctx context.Context, workers int) {
 	}) {
 		return
 	}
-
 	logger.Info("All resource monitors have synced, proceeding to collect garbage")
 
-	// run gc workers
+	// run gc workers to process ownerChanges and attemptToDelete queue.
 	for i := 0; i < workers; i++ {
 		go wait.UntilWithContext(ctx, gc.runProcessOwnerChangesWorker, 1*time.Second)
 		go wait.UntilWithContext(ctx, gc.runAttemptToDeleteWorker, 1*time.Second)
@@ -165,31 +156,38 @@ func (gc *GarbageCollector) startMonitors(ctx context.Context, logger klog.Logge
 	logger.Info("Starting monitors")
 	gc.monitors = make(monitors)
 	// add monitor for manifestwork
-	gc.monitors[workapiv1.SchemeGroupVersion.WithResource("manifestworks")] = gc.workController(logger)
+	ctr, err := gc.workController(logger)
+	if err != nil {
+		return err
+	}
+	gc.monitors[workapiv1.SchemeGroupVersion.WithResource("manifestworks")] = &monitor{
+		Controller:          ctr,
+		SharedIndexInformer: gc.workInformer.Informer(),
+	}
 
 	// add monitor for owner resources
-	for _, gvr := range gc.ownerGVRs {
-		ctr, err := gc.controllerFor(logger, gvr)
+	for gvr, listOptions := range gc.ownerGVRFilters {
+		monitor, err := gc.MonitorFor(logger, gvr, listOptions)
 		if err != nil {
 			return err
 		}
-		gc.monitors[gvr] = ctr
+		gc.monitors[gvr] = monitor
 	}
 
 	// start monitors
-	gc.objectOrMetadataInformerFactory.Start(ctx.Done())
 	started := 0
-	for _, ctr := range gc.monitors {
-		go ctr.Run(ctx.Done())
+	for _, monitor := range gc.monitors {
+		go monitor.Controller.Run(ctx.Done())
+		go monitor.SharedIndexInformer.Run(ctx.Done())
 		started++
 	}
 
-	logger.Info("Started monitors", "started", started, "total", len(gc.monitors))
+	logger.V(4).Info("Started monitors", "started", started, "total", len(gc.monitors))
 	return nil
 }
 
-// workController create controller for manifestwork
-func (gc *GarbageCollector) workController(logger klog.Logger) cache.Controller {
+// workController creates controller for manifestwork
+func (gc *GarbageCollector) workController(logger klog.Logger) (cache.Controller, error) {
 	workGVR := workapiv1.SchemeGroupVersion.WithResource("manifestworks")
 	handlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -198,12 +196,6 @@ func (gc *GarbageCollector) workController(logger klog.Logger) cache.Controller 
 				obj:       obj,
 				gvr:       workGVR,
 			}
-			accessor, err := meta.Accessor(obj)
-			if err != nil {
-				utilruntime.HandleError(fmt.Errorf("cannot access obj: %v", err))
-				return
-			}
-			logger.Info("Manifestwork added", "namespace", accessor.GetNamespace(), "name", accessor.GetName())
 			gc.ownerChanges.Add(event)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -227,7 +219,7 @@ func (gc *GarbageCollector) workController(logger klog.Logger) cache.Controller 
 			if reflect.DeepEqual(newAccessor.GetOwnerReferences(), oldAccessor.GetOwnerReferences()) {
 				return
 			}
-			logger.Info("Manifestwork updated", "namespace", newAccessor.GetNamespace(), "name", newAccessor.GetName())
+			logger.V(4).Info("Manifestwork updated", "namespace", newAccessor.GetNamespace(), "name", newAccessor.GetName())
 			gc.ownerChanges.Add(event)
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -240,44 +232,20 @@ func (gc *GarbageCollector) workController(logger klog.Logger) cache.Controller 
 				obj:       obj,
 				gvr:       workGVR,
 			}
-			accessor, err := meta.Accessor(obj)
-			if err != nil {
-				utilruntime.HandleError(fmt.Errorf("cannot access obj: %v", err))
-				return
-			}
-			logger.Info("Manifestwork deleted", "namespace", accessor.GetNamespace(), "name", accessor.GetName())
 			gc.ownerChanges.Add(event)
 		},
 	}
-	gc.workInformer.Informer().AddEventHandlerWithResyncPeriod(handlers, 0)
-
-	return gc.workInformer.Informer().GetController()
+	if _, err := gc.workInformer.Informer().AddEventHandlerWithResyncPeriod(handlers, 0); err != nil {
+		return nil, err
+	}
+	return gc.workInformer.Informer().GetController(), nil
 }
 
-// controllerFor create controller for owner resource
-func (gc *GarbageCollector) controllerFor(logger klog.Logger, gvr schema.GroupVersionResource) (cache.Controller, error) {
+// MonitorFor creates monitor for owner resource
+func (gc *GarbageCollector) MonitorFor(logger klog.Logger, gvr schema.GroupVersionResource, listOptions *metav1.ListOptions) (*monitor, error) {
 	handlers := cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			// event := &event{
-			// 	eventType: addEvent,
-			// 	obj:       obj,
-			// 	gvr:       gvr,
-			// }
-			// logger.Info("owner added", "resources", gvr)
-			// gc.ownerChanges.Add(event)
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			// TODO: check if there are differences in the ownerRefs,
-			// finalizers, and DeletionTimestamp; if not, ignore the update.
-			// event := &event{
-			// 	eventType: updateEvent,
-			// 	obj:       newObj,
-			// 	oldObj:    oldObj,
-			// 	gvr:       gvr,
-			// }
-			// logger.Info("owner updated", "resources", gvr)
-			// gc.ownerChanges.Add(event)
-		},
+		AddFunc:    func(obj interface{}) {},
+		UpdateFunc: func(oldObj, newObj interface{}) {},
 		DeleteFunc: func(obj interface{}) {
 			// delta fifo may wrap the object in a cache.DeletedFinalStateUnknown, unwrap it
 			if deletedFinalStateUnknown, ok := obj.(cache.DeletedFinalStateUnknown); ok {
@@ -298,32 +266,40 @@ func (gc *GarbageCollector) controllerFor(logger klog.Logger, gvr schema.GroupVe
 			// only add the event to the ownerChanges if the owner has dependents
 			if _, exist := gc.ownerToDependents[accessor.GetUID()]; exist {
 				gc.ownerChanges.Add(event)
-				logger.Info("Owner deleted", "resource", gvr, "namespace", accessor.GetNamespace(), "name", accessor.GetName())
+				logger.V(4).Info("Owner deleted", "resource", gvr, "namespace", accessor.GetNamespace(), "name", accessor.GetName())
 			}
 		},
 	}
 
-	sharedInformer, err := gc.objectOrMetadataInformerFactory.ForResource(gvr)
-	if err != nil {
-		logger.Error(err, "unable to use a shared informer", "resource", gvr)
+	// create informer for owner resource with GVR and listOptions.
+	informer := metadatainformer.NewFilteredMetadataInformer(gc.metadataClient, gvr,
+		metav1.NamespaceAll, 10*time.Minute,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		func(options *metav1.ListOptions) {
+			if listOptions != nil {
+				options.FieldSelector = listOptions.FieldSelector
+				options.LabelSelector = listOptions.LabelSelector
+			}
+		})
+	if _, err := informer.Informer().AddEventHandlerWithResyncPeriod(handlers, 0); err != nil {
 		return nil, err
 	}
-	sharedInformer.Informer().AddEventHandlerWithResyncPeriod(handlers, 0)
-	return sharedInformer.Informer().GetController(), nil
+	return &monitor{
+		Controller:          informer.Informer().GetController(),
+		SharedIndexInformer: informer.Informer(),
+	}, nil
 }
 
 // HasSynced returns true if any monitors exist AND all those monitors'
-// controllers HasSynced functions return true. This means HasSynced could return
-// true at one time, and then later return false if all monitors were
-// reconstructed.
+// controllers HasSynced functions return true.
 func (gc *GarbageCollector) HasSynced(logger klog.Logger) bool {
 	if len(gc.monitors) == 0 {
 		logger.V(4).Info("garbage collector monitors are not synced: no monitors")
 		return false
 	}
 
-	for resource, ctr := range gc.monitors {
-		if !ctr.HasSynced() {
+	for resource, monitor := range gc.monitors {
+		if !monitor.Controller.HasSynced() {
 			logger.V(4).Info("garbage controller monitor is not yet synced", "resource", resource)
 			return false
 		}
@@ -357,7 +333,7 @@ func (gc *GarbageCollector) processOwnerChangesWorker(ctx context.Context) bool 
 		utilruntime.HandleError(fmt.Errorf("cannot access obj: %v", err))
 		return true
 	}
-	logger.Info("Processing owner changes", "event", event.eventType, "resource", event.gvr, "namespace", accessor.GetNamespace(), "name", accessor.GetName())
+	logger.V(4).Info("Processing owner changes", "event", event.eventType, "resource", event.gvr, "namespace", accessor.GetNamespace(), "name", accessor.GetName())
 
 	var oldAccessor metav1.Object
 	if event.eventType == updateEvent {
@@ -369,13 +345,13 @@ func (gc *GarbageCollector) processOwnerChangesWorker(ctx context.Context) bool 
 	}
 
 	if event.gvr.String() == workapiv1.SchemeGroupVersion.WithResource("manifestworks").String() {
+		// handle manifestwork events for owner relationship changes
 		owners := accessor.GetOwnerReferences()
 		switch {
 		case event.eventType == addEvent:
 			for _, owner := range owners {
 				gc.ownerToDependentsLock.Lock()
 				if _, exist := gc.ownerToDependents[owner.UID]; !exist {
-					// TODO: add finalizer to owner object to block onwer deletion
 					gc.ownerToDependents[owner.UID] = []types.NamespacedName{}
 				}
 				gc.ownerToDependents[owner.UID] = append(gc.ownerToDependents[owner.UID], types.NamespacedName{Namespace: accessor.GetNamespace(), Name: accessor.GetName()})
@@ -387,7 +363,6 @@ func (gc *GarbageCollector) processOwnerChangesWorker(ctx context.Context) bool 
 			for _, owner := range added {
 				gc.ownerToDependentsLock.Lock()
 				if _, exist := gc.ownerToDependents[owner.UID]; !exist {
-					// TODO: add finalizer to owner object to block onwer deletion
 					gc.ownerToDependents[owner.UID] = []types.NamespacedName{}
 				}
 				gc.ownerToDependents[owner.UID] = append(gc.ownerToDependents[owner.UID], types.NamespacedName{Namespace: accessor.GetNamespace(), Name: accessor.GetName()})
@@ -447,6 +422,7 @@ type ownerReferenceChange struct {
 	newOwnerRef metav1.OwnerReference
 }
 
+// ownerReferencesDiffs compares two owner references slices and returns the added, removed and changed owner references.
 func ownerReferencesDiffs(old []metav1.OwnerReference, new []metav1.OwnerReference) (added []metav1.OwnerReference, removed []metav1.OwnerReference, changed []ownerReferenceChange) {
 	oldUIDToRef := make(map[string]metav1.OwnerReference)
 	for _, value := range old {
@@ -520,7 +496,7 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 	// may happen when manifestwork deletion failed in last attempt
 	ownerReferences := latest.GetOwnerReferences()
 	if len(ownerReferences) == 0 {
-		logger.Info("Manifestwork has no owner references, deleting it")
+		logger.V(4).Info("Manifestwork has no owner references, deleting it", "namespace", latest.GetNamespace(), "name", latest.GetName())
 		if err := gc.deleteManifestwork(ctx, dep.namespacedName); err != nil {
 			return requeueItem
 		}
@@ -537,22 +513,21 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 
 	if found {
 		// remove the owner reference from the manifestwork
-		logger.Info("Removing owner reference from manifestwork", "owner", dep.ownerUID, "manifestwork", dep.namespacedName)
+		logger.V(4).Info("Removing owner reference from manifestwork", "owner", dep.ownerUID, "manifestwork", dep.namespacedName)
 		jmp, err := generateDeleteOwnerRefJSONMergePatch(latest, dep.ownerUID)
 		if err != nil {
-			logger.Info("Failed to generate JSON merge patch", "error", err)
+			logger.Error(err, "Failed to generate JSON merge patch", "error")
 			return requeueItem
 		}
 		if _, err = gc.patchManifestwork(ctx, dep.namespacedName, jmp, types.MergePatchType); err != nil {
-			logger.Info("Failed to patch manifestwork with json patch", "error", err)
+			logger.Error(err, "Failed to patch manifestwork with json patch")
 			return requeueItem
 		}
-
-		logger.Info("Successfully removed owner reference from manifestwork", "owner", dep.ownerUID, "manifestwork", dep.namespacedName)
+		logger.V(4).Info("Successfully removed owner reference from manifestwork", "owner", dep.ownerUID, "manifestwork", dep.namespacedName)
 
 		// if the deleted owner reference is the only owner reference then delete the manifestwork
 		if len(ownerReferences) == 1 {
-			logger.Info("All owner references are deleted for manifestwork, deleting the manifestwork itself")
+			logger.V(4).Info("All owner references are deleted for manifestwork, deleting the manifestwork itself", "manifestwork", dep.namespacedName)
 			if err := gc.deleteManifestwork(ctx, dep.namespacedName); err != nil {
 				return requeueItem
 			}

@@ -9,15 +9,12 @@ import (
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 
-	corev1 "k8s.io/api/core/v1"
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
@@ -207,26 +204,19 @@ func StartManifestWorkSourceClient(ctx context.Context, kubeConfig *rest.Config,
 
 	workClient := clientHolder.WorkInterface()
 	workInformers := clientHolder.ManifestWorkInformer()
-
-	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
 	metadataClient, err := metadata.NewForConfig(kubeConfig)
 	if err != nil {
 		return nil, err
 	}
-	ownerGVRs := []schema.GroupVersionResource{
-		corev1.SchemeGroupVersion.WithResource(corev1.ResourceConfigMaps.String()),
-		admissionregistrationv1.SchemeGroupVersion.WithResource("mutatingwebhookconfigurations"),
-		addonapiv1alpha1.SchemeGroupVersion.WithResource("managedclusteraddons"),
-		addonapiv1alpha1.SchemeGroupVersion.WithResource("clustermanagementaddons"),
-	}
 	listOptions := &metav1.ListOptions{
-		FieldSelector: "metadata.name=test",
 		LabelSelector: "test=test",
+		FieldSelector: "metadata.name=test",
 	}
-	garbageCollector := garbagecollector.NewGarbageCollector(workClient.WorkV1(), workInformers, ownerGVRs, listOptions, kubeClient, metadataClient)
+	ownerGVRFilters := map[schema.GroupVersionResource]*metav1.ListOptions{
+		addonapiv1alpha1.SchemeGroupVersion.WithResource("managedclusteraddons"):    listOptions,
+		addonapiv1alpha1.SchemeGroupVersion.WithResource("clustermanagementaddons"): listOptions,
+	}
+	garbageCollector := garbagecollector.NewGarbageCollector(workClient.WorkV1(), metadataClient, workInformers, ownerGVRFilters)
 	go garbageCollector.Run(ctx, 1)
 	go workInformers.Informer().Run(ctx.Done())
 
