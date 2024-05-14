@@ -17,7 +17,7 @@ import (
 )
 
 type kafkaAgentOptions struct {
-	KafkaOptions
+	configMap   kafka.ConfigMap
 	clusterName string
 	agentID     string
 	errorChan   chan error
@@ -25,15 +25,15 @@ type kafkaAgentOptions struct {
 
 func NewAgentOptions(kafkaOptions *KafkaOptions, clusterName, agentID string) *options.CloudEventsAgentOptions {
 	kafkaAgentOptions := &kafkaAgentOptions{
-		KafkaOptions: *kafkaOptions,
-		clusterName:  clusterName,
-		agentID:      agentID,
-		errorChan:    make(chan error),
+		configMap:   kafkaOptions.ConfigMap(),
+		clusterName: clusterName,
+		agentID:     agentID,
+		errorChan:   make(chan error),
 	}
 
-	groupID, err := kafkaOptions.ConfigMap.Get("group.id", "")
+	groupID, err := kafkaAgentOptions.configMap.Get("group.id", "")
 	if groupID == "" || err != nil {
-		_ = kafkaOptions.ConfigMap.SetKey("group.id", agentID)
+		_ = kafkaAgentOptions.configMap.SetKey("group.id", agentID)
 	}
 
 	return &options.CloudEventsAgentOptions{
@@ -69,7 +69,7 @@ func (o *kafkaAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 }
 
 func (o *kafkaAgentOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
-	protocol, err := confluent.New(confluent.WithConfigMap(&o.KafkaOptions.ConfigMap),
+	protocol, err := confluent.New(confluent.WithConfigMap(&o.configMap),
 		confluent.WithReceiverTopics([]string{
 			fmt.Sprintf("^%s", replaceLast(sourceEventsTopic, "*", o.clusterName)),
 			fmt.Sprintf("^%s", sourceBroadcastTopic),

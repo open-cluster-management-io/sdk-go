@@ -76,17 +76,17 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 		return grpcOptions.URL, grpcOptions, nil
 
 	case constants.ConfigTypeKafka:
-		kafkaOptions, err := kafka.BuildKafkaOptionsFromFlags(l.configPath)
+		configMap, err := kafka.BuildKafkaOptionsFromFlags(l.configPath)
 		if err != nil {
 			return "", nil, err
 		}
-		val, found := kafkaOptions.ConfigMap["bootstrap.servers"]
+		val, found := (*configMap)["bootstrap.servers"]
 		if found {
 			server, ok := val.(string)
 			if !ok {
 				return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
 			}
-			return server, kafkaOptions, nil
+			return server, configMap, nil
 		}
 		return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
 	}

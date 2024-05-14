@@ -11,9 +11,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 )
 
-type KafkaOptions struct {
-	ConfigMap map[string]interface{}
-}
+type KafkaOptions map[string]interface{}
 
 func NewSourceOptions(configMap *KafkaOptions, sourceID string) *options.CloudEventsSourceOptions {
 	return nil

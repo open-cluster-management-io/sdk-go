@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 const (
@@ -25,8 +25,14 @@ const (
 	agentBroadcastTopic = "agentbroadcast.*"
 )
 
-type KafkaOptions struct {
-	ConfigMap kafka.ConfigMap
+type KafkaOptions map[string]interface{}
+
+func (opts *KafkaOptions) ConfigMap() kafkav2.ConfigMap {
+	kafkaConfigMap := kafkav2.ConfigMap{}
+	for k, v := range *opts {
+		_ = kafkaConfigMap.SetKey(k, v)
+	}
+	return kafkaConfigMap
 }
 
 type KafkaConfig struct {
@@ -48,19 +54,19 @@ type KafkaConfig struct {
 // Listen to all the events on the default events channel
 // It's important to read these events otherwise the events channel will eventually fill up
 // Detail: https://github.com/cloudevents/sdk-go/blob/main/protocol/kafka_confluent/v2/protocol.go#L90
-func handleProduceEvents(producerEvents chan kafka.Event, errChan chan error) {
+func handleProduceEvents(producerEvents chan kafkav2.Event, errChan chan error) {
 	if producerEvents == nil {
 		return
 	}
 	go func() {
 		for e := range producerEvents {
 			switch ev := e.(type) {
-			case *kafka.Message:
+			case *kafkav2.Message:
 				// The message delivery report, indicating success or failure when sending message
 				if ev.TopicPartition.Error != nil {
 					klog.Errorf("Delivery failed: %v", ev.TopicPartition.Error)
 				}
-			case kafka.Error:
+			case kafkav2.Error:
 				// Generic client instance-level errors, such as
 				// broker connection failures, authentication issues, etc.
 				errChan <- fmt.Errorf("client error %w", ev)
@@ -95,7 +101,7 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 		return nil, fmt.Errorf("setting clientCertFile and clientKeyFile requires caFile")
 	}
 
-	configMap := kafka.ConfigMap{
+	kafkaOptions := KafkaOptions{
 		"bootstrap.servers":       config.BootstrapServer,
 		"socket.keepalive.enable": true,
 		// silence spontaneous disconnection logs, kafka recovers by itself.
@@ -130,13 +136,23 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 	}
 
 	if config.ClientCertFile != "" {
-		_ = configMap.SetKey("security.protocol", "ssl")
-		_ = configMap.SetKey("ssl.ca.location", config.CAFile)
-		_ = configMap.SetKey("ssl.certificate.location", config.ClientCertFile)
-		_ = configMap.SetKey("ssl.key.location", config.ClientKeyFile)
-	}
+		kafkaOptions["security.protocol"] = "ssl"
+		kafkaOptions["ssl.ca.location"] = config.CAFile
+		kafkaOptions["ssl.certificate.location"] = config.ClientCertFile
+		kafkaOptions["ssl.key.location"] = config.ClientKeyFile
 
-	return &KafkaOptions{
-		ConfigMap: configMap,
-	}, nil
+		// _ = kafkaConfigMap.SetKey("security.protocol", "ssl")
+		// _ = kafkaConfigMap.SetKey("ssl.ca.location", config.CAFile)
+		// _ = kafkaConfigMap.SetKey("ssl.certificate.location", config.ClientCertFile)
+		// _ = kafkaConfigMap.SetKey("ssl.key.location", config.ClientKeyFile)
+	}
+	return &kafkaOptions, nil
 }
+
+// func convertToKafkaConfigMap(configMap map[string]interface{}) kafkav2.ConfigMap {
+// 	kafkaConfigMap := kafkav2.ConfigMap{}
+// 	for k, v := range configMap {
+// 		_ = kafkaConfigMap.SetKey(k, v)
+// 	}
+// 	return kafkaConfigMap
+// }

@@ -112,8 +112,8 @@ func TestAgentContext(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			agentOptions := &kafkaAgentOptions{
-				KafkaOptions: *kafkaOptions,
-				clusterName:  clusterName,
+				configMap:   kafkaOptions.ConfigMap(),
+				clusterName: clusterName,
 			}
 
 			ctx, err := agentOptions.WithContext(context.TODO(), c.event.Context)
