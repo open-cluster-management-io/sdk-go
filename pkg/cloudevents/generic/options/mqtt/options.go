@@ -17,6 +17,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
@@ -28,19 +29,53 @@ const (
 	MQTT_AGENT_PUB_TOPIC_KEY  TopicKey = "mqtt_agent_pub_topic"
 )
 
+type MQTTDialer struct {
+	TLSConfig  *tls.Config
+	BrokerHost string
+	Timeout    time.Duration
+
+	conn net.Conn
+}
+
+func (d *MQTTDialer) Dial() (net.Conn, error) {
+	if d.TLSConfig != nil {
+		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: d.Timeout}, "tcp", d.BrokerHost, d.TLSConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to MQTT broker %s, %v", d.BrokerHost, err)
+		}
+
+		// ensure parallel writes are thread-Safe
+		d.conn = packets.NewThreadSafeConn(conn)
+		return d.conn, nil
+	}
+
+	conn, err := net.DialTimeout("tcp", d.BrokerHost, d.Timeout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to MQTT broker %s, %v", d.BrokerHost, err)
+	}
+
+	// ensure parallel writes are thread-Safe
+	d.conn = packets.NewThreadSafeConn(conn)
+	return d.conn, nil
+}
+
+func (d *MQTTDialer) Close() error {
+	if d.conn != nil {
+		return d.conn.Close()
+	}
+	return nil
+}
+
 // MQTTOptions holds the options that are used to build MQTT client.
 type MQTTOptions struct {
-	Topics         types.Topics
-	BrokerHost     string
-	Username       string
-	Password       string
-	CAFile         string
-	ClientCertFile string
-	ClientKeyFile  string
-	KeepAlive      uint16
-	DialTimeout    time.Duration
-	PubQoS         int
-	SubQoS         int
+	Topics    types.Topics
+	Username  string
+	Password  string
+	KeepAlive uint16
+	PubQoS    int
+	SubQoS    int
+
+	Dialer *MQTTDialer
 }
 
 // MQTTConfig holds the information needed to build connect to MQTT broker as a given user.
@@ -104,25 +139,16 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 	}
 
 	options := &MQTTOptions{
-		BrokerHost:     config.BrokerHost,
-		Username:       config.Username,
-		Password:       config.Password,
-		CAFile:         config.CAFile,
-		ClientCertFile: config.ClientCertFile,
-		ClientKeyFile:  config.ClientKeyFile,
-		KeepAlive:      60,
-		PubQoS:         1,
-		SubQoS:         1,
-		DialTimeout:    60 * time.Second,
-		Topics:         *config.Topics,
+		Username:  config.Username,
+		Password:  config.Password,
+		KeepAlive: 60,
+		PubQoS:    1,
+		SubQoS:    1,
+		Topics:    *config.Topics,
 	}
 
 	if config.KeepAlive != nil {
 		options.KeepAlive = *config.KeepAlive
-	}
-
-	if config.DialTimeout != nil {
-		options.DialTimeout = *config.DialTimeout
 	}
 
 	if config.PubQoS != nil {
@@ -133,49 +159,49 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 		options.SubQoS = *config.SubQoS
 	}
 
-	return options, nil
-}
+	dialTimeout := 60 * time.Second
+	if config.DialTimeout != nil {
+		dialTimeout = *config.DialTimeout
+	}
 
-func (o *MQTTOptions) GetNetConn() (net.Conn, error) {
-	if len(o.CAFile) != 0 {
+	if len(config.CAFile) != 0 {
 		certPool, err := x509.SystemCertPool()
 		if err != nil {
 			return nil, err
 		}
 
-		caPEM, err := os.ReadFile(o.CAFile)
+		caPEM, err := os.ReadFile(config.CAFile)
 		if err != nil {
 			return nil, err
 		}
 
 		if ok := certPool.AppendCertsFromPEM(caPEM); !ok {
-			return nil, fmt.Errorf("invalid CA %s", o.CAFile)
+			return nil, fmt.Errorf("invalid CA %s", config.CAFile)
 		}
 
-		clientCerts, err := tls.LoadX509KeyPair(o.ClientCertFile, o.ClientKeyFile)
-		if err != nil {
-			return nil, err
+		tlsConfig := &tls.Config{
+			RootCAs: certPool,
+			GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				return cert.CachingCertificateLoader(config.ClientCertFile, config.ClientKeyFile)()
+			},
 		}
 
-		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: o.DialTimeout}, "tcp", o.BrokerHost, &tls.Config{
-			RootCAs:      certPool,
-			Certificates: []tls.Certificate{clientCerts},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to MQTT broker %s, %v", o.BrokerHost, err)
+		options.Dialer = &MQTTDialer{
+			BrokerHost: config.BrokerHost,
+			TLSConfig:  tlsConfig,
+			Timeout:    dialTimeout,
 		}
 
-		// ensure parallel writes are thread-Safe
-		return packets.NewThreadSafeConn(conn), nil
+		// start a goroutine to periodically refresh client certificates for this connection
+		cert.StartClientCertRotating(tlsConfig.GetClientCertificate, options.Dialer)
+		return options, nil
 	}
 
-	conn, err := net.DialTimeout("tcp", o.BrokerHost, o.DialTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MQTT broker %s, %v", o.BrokerHost, err)
+	options.Dialer = &MQTTDialer{
+		BrokerHost: config.BrokerHost,
+		Timeout:    dialTimeout,
 	}
-
-	// ensure parallel writes are thread-Safe
-	return packets.NewThreadSafeConn(conn), nil
+	return options, nil
 }
 
 func (o *MQTTOptions) GetMQTTConnectOption(clientID string) *paho.Connect {
@@ -204,7 +230,7 @@ func (o *MQTTOptions) GetCloudEventsProtocol(
 	errorHandler func(error),
 	clientOpts ...cloudeventsmqtt.Option,
 ) (options.CloudEventsProtocol, error) {
-	netConn, err := o.GetNetConn()
+	netConn, err := o.Dialer.Dial()
 	if err != nil {
 		return nil, err
 	}

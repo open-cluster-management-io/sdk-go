@@ -6,10 +6,11 @@ import (
 	"log"
 	"net"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/equality"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -79,14 +80,16 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			name:   "default options",
 			config: testConfig,
 			expectedOptions: &MQTTOptions{
-				BrokerHost:  "test",
-				KeepAlive:   60,
-				PubQoS:      1,
-				SubQoS:      1,
-				DialTimeout: 60 * time.Second,
+				KeepAlive: 60,
+				PubQoS:    1,
+				SubQoS:    1,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
+				},
+				Dialer: &MQTTDialer{
+					BrokerHost: "test",
+					Timeout:    60 * time.Second,
 				},
 			},
 		},
@@ -94,14 +97,16 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			name:   "default options with yaml format",
 			config: testYamlConfig,
 			expectedOptions: &MQTTOptions{
-				BrokerHost:  "test",
-				KeepAlive:   60,
-				PubQoS:      1,
-				SubQoS:      1,
-				DialTimeout: 60 * time.Second,
+				KeepAlive: 60,
+				PubQoS:    1,
+				SubQoS:    1,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
+				},
+				Dialer: &MQTTDialer{
+					BrokerHost: "test",
+					Timeout:    60 * time.Second,
 				},
 			},
 		},
@@ -109,14 +114,16 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			name:   "customized options",
 			config: testCustomizedConfig,
 			expectedOptions: &MQTTOptions{
-				BrokerHost:  "test",
-				KeepAlive:   30,
-				PubQoS:      0,
-				SubQoS:      2,
-				DialTimeout: 10 * time.Minute,
+				KeepAlive: 30,
+				PubQoS:    0,
+				SubQoS:    2,
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
+				},
+				Dialer: &MQTTDialer{
+					BrokerHost: "test",
+					Timeout:    10 * time.Minute,
 				},
 			},
 		},
@@ -135,7 +142,7 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 				}
 			}
 
-			if !reflect.DeepEqual(options, c.expectedOptions) {
+			if !equality.Semantic.DeepEqual(options, c.expectedOptions) {
 				t.Errorf("unexpected options %v", options)
 			}
 		})
@@ -342,7 +349,7 @@ func TestConnectionTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	options.DialTimeout = 10 * time.Millisecond
+	options.Dialer.Timeout = 10 * time.Millisecond
 
 	agentOptions := &mqttAgentOptions{
 		MQTTOptions: *options,
