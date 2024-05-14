@@ -140,19 +140,6 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 		kafkaOptions["ssl.ca.location"] = config.CAFile
 		kafkaOptions["ssl.certificate.location"] = config.ClientCertFile
 		kafkaOptions["ssl.key.location"] = config.ClientKeyFile
-
-		// _ = kafkaConfigMap.SetKey("security.protocol", "ssl")
-		// _ = kafkaConfigMap.SetKey("ssl.ca.location", config.CAFile)
-		// _ = kafkaConfigMap.SetKey("ssl.certificate.location", config.ClientCertFile)
-		// _ = kafkaConfigMap.SetKey("ssl.key.location", config.ClientKeyFile)
 	}
 	return &kafkaOptions, nil
 }
-
-// func convertToKafkaConfigMap(configMap map[string]interface{}) kafkav2.ConfigMap {
-// 	kafkaConfigMap := kafkav2.ConfigMap{}
-// 	for k, v := range configMap {
-// 		_ = kafkaConfigMap.SetKey(k, v)
-// 	}
-// 	return kafkaConfigMap
-// }

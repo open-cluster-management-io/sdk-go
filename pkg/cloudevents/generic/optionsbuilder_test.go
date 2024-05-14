@@ -128,18 +128,6 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 			if !equality.Semantic.DeepEqual(config, c.expectedContainedOptions) {
 				t.Errorf("unexpected config %v, %v", config, c.expectedContainedOptions)
 			}
-
-			// options, err := BuildCloudEventsSourceOptions(config, "client", "source")
-			// if err != nil {
-			// 	t.Errorf("unexpected error %v", err)
-			// }
-
-			// optionsRaw, _ := json.Marshal(options)
-			// expectedRaw, _ := json.Marshal(c.expectedContainedOptions)
-
-			// if !strings.Contains(string(optionsRaw), string(expectedRaw)) {
-			// 	t.Errorf("the results %v\n does not contain the original options %v\n", string(optionsRaw), string(expectedRaw))
-			// }
 		})
 	}
 }
