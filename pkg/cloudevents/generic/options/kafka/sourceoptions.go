@@ -29,11 +29,7 @@ func NewSourceOptions(kafkaOptions *KafkaOptions, sourceID string) *options.Clou
 		errorChan:    make(chan error),
 	}
 
-	groupID, err := kafkaOptions.ConfigMap.Get("group.id", "")
-	if groupID == "" || err != nil {
-		_ = kafkaOptions.ConfigMap.SetKey("group.id", sourceID)
-	}
-
+	_ = kafkaOptions.ConfigMap.SetKey("group.id", sourceID)
 	return &options.CloudEventsSourceOptions{
 		CloudEventsOptions: sourceOptions,
 		SourceID:           sourceID,

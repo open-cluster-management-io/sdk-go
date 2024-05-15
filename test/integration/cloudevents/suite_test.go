@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	mochimqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
@@ -16,33 +17,36 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	grpcoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
-const mqttBrokerHost = "127.0.0.1:1883"
-const mqttTLSBrokerHost = "127.0.0.1:8883"
+const (
+	mqttBrokerHost    = "127.0.0.1:1883"
+	mqttTLSBrokerHost = "127.0.0.1:8883"
+	grpcServerHost    = "127.0.0.1:8881"
+	sourceID          = "integration-test"
+)
 
-const grpcServerHost = "127.0.0.1:8881"
-
-const sourceID = "integration-test"
-
-var mqttBroker *mochimqtt.Server
-var mqttOptions *mqtt.MQTTOptions
-var mqttSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
-
-var grpcServer *source.GRPCServer
-var grpcOptions *grpcoptions.GRPCOptions
-var grpcSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
-
-var eventBroadcaster *source.EventBroadcaster
-var store *source.MemoryStore
-var consumerStore *source.MemoryStore
-
-var serverCertPairs *util.ServerCertPairs
-var certPool *x509.CertPool
+var (
+	// TODO: need a brokerInterface to consolidate the transport configurations
+	mqttBroker                  *mochimqtt.Server
+	mqttOptions                 *mqtt.MQTTOptions
+	mqttSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
+	grpcServer                  *source.GRPCServer
+	grpcOptions                 *grpcoptions.GRPCOptions
+	grpcSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
+	eventBroadcaster            *source.EventBroadcaster
+	store                       *source.MemoryStore
+	consumerStore               *source.MemoryStore
+	serverCertPairs             *util.ServerCertPairs
+	certPool                    *x509.CertPool
+	kafkaCluster                *kafkav2.MockCluster
+	kafkaOptions                *kafka.KafkaOptions
+)
 
 func TestIntegration(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
@@ -115,6 +119,23 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	})
 
 	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, store.GetResourceSpecChan())
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	ginkgo.By("init the kafka broker and topics")
+	kafkaCluster, err = kafkav2.NewMockCluster(1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	kafkaOptions = &kafka.KafkaOptions{
+		ConfigMap: kafkav2.ConfigMap{
+			"bootstrap.servers": kafkaCluster.BootstrapServers(),
+		},
+	}
+	err = kafkaCluster.CreateTopic("sourcebroadcast.source1", 1, 1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	err = kafkaCluster.CreateTopic("sourceevents.source1.cluster1", 1, 1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	err = kafkaCluster.CreateTopic("agentevents.source1.cluster1", 1, 1)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	err = kafkaCluster.CreateTopic("agentbroadcast.cluster1", 1, 1)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	close(done)

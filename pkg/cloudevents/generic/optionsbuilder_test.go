@@ -26,9 +26,10 @@ topics:
 	grpcConfig = `
 url: grpc
 `
+	sourceId    = "source"
 	kafkaConfig = `
 bootstrapServer: broker1
-groupID: id
+groupID: source
 clientCertFile: cert
 clientKeyFile: key
 caFile: ca
@@ -109,7 +110,7 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 					"enable.auto.commit":                    true,
 					"enable.auto.offset.store":              true,
 					"go.events.channel.size":                1000,
-					"group.id":                              "id",
+					"group.id":                              sourceId,
 					"log.connection.close":                  false,
 					"queued.max.messages.kbytes":            32768,
 					"retries":                               "0",
@@ -136,7 +137,7 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 				t.Errorf("unexpected config %v, %v", config, c.expectedContainedOptions)
 			}
 
-			options, err := BuildCloudEventsSourceOptions(config, "client", "source")
+			options, err := BuildCloudEventsSourceOptions(config, "client", sourceId)
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
 			}

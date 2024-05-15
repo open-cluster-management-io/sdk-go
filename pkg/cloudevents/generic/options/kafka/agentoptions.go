@@ -31,10 +31,7 @@ func NewAgentOptions(kafkaOptions *KafkaOptions, clusterName, agentID string) *o
 		errorChan:    make(chan error),
 	}
 
-	groupID, err := kafkaOptions.ConfigMap.Get("group.id", "")
-	if groupID == "" || err != nil {
-		_ = kafkaOptions.ConfigMap.SetKey("group.id", agentID)
-	}
+	_ = kafkaOptions.ConfigMap.SetKey("group.id", agentID)
 
 	return &options.CloudEventsAgentOptions{
 		CloudEventsOptions: kafkaAgentOptions,
