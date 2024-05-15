@@ -63,7 +63,15 @@ func handleProduceEvents(producerEvents chan kafka.Event, errChan chan error) {
 			case kafka.Error:
 				// Generic client instance-level errors, such as
 				// broker connection failures, authentication issues, etc.
-				errChan <- fmt.Errorf("client error %w", ev)
+				if ev.Code() == kafka.ErrAllBrokersDown {
+					// ALL_BROKERS_DOWN doesn't really mean anything to librdkafka, it is just a friendly indication
+					// to the application that currently there are no brokers to communicate with.
+					// But librdkafka will continue to try to reconnect indefinately,
+					// and it will attempt to re-send messages until message.timeout.ms or message.max.retries are exceeded.
+					klog.V(4).Infof("Producer received the error %v", ev)
+				} else {
+					errChan <- fmt.Errorf("client error %w", ev)
+				}
 			}
 		}
 	}()
