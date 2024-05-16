@@ -5,93 +5,106 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/metadata"
+	fakemetadata "k8s.io/client-go/metadata/fake"
 	"k8s.io/client-go/rest"
 
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	workclientset "open-cluster-management.io/api/client/work/clientset/versioned"
+	fakework "open-cluster-management.io/api/client/work/clientset/versioned/fake"
 	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	workapiv1 "open-cluster-management.io/api/work/v1"
 )
 
-func createEvent(eventType eventType, namespace, name string, newOwners, oldOwners []string) *event {
-	var newOwnerReferences []metav1.OwnerReference
-	var oldOwnerReferences []metav1.OwnerReference
-	for i := 0; i < len(newOwners); i++ {
-		newOwnerReferences = append(newOwnerReferences, metav1.OwnerReference{UID: types.UID(newOwners[i])})
-	}
-	for i := 0; i < len(oldOwners); i++ {
-		oldOwnerReferences = append(oldOwnerReferences, metav1.OwnerReference{UID: types.UID(oldOwners[i])})
+func buildWork(namespace, name string, owners []string) *workapiv1.ManifestWork {
+	var ownerReferences []metav1.OwnerReference
+	for i := 0; i < len(owners); i++ {
+		ownerReferences = append(ownerReferences, metav1.OwnerReference{UID: types.UID(owners[i])})
 	}
 
-	return &event{
-		eventType: eventType,
-		obj: &workapiv1.ManifestWork{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            name,
-				Namespace:       namespace,
-				OwnerReferences: newOwnerReferences,
-			},
+	return &workapiv1.ManifestWork{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            name,
+			Namespace:       namespace,
+			OwnerReferences: ownerReferences,
 		},
-		oldObj: &workapiv1.ManifestWork{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            name,
-				Namespace:       namespace,
-				OwnerReferences: oldOwnerReferences,
-			},
-		},
-		gvr: workapiv1.GroupVersion.WithResource("manifestworks"),
 	}
 }
 
-func TestProcessOwnerChangesEvent(t *testing.T) {
+func TestProcessManifestWorkEvent(t *testing.T) {
 	cases := []struct {
 		name string
 		// a series of events that will be supplied to the ownerChanges queue
-		events                  []*event
-		expectedUIDToDependents map[types.UID][]types.NamespacedName
+		manifestworks []*workapiv1.ManifestWork
+		expectedIndex map[string][]string
 	}{
 		{
 			name: "test1",
-			events: []*event{
-				createEvent(addEvent, "ns1", "work1", []string{}, []string{}),
-				createEvent(addEvent, "ns1", "work2", []string{"1"}, []string{}),
-				createEvent(addEvent, "ns1", "work3", []string{"1", "2"}, []string{}),
-				createEvent(updateEvent, "ns1", "work1", []string{"1"}, []string{}),
-				createEvent(updateEvent, "ns1", "work2", []string{"1", "3"}, []string{"1"}),
-				createEvent(deleteEvent, "ns1", "work3", []string{"1", "2"}, []string{}),
+			manifestworks: []*workapiv1.ManifestWork{
+				buildWork("ns1", "work1", []string{}),
+				buildWork("ns1", "work2", []string{"1"}),
+				buildWork("ns1", "work3", []string{"1", "3"}),
+				buildWork("ns1", "work1", []string{"1"}),
+				buildWork("ns1", "work2", []string{"1", "2"}),
+				buildWork("ns1", "work3", []string{"3"}),
 			},
-			expectedUIDToDependents: map[types.UID][]types.NamespacedName{
-				"1": {types.NamespacedName{Name: "work2", Namespace: "ns1"}, types.NamespacedName{Name: "work1", Namespace: "ns1"}},
-				"3": {types.NamespacedName{Name: "work2", Namespace: "ns1"}},
+			expectedIndex: map[string][]string{
+				"1": {"ns1/work1", "ns1/work2"},
+				"2": {"ns1/work2"},
+				"3": {"ns1/work3"},
 			},
 		},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	gc := setupGC(t, &rest.Config{})
-	go gc.runProcessOwnerChangesWorker(ctx)
+	fakeWorkClient := fakework.NewSimpleClientset()
+	fakeWorkInformer := workinformers.NewSharedInformerFactory(fakeWorkClient, 10*time.Minute).Work().V1().ManifestWorks()
+	metadataClient := fakemetadata.NewSimpleMetadataClient(fakemetadata.NewTestScheme())
+	gc := NewGarbageCollector(fakeWorkClient.WorkV1(), metadataClient, fakeWorkInformer, nil)
+	go fakeWorkInformer.Informer().Run(ctx.Done())
 	for _, testCase := range cases {
-		for _, event := range testCase.events {
-			gc.ownerChanges.Add(event)
+		for _, work := range testCase.manifestworks {
+			if err := gc.workInformer.Informer().GetStore().Add(work); err != nil {
+				if !errors.IsAlreadyExists(err) {
+					t.Fatalf("failed to add work to store: %v", err)
+				}
+				if err := gc.workInformer.Informer().GetStore().Update(work); err != nil {
+					t.Fatalf("failed to update work in store: %v", err)
+				}
+			}
 		}
-		time.Sleep(1 * time.Second)
-		gc.ownerToDependentsLock.RLock()
-		if !reflect.DeepEqual(gc.ownerToDependents, testCase.expectedUIDToDependents) {
-			t.Errorf("expected %v but got %v", testCase.expectedUIDToDependents, gc.ownerToDependents)
+
+		for ownerUID, expectedNamespacedNames := range testCase.expectedIndex {
+			objs, err := gc.workIndexer.ByIndex(manifestWorkByOwner, ownerUID)
+			if err != nil {
+				t.Fatalf("failed to get objects by index: %v", err)
+			}
+			gotNamspacedNames := make([]string, len(objs))
+			for i, o := range objs {
+				manifestWork := o.(*workapiv1.ManifestWork)
+				gotNamspacedNames[i] = types.NamespacedName{Name: manifestWork.Name, Namespace: manifestWork.Namespace}.String()
+			}
+			trans := cmp.Transformer("Sort", func(in []string) []string {
+				sort.Strings(in)
+				return in
+			})
+			if !cmp.Equal(expectedNamespacedNames, gotNamspacedNames, trans) {
+				t.Fatalf("expected %v but got %v", expectedNamespacedNames, gotNamspacedNames)
+			}
 		}
-		gc.ownerToDependentsLock.RUnlock()
 	}
 }
 
@@ -181,7 +194,8 @@ func setupGC(t *testing.T, config *rest.Config) *GarbageCollector {
 		FieldSelector: "metadata.name=test",
 	}
 	ownerGVRFilters := map[schema.GroupVersionResource]*metav1.ListOptions{
-		addonapiv1alpha1.SchemeGroupVersion.WithResource("managedclusteraddons"): listOptions,
+		addonapiv1alpha1.SchemeGroupVersion.WithResource("managedclusteraddons"):    listOptions,
+		addonapiv1alpha1.SchemeGroupVersion.WithResource("clustermanagementaddons"): listOptions,
 	}
 
 	return NewGarbageCollector(workClient.WorkV1(), metadataClient, workInformer.Work().V1().ManifestWorks(), ownerGVRFilters)

@@ -114,6 +114,8 @@ github.com/json-iterator/go
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
+# github.com/moby/term v0.0.0-20221205130635-1aeaba878587
+## explicit; go 1.18
 # github.com/mochi-mqtt/server/v2 v2.4.6
 ## explicit; go 1.21
 github.com/mochi-mqtt/server/v2
@@ -172,6 +174,8 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
+# github.com/opencontainers/runc v1.1.10
+## explicit; go 1.17
 # github.com/openshift/build-machinery-go v0.0.0-20231128094528-1e9b1b0595c8
 ## explicit; go 1.13
 github.com/openshift/build-machinery-go
@@ -716,6 +720,7 @@ k8s.io/client-go/listers/storage/v1
 k8s.io/client-go/listers/storage/v1alpha1
 k8s.io/client-go/listers/storage/v1beta1
 k8s.io/client-go/metadata
+k8s.io/client-go/metadata/fake
 k8s.io/client-go/metadata/metadatainformer
 k8s.io/client-go/metadata/metadatalister
 k8s.io/client-go/openapi
