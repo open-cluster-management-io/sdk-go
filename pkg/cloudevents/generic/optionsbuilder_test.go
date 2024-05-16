@@ -105,7 +105,7 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 				ConfigMap: confluentkafka.ConfigMap{
 					"acks":                                  "1",
 					"auto.commit.interval.ms":               5000,
-					"auto.offset.reset":                     "latest",
+					"auto.offset.reset":                     "earliest",
 					"bootstrap.servers":                     "broker1",
 					"enable.auto.commit":                    true,
 					"enable.auto.offset.store":              true,

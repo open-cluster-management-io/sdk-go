@@ -131,7 +131,10 @@ func BuildKafkaOptionsFromFlags(configPath string) (*KafkaOptions, error) {
 
 		// earliest: automatically reset the offset to the earliest offset
 		// latest: automatically reset the offset to the latest offset
-		"auto.offset.reset": "latest",
+		// We must use earliest due to the source client may not start to watch a new topic
+		// when the agent is sending the events to that topic.
+		// the source client may lose the events if we set as latest.
+		"auto.offset.reset": "earliest",
 
 		// The frequency in milliseconds that the consumer offsets are commited (written) to offset storage
 		"auto.commit.interval.ms": 5000,
