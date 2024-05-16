@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -17,6 +18,7 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	kafkaoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
@@ -56,9 +58,14 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 
 		ginkgo.By("Start an source cloudevent client")
 		sourceStoreLister := NewResourceLister()
+		sourceOptions := &kafka.KafkaOptions{
+			ConfigMap: kafkav2.ConfigMap{
+				"bootstrap.servers": kafkaCluster.BootstrapServers(),
+			},
+		}
 		sourceCloudEventClient, err := generic.NewCloudEventSourceClient[*source.Resource](
 			ctx,
-			kafkaoptions.NewSourceOptions(kafkaOptions, "source1"),
+			kafkaoptions.NewSourceOptions(sourceOptions, "source1"),
 			sourceStoreLister,
 			source.StatusHashGetter,
 			&source.ResourceCodec{},
@@ -165,7 +172,14 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 
 		newAgentCtx, newAgentCancel := context.WithCancel(context.Background())
 		defer newAgentCancel()
+		// Note: Different configuration for the new agent will have different behavior
+		//   Case1: new agentID(group.id) + "auto.offset.reset": latest
+		//        The agent has to wait until the consumer is ready to send message, like time.Sleep(5 * time.Second)
+		//   Case2: keep the same agentID for the new agent, it will ignore the "auto.offset.reset" automatically
+		//        Then we don't need wait the consumer ready, cause it will consume message from last committed
+		//        But the agent will wait a long time(test result is 56 seconds) to receive the message
 		agentID = clusterName + "-" + rand.String(5)
+		_ = kafkaOptions.ConfigMap.SetKey("group.id", agentID)
 		newAgentHolder, err := work.NewClientHolderBuilder(kafkaOptions).
 			WithClientID(agentID).
 			WithClusterName(clusterName).
@@ -173,12 +187,7 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 			NewAgentClientHolder(newAgentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-		// Note: Different configuration for the new agent will have different behavior
-		//   Case1: new agentID(group.id) + "auto.offset.reset": latest
-		//        The agent has to wait until the consumer is ready to send message, like time.Sleep(5 * time.Second)
-		//   Case2: keep the same agentID for the new agent, it will ignore the "auto.offset.reset" automatically
-		//        Then we don't need wait the consumer ready, cause it will consume message from last committed
-		//        But the agent will wait a long time(test result is 56 seconds) to receive the message
+		// case1: wait until the consumer is ready
 		time.Sleep(5 * time.Second)
 		go newAgentHolder.ManifestWorkInformer().Informer().Run(newAgentCtx.Done())
 		newAgentManifestClient := newAgentHolder.ManifestWorks(clusterName)
@@ -198,7 +207,7 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 			}
 			fmt.Println("new agent get resync workName2", work2.Name)
 			return nil
-		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+		}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
 	})
 })
 
