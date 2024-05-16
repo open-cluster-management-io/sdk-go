@@ -12,9 +12,11 @@ type MemoryStore struct {
 	resourceSpecChan chan *Resource
 }
 
-var once sync.Once
-var store *MemoryStore
-var consumerStore *MemoryStore
+var (
+	once          sync.Once
+	store         *MemoryStore
+	consumerStore *MemoryStore
+)
 
 func InitStore(eventBroadcaster *EventBroadcaster) (*MemoryStore, *MemoryStore) {
 	once.Do(func() {
@@ -29,6 +31,12 @@ func InitStore(eventBroadcaster *EventBroadcaster) (*MemoryStore, *MemoryStore) 
 	})
 
 	return store, consumerStore
+}
+
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{
+		resources: make(map[string]*Resource),
+	}
 }
 
 func (s *MemoryStore) Add(resource *Resource) {

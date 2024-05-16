@@ -21,15 +21,15 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
 )
 
-type resourceCodec struct{}
+type ResourceCodec struct{}
 
-var _ generic.Codec[*Resource] = &resourceCodec{}
+var _ generic.Codec[*Resource] = &ResourceCodec{}
 
-func (c *resourceCodec) EventDataType() types.CloudEventsDataType {
+func (c *ResourceCodec) EventDataType() types.CloudEventsDataType {
 	return payload.ManifestEventDataType
 }
 
-func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, resource *Resource) (*cloudevents.Event, error) {
+func (c *ResourceCodec) Encode(source string, eventType types.CloudEventsType, resource *Resource) (*cloudevents.Event, error) {
 	if resource.Source != "" {
 		source = resource.Source
 	}
@@ -57,7 +57,7 @@ func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, r
 	return &evt, nil
 }
 
-func (c *resourceCodec) Decode(evt *cloudevents.Event) (*Resource, error) {
+func (c *ResourceCodec) Decode(evt *cloudevents.Event) (*Resource, error) {
 	eventType, err := types.ParseCloudEventsType(evt.Type())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
@@ -115,7 +115,7 @@ func (resLister *resourceLister) List(listOpts types.ListOptions) ([]*Resource, 
 	return store.List(listOpts.ClusterName), nil
 }
 
-func statusHashGetter(obj *Resource) (string, error) {
+func StatusHashGetter(obj *Resource) (string, error) {
 	statusBytes, err := json.Marshal(&workv1.ManifestWorkStatus{Conditions: obj.Status.Conditions})
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal resource status, %v", err)
@@ -128,10 +128,9 @@ func StartMQTTResourceSourceClient(ctx context.Context, config *mqtt.MQTTOptions
 		ctx,
 		mqtt.NewSourceOptions(config, fmt.Sprintf("%s-client", sourceID), sourceID),
 		&resourceLister{},
-		statusHashGetter,
-		&resourceCodec{},
+		StatusHashGetter,
+		&ResourceCodec{},
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -173,10 +172,9 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 		ctx,
 		grpc.NewSourceOptions(config, "integration-test"),
 		&consumerResourceLister{},
-		statusHashGetter,
-		&resourceCodec{},
+		StatusHashGetter,
+		&ResourceCodec{},
 	)
-
 	if err != nil {
 		return nil, err
 	}
