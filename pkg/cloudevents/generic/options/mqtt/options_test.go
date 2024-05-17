@@ -67,11 +67,6 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 			expectedErrorMsg: "either both or none of clientCertFile and clientKeyFile must be set",
 		},
 		{
-			name:             "tls config without caFile",
-			config:           "{\"brokerHost\":\"test\",\"clientCertFile\":\"test\",\"clientKeyFile\":\"test\"}",
-			expectedErrorMsg: "setting clientCertFile and clientKeyFile requires caFile",
-		},
-		{
 			name:             "without topics",
 			config:           "{\"brokerHost\":\"test\"}",
 			expectedErrorMsg: "the topics must be set",

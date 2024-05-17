@@ -16,6 +16,7 @@ import (
 	"github.com/eclipse/paho.golang/paho"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -130,9 +131,6 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 		(config.ClientCertFile != "" && config.ClientKeyFile == "") {
 		return nil, fmt.Errorf("either both or none of clientCertFile and clientKeyFile must be set")
 	}
-	if config.ClientCertFile != "" && config.ClientKeyFile != "" && config.CAFile == "" {
-		return nil, fmt.Errorf("setting clientCertFile and clientKeyFile requires caFile")
-	}
 
 	if err := validateTopics(config.Topics); err != nil {
 		return nil, err
@@ -164,19 +162,10 @@ func BuildMQTTOptionsFromFlags(configPath string) (*MQTTOptions, error) {
 		dialTimeout = *config.DialTimeout
 	}
 
-	if len(config.CAFile) != 0 {
-		certPool, err := x509.SystemCertPool()
+	if config.ClientCertFile != "" && config.ClientKeyFile != "" {
+		certPool, err := rootCAs(config.CAFile)
 		if err != nil {
 			return nil, err
-		}
-
-		caPEM, err := os.ReadFile(config.CAFile)
-		if err != nil {
-			return nil, err
-		}
-
-		if ok := certPool.AppendCertsFromPEM(caPEM); !ok {
-			return nil, fmt.Errorf("invalid CA %s", config.CAFile)
 		}
 
 		tlsConfig := &tls.Config{
@@ -344,4 +333,27 @@ func getAgentPubTopic(ctx context.Context) (*PubTopic, error) {
 	}
 
 	return nil, fmt.Errorf("invalid agent pub topic")
+}
+
+func rootCAs(caFile string) (*x509.CertPool, error) {
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(caFile) == 0 {
+		klog.Warningf("CA file is not provided, TLS connection will be verified with the system cert pool")
+		return certPool, nil
+	}
+
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+
+	if ok := certPool.AppendCertsFromPEM(caPEM); !ok {
+		return nil, fmt.Errorf("invalid CA %s", caFile)
+	}
+
+	return certPool, nil
 }
