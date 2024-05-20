@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	mochimqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
@@ -17,7 +16,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	grpcoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
@@ -44,8 +42,6 @@ var (
 	consumerStore               *source.MemoryStore
 	serverCertPairs             *util.ServerCertPairs
 	certPool                    *x509.CertPool
-	kafkaCluster                *kafkav2.MockCluster
-	kafkaOptions                *kafka.KafkaOptions
 )
 
 func TestIntegration(t *testing.T) {
@@ -119,23 +115,6 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	})
 
 	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, store.GetResourceSpecChan())
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-	ginkgo.By("init the kafka broker and topics")
-	kafkaCluster, err = kafkav2.NewMockCluster(1)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	kafkaOptions = &kafka.KafkaOptions{
-		ConfigMap: kafkav2.ConfigMap{
-			"bootstrap.servers": kafkaCluster.BootstrapServers(),
-		},
-	}
-	err = kafkaCluster.CreateTopic("sourcebroadcast.source1", 1, 1)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	err = kafkaCluster.CreateTopic("sourceevents.source1.cluster1", 1, 1)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	err = kafkaCluster.CreateTopic("agentevents.source1.cluster1", 1, 1)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	err = kafkaCluster.CreateTopic("agentbroadcast.cluster1", 1, 1)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	close(done)
