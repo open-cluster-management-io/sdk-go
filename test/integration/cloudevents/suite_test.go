@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,8 +13,6 @@ import (
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
@@ -36,8 +33,6 @@ const (
 
 var (
 	// TODO: need a brokerInterface to consolidate the transport configurations
-	testEnv                     *envtest.Environment
-	testEnvConfig               *rest.Config
 	mqttBroker                  *mochimqtt.Server
 	mqttOptions                 *mqtt.MQTTOptions
 	mqttSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
@@ -66,22 +61,10 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 
 	ginkgo.By("bootstrapping test environment")
 	ctx := context.TODO()
-	var err error
-
-	// start a kube-apiserver
-	testEnv = &envtest.Environment{
-		ErrorIfCRDPathMissing: true,
-		CRDDirectoryPaths: []string{
-			filepath.Join(".", "vendor", "open-cluster-management.io", "api", "addon", "v1alpha1"),
-		},
-	}
-	testEnvConfig, err = testEnv.Start()
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	gomega.Expect(testEnvConfig).ToNot(gomega.BeNil())
 
 	// start a MQTT broker
 	mqttBroker = mochimqtt.New(&mochimqtt.Options{})
-	err = mqttBroker.AddHook(new(util.AllowHook), nil)
+	err := mqttBroker.AddHook(new(util.AllowHook), nil)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	err = mqttBroker.AddListener(listeners.NewTCP("mqtt-test-broker", mqttBrokerHost, nil))
@@ -162,9 +145,6 @@ var _ = ginkgo.AfterSuite(func() {
 	ginkgo.By("tearing down the test environment")
 
 	err := mqttBroker.Close()
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-	err = testEnv.Stop()
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 })
 

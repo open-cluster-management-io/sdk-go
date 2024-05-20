@@ -15,16 +15,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	apitypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
+	fakemetadata "k8s.io/client-go/metadata/fake"
 
-	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
-	addonv1alpha1client "open-cluster-management.io/api/client/addon/clientset/versioned"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/garbagecollector"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
@@ -52,7 +53,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, testEnvConfig, sourceID, sourceMQTTOptions)
+			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -220,28 +221,65 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 		var workName2 string
 		var sourceClientHolder *work.ClientHolder
 		var agentClientHolder *work.ClientHolder
-		var kubeClient kubernetes.Interface
-		var addonClient addonv1alpha1client.Interface
+		var metadataClient metadata.Interface
 
 		ginkgo.BeforeEach(func() {
 			ctx, cancel = context.WithCancel(context.Background())
 			sourceID = "integration-mw-test"
-			clusterName = "cluster-a"
+			clusterName = "default"
 			workName1 = "test1"
 			workName2 = "test2"
 
 			var err error
-			kubeClient, err = kubernetes.NewForConfig(testEnvConfig)
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			addonClient, err = addonv1alpha1client.NewForConfig(testEnvConfig)
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			sourceMQTTOptions := newMQTTOptions(types.Topics{
 				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, testEnvConfig, sourceID, sourceMQTTOptions)
+			cm := &metav1.PartialObjectMetadata{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: corev1.SchemeGroupVersion.String(),
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: clusterName,
+					UID:       "123",
+					Labels:    map[string]string{"test": "test"},
+				},
+			}
+			srt := &metav1.PartialObjectMetadata{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: corev1.SchemeGroupVersion.String(),
+					Kind:       "Secret",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: clusterName,
+					UID:       "456",
+					Labels:    map[string]string{"test": "test"},
+				},
+			}
+			scheme := fakemetadata.NewTestScheme()
+			err = metav1.AddMetaToScheme(scheme)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			metadataClient = fakemetadata.NewSimpleMetadataClient(scheme, cm, srt)
+			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+			workClient := sourceClientHolder.WorkInterface()
+			workInformers := sourceClientHolder.ManifestWorkInformer()
+			listOptions := &metav1.ListOptions{
+				LabelSelector: "test=test",
+				FieldSelector: "metadata.name=test",
+			}
+			ownerGVRFilters := map[schema.GroupVersionResource]*metav1.ListOptions{
+				corev1.SchemeGroupVersion.WithResource("configmaps"): listOptions,
+				corev1.SchemeGroupVersion.WithResource("secrets"):    listOptions,
+			}
+			garbageCollector := garbagecollector.NewGarbageCollector(workClient.WorkV1(), metadataClient, workInformers, ownerGVRFilters)
+			go garbageCollector.Run(ctx, 1)
+
 			// wait for cache ready
 			<-time.After(time.Second)
 
@@ -262,55 +300,28 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 		})
 
 		ginkgo.It("CRUD a manifestwork with manifestwork source client and agent client", func() {
-			ns, err := kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}, metav1.CreateOptions{})
+			cmVGR := corev1.SchemeGroupVersion.WithResource("configmaps")
+			srtGVR := corev1.SchemeGroupVersion.WithResource("secrets")
+			cmObj, err := metadataClient.Resource(corev1.SchemeGroupVersion.WithResource("configmaps")).Namespace(clusterName).Get(ctx, "test", metav1.GetOptions{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			mca, err := addonClient.AddonV1alpha1().ManagedClusterAddOns(ns.Name).Create(ctx, &addonapiv1alpha1.ManagedClusterAddOn{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Labels: map[string]string{
-						"test": "test",
-					},
-				},
-				Spec: addonapiv1alpha1.ManagedClusterAddOnSpec{
-					InstallNamespace: "open-cluster-management-addon",
-				},
-			}, metav1.CreateOptions{})
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-			cma, err := addonClient.AddonV1alpha1().ClusterManagementAddOns().Create(ctx, &addonapiv1alpha1.ClusterManagementAddOn{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-					Labels: map[string]string{
-						"test": "test",
-					},
-				},
-				Spec: addonapiv1alpha1.ClusterManagementAddOnSpec{
-					InstallStrategy: addonapiv1alpha1.InstallStrategy{
-						Type: addonapiv1alpha1.AddonInstallStrategyManual,
-					},
-				},
-			}, metav1.CreateOptions{})
+			srtObj, err := metadataClient.Resource(corev1.SchemeGroupVersion.WithResource("secrets")).Namespace(clusterName).Get(ctx, "test", metav1.GetOptions{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			work1 := newManifestWork(clusterName, workName1)
 			work2 := newManifestWork(clusterName, workName2)
 			pTrue := true
 			ownerReference1 := metav1.OwnerReference{
-				APIVersion:         addonapiv1alpha1.GroupVersion.String(),
-				Kind:               "ManagedClusterAddon",
-				Name:               mca.Name,
-				UID:                mca.UID,
+				APIVersion:         corev1.SchemeGroupVersion.String(),
+				Kind:               "ConfigMap",
+				Name:               cmObj.Name,
+				UID:                cmObj.UID,
 				BlockOwnerDeletion: &pTrue,
 			}
 			ownerReference2 := metav1.OwnerReference{
-				APIVersion:         addonapiv1alpha1.GroupVersion.String(),
-				Kind:               "ClusterManagementAddOn",
-				Name:               cma.Name,
-				UID:                cma.UID,
+				APIVersion:         corev1.SchemeGroupVersion.String(),
+				Kind:               "Secret",
+				Name:               srtObj.Name,
+				UID:                srtObj.UID,
 				BlockOwnerDeletion: &pTrue,
 			}
 			work1.SetOwnerReferences([]metav1.OwnerReference{ownerReference1})
@@ -395,7 +406,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("delete namespace-scoped owner of work from source", func() {
 				// envtest does't have GC controller
-				err = addonClient.AddonV1alpha1().ManagedClusterAddOns(mca.GetNamespace()).Delete(ctx, mca.GetName(), metav1.DeleteOptions{})
+				err := metadataClient.Resource(cmVGR).Namespace(clusterName).Delete(ctx, cmObj.Name, metav1.DeleteOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
@@ -442,7 +453,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 			ginkgo.By("delete cluster-scoped owner of work from source", func() {
 				// envtest does't have GC controller
-				err = addonClient.AddonV1alpha1().ClusterManagementAddOns().Delete(ctx, cma.GetName(), metav1.DeleteOptions{})
+				err = metadataClient.Resource(srtGVR).Namespace(clusterName).Delete(ctx, srtObj.Name, metav1.DeleteOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
@@ -501,7 +512,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, testEnvConfig, sourceID, sourceMQTTOptions)
+			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -717,7 +728,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			})
 
 			// simulate a source client restart, recover two works
-			sourceClientHolder, err := source.StartManifestWorkSourceClient(ctx, testEnvConfig, sourceID, mqttOptions)
+			sourceClientHolder, err := source.StartManifestWorkSourceClient(ctx, sourceID, mqttOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(ctx, newManifestWork(clusterName, fmt.Sprintf("%s-1", workNamePrefix)), metav1.CreateOptions{})

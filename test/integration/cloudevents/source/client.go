@@ -9,20 +9,14 @@ import (
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/metadata"
-	"k8s.io/client-go/rest"
 
-	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/garbagecollector"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
 )
@@ -192,7 +186,7 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 	return client, nil
 }
 
-func StartManifestWorkSourceClient(ctx context.Context, kubeConfig *rest.Config, sourceID string, config any) (*work.ClientHolder, error) {
+func StartManifestWorkSourceClient(ctx context.Context, sourceID string, config any) (*work.ClientHolder, error) {
 	clientHolder, err := work.NewClientHolderBuilder(config).
 		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 		WithSourceID(sourceID).
@@ -202,23 +196,7 @@ func StartManifestWorkSourceClient(ctx context.Context, kubeConfig *rest.Config,
 		return nil, err
 	}
 
-	workClient := clientHolder.WorkInterface()
-	workInformers := clientHolder.ManifestWorkInformer()
-	metadataClient, err := metadata.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
-	listOptions := &metav1.ListOptions{
-		LabelSelector: "test=test",
-		FieldSelector: "metadata.name=test",
-	}
-	ownerGVRFilters := map[schema.GroupVersionResource]*metav1.ListOptions{
-		addonapiv1alpha1.SchemeGroupVersion.WithResource("managedclusteraddons"):    listOptions,
-		addonapiv1alpha1.SchemeGroupVersion.WithResource("clustermanagementaddons"): listOptions,
-	}
-	garbageCollector := garbagecollector.NewGarbageCollector(workClient.WorkV1(), metadataClient, workInformers, ownerGVRFilters)
-	go garbageCollector.Run(ctx, 1)
-	go workInformers.Informer().Run(ctx.Done())
+	go clientHolder.ManifestWorkInformer().Informer().Run(ctx.Done())
 
 	return clientHolder, nil
 }
