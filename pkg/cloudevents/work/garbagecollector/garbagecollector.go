@@ -2,6 +2,7 @@ package garbagecollector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -258,23 +259,15 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 	}
 
 	logger := klog.FromContext(ctx)
-	logger.Info("Attempting to delete manifestwork", "ownerUID", dep.ownerUID, "namespacedName", dep.namespacedName)
+	logger.V(4).Info("Attempting to delete manifestwork", "ownerUID", dep.ownerUID, "namespacedName", dep.namespacedName)
 
-	latest, err := gc.getManifestwork(ctx, dep.namespacedName)
+	latest, err := gc.workClient.ManifestWorks(dep.namespacedName.Namespace).Get(ctx, dep.namespacedName.Name, metav1.GetOptions{})
+
 	if err != nil {
 		return requeueItem
 	}
 
-	// may happen when manifestwork deletion failed in last attempt
 	ownerReferences := latest.GetOwnerReferences()
-	if len(ownerReferences) == 0 {
-		logger.V(4).Info("Manifestwork has no owner references, deleting it", "namespace", latest.GetNamespace(), "name", latest.GetName())
-		if err := gc.deleteManifestwork(ctx, dep.namespacedName); err != nil {
-			return requeueItem
-		}
-		return forgetItem
-	}
-
 	found := false
 	for _, owner := range ownerReferences {
 		if owner.UID == dep.ownerUID {
@@ -284,6 +277,15 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 	}
 
 	if found {
+		// if the deleted owner reference is the only owner reference then delete the manifestwork
+		if len(ownerReferences) == 1 {
+			logger.V(4).Info("All owner references are deleted for manifestwork, deleting the manifestwork itself", "manifestwork", dep.namespacedName)
+			if err := gc.workClient.ManifestWorks(dep.namespacedName.Namespace).Delete(ctx, dep.namespacedName.Name, metav1.DeleteOptions{}); err != nil {
+				return requeueItem
+			}
+			return forgetItem
+		}
+
 		// remove the owner reference from the manifestwork
 		logger.V(4).Info("Removing owner reference from manifestwork", "owner", dep.ownerUID, "manifestwork", dep.namespacedName)
 		jmp, err := generateDeleteOwnerRefJSONMergePatch(latest, dep.ownerUID)
@@ -291,19 +293,11 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 			logger.Error(err, "Failed to generate JSON merge patch", "error")
 			return requeueItem
 		}
-		if _, err = gc.patchManifestwork(ctx, dep.namespacedName, jmp, types.MergePatchType); err != nil {
+		if _, err = gc.workClient.ManifestWorks(dep.namespacedName.Namespace).Patch(ctx, dep.namespacedName.Name, types.MergePatchType, jmp, metav1.PatchOptions{}); err != nil {
 			logger.Error(err, "Failed to patch manifestwork with json patch")
 			return requeueItem
 		}
 		logger.V(4).Info("Successfully removed owner reference from manifestwork", "owner", dep.ownerUID, "manifestwork", dep.namespacedName)
-
-		// if the deleted owner reference is the only owner reference then delete the manifestwork
-		if len(ownerReferences) == 1 {
-			logger.V(4).Info("All owner references are deleted for manifestwork, deleting the manifestwork itself", "manifestwork", dep.namespacedName)
-			if err := gc.deleteManifestwork(ctx, dep.namespacedName); err != nil {
-				return requeueItem
-			}
-		}
 	}
 
 	return forgetItem
@@ -321,4 +315,28 @@ func indexManifestWorkByOwner(obj interface{}) ([]string, error) {
 	}
 
 	return ownerKeys, nil
+}
+
+// objectForOwnerRefsPatch defines object struct for owner references patch operation.
+type objectForOwnerRefsPatch struct {
+	ObjectMetaForOwnerRefsPatch `json:"metadata"`
+}
+
+// ObjectMetaForOwnerRefsPatch defines object meta struct for owner references patch operation.
+type ObjectMetaForOwnerRefsPatch struct {
+	ResourceVersion string                  `json:"resourceVersion"`
+	OwnerReferences []metav1.OwnerReference `json:"ownerReferences"`
+}
+
+// returns JSON merge patch that removes the ownerReferences matching ownerUID.
+func generateDeleteOwnerRefJSONMergePatch(obj metav1.Object, ownerUID types.UID) ([]byte, error) {
+	expectedObjectMeta := objectForOwnerRefsPatch{}
+	expectedObjectMeta.ResourceVersion = obj.GetResourceVersion()
+	refs := obj.GetOwnerReferences()
+	for _, ref := range refs {
+		if ref.UID != ownerUID {
+			expectedObjectMeta.OwnerReferences = append(expectedObjectMeta.OwnerReferences, ref)
+		}
+	}
+	return json.Marshal(expectedObjectMeta)
 }

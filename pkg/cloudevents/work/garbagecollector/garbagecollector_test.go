@@ -273,7 +273,6 @@ func TestAttemptToDeleteItem(t *testing.T) {
 	}
 	expectedActionSet := sets.NewString()
 	expectedActionSet.Insert("GET=/apis/work.open-cluster-management.io/v1/namespaces/ns1/manifestworks/ToBeDeletedWork")
-	expectedActionSet.Insert("PATCH=/apis/work.open-cluster-management.io/v1/namespaces/ns1/manifestworks/ToBeDeletedWork")
 	expectedActionSet.Insert("DELETE=/apis/work.open-cluster-management.io/v1/namespaces/ns1/manifestworks/ToBeDeletedWork")
 
 	actualActionSet := sets.NewString()
