@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	confluentkafka "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"k8s.io/apimachinery/pkg/api/equality"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
+
+const sourceId = "source"
 
 const (
 	mqttConfig = `
@@ -26,58 +26,22 @@ topics:
 	grpcConfig = `
 url: grpc
 `
-	sourceId    = "source"
-	kafkaConfig = `
-bootstrapServer: broker1
-groupID: source
-clientCertFile: cert
-clientKeyFile: key
-caFile: ca
-`
 )
 
+type buildingCloudEventsOptionTestCase struct {
+	name            string
+	configType      string
+	configFile      *os.File
+	expectedOptions any
+}
+
 func TestBuildCloudEventsSourceOptions(t *testing.T) {
-	mqttConfigFile, err := os.CreateTemp("", "mqtt-config-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(mqttConfigFile.Name())
-
-	grpcConfigFile, err := os.CreateTemp("", "grpc-config-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(grpcConfigFile.Name())
-
-	kafkaConfigFile, err := os.CreateTemp("", "kafka-config-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(kafkaConfigFile.Name())
-
-	if err := os.WriteFile(mqttConfigFile.Name(), []byte(mqttConfig), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(grpcConfigFile.Name(), []byte(grpcConfig), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(kafkaConfigFile.Name(), []byte(kafkaConfig), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	cases := []struct {
-		name                     string
-		configType               string
-		configFilePath           string
-		expectedContainedOptions any
-	}{
+	cases := []buildingCloudEventsOptionTestCase{
 		{
-			name:           "mqtt config",
-			configType:     "mqtt",
-			configFilePath: mqttConfigFile.Name(),
-			expectedContainedOptions: &mqtt.MQTTOptions{
+			name:       "mqtt config",
+			configType: "mqtt",
+			configFile: configFile(t, "mqtt-config-test-", []byte(mqttConfig)),
+			expectedOptions: &mqtt.MQTTOptions{
 				Topics: types.Topics{
 					SourceEvents: "sources/hub1/clusters/+/sourceevents",
 					AgentEvents:  "sources/hub1/clusters/+/agentevents",
@@ -92,62 +56,53 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 			},
 		},
 		{
-			name:                     "grpc config",
-			configType:               "grpc",
-			configFilePath:           grpcConfigFile.Name(),
-			expectedContainedOptions: &grpc.GRPCOptions{URL: "grpc"},
-		},
-		{
-			name:           "kafka config",
-			configType:     "kafka",
-			configFilePath: kafkaConfigFile.Name(),
-			expectedContainedOptions: &kafka.KafkaOptions{
-				ConfigMap: confluentkafka.ConfigMap{
-					"acks":                                  "1",
-					"auto.commit.interval.ms":               5000,
-					"auto.offset.reset":                     "earliest",
-					"bootstrap.servers":                     "broker1",
-					"enable.auto.commit":                    true,
-					"enable.auto.offset.store":              true,
-					"go.events.channel.size":                1000,
-					"group.id":                              sourceId,
-					"log.connection.close":                  false,
-					"queued.max.messages.kbytes":            32768,
-					"retries":                               "0",
-					"security.protocol":                     "ssl",
-					"socket.keepalive.enable":               true,
-					"ssl.ca.location":                       "ca",
-					"ssl.certificate.location":              "cert",
-					"ssl.endpoint.identification.algorithm": "none",
-					"ssl.key.location":                      "key",
-				},
-			},
+			name:            "grpc config",
+			configType:      "grpc",
+			configFile:      configFile(t, "grpc-config-test-", []byte(grpcConfig)),
+			expectedOptions: &grpc.GRPCOptions{URL: "grpc"},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, config, err := NewConfigLoader(c.configType, c.configFilePath).
-				LoadConfig()
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
-
-			if !equality.Semantic.DeepEqual(config, c.expectedContainedOptions) {
-				t.Errorf("unexpected config %v, %v", config, c.expectedContainedOptions)
-			}
-
-			options, err := BuildCloudEventsSourceOptions(config, "client", sourceId)
-			if err != nil {
-				t.Errorf("unexpected error %v", err)
-			}
-
-			optionsRaw, _ := json.Marshal(options)
-			expectedRaw, _ := json.Marshal(c.expectedContainedOptions)
-
-			if !strings.Contains(string(optionsRaw), string(expectedRaw)) {
-				t.Errorf("the results %v\n does not contain the original options %v\n", string(optionsRaw), string(expectedRaw))
-			}
+			assertOptions(t, c)
 		})
+	}
+}
+
+func configFile(t *testing.T, prefix string, data []byte) *os.File {
+	configFile, err := os.CreateTemp("", prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(configFile.Name(), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	return configFile
+}
+
+func assertOptions(t *testing.T, c buildingCloudEventsOptionTestCase) {
+	_, config, err := NewConfigLoader(c.configType, c.configFile.Name()).
+		LoadConfig()
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	if !equality.Semantic.DeepEqual(config, c.expectedOptions) {
+		t.Errorf("unexpected config %v, %v", config, c.expectedOptions)
+	}
+
+	options, err := BuildCloudEventsSourceOptions(config, "client", sourceId)
+	if err != nil {
+		t.Errorf("unexpected error %v", err)
+	}
+
+	optionsRaw, _ := json.Marshal(options)
+	expectedRaw, _ := json.Marshal(c.expectedOptions)
+
+	if !strings.Contains(string(optionsRaw), string(expectedRaw)) {
+		t.Errorf("the results %v\n does not contain the original options %v\n", string(optionsRaw), string(expectedRaw))
 	}
 }
