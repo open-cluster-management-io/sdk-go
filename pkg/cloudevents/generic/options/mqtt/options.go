@@ -335,6 +335,9 @@ func getAgentPubTopic(ctx context.Context) (*PubTopic, error) {
 	return nil, fmt.Errorf("invalid agent pub topic")
 }
 
+// rootCAs returns a cert pool to verify the TLS connection.
+// If the caFile is not provided, the default system certificate pool will be returned
+// If the caFile is provided, the provided CA will be appended to the system certificate pool
 func rootCAs(caFile string) (*x509.CertPool, error) {
 	certPool, err := x509.SystemCertPool()
 	if err != nil {
