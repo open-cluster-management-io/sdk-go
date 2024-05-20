@@ -1,3 +1,5 @@
+//go:build kafka
+
 package cloudevents
 
 import (
@@ -6,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	confluentkafka "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/onsi/ginkgo"
@@ -27,16 +30,40 @@ import (
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 )
 
-// go test -tags=kafka ./test/integration/cloudevents -ginkgo.focus "CloudeventKafkaClient" -v
 var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
+	var err error
 	var ctx context.Context
 	var cancel context.CancelFunc
+	var kafkaCluster *confluentkafka.MockCluster
+	var kafkaOptions *kafka.KafkaOptions
 
 	ginkgo.BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
+
+		kafkaCluster, err = kafkav2.NewMockCluster(1)
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+		kafkaOptions = &kafka.KafkaOptions{
+			ConfigMap: confluentkafka.ConfigMap{
+				"bootstrap.servers": kafkaCluster.BootstrapServers(),
+			},
+		}
+
+		// prepare topics in advance
+		err = kafkaCluster.CreateTopic("sourcebroadcast.source1", 1, 1)
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		err = kafkaCluster.CreateTopic("sourceevents.source1.cluster1", 1, 1)
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		err = kafkaCluster.CreateTopic("agentevents.source1.cluster1", 1, 1)
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		err = kafkaCluster.CreateTopic("agentbroadcast.cluster1", 1, 1)
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	})
+
 	ginkgo.AfterEach(func() {
 		cancel()
+
+		kafkaCluster.Close()
 	})
 
 	ginkgo.It("publish event from source to agent", func() {
