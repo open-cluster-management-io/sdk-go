@@ -23,6 +23,7 @@ import (
 	workv1 "open-cluster-management.io/api/client/work/clientset/versioned/typed/work/v1"
 	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 	workapiv1 "open-cluster-management.io/api/work/v1"
+	cloudeventswork "open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 )
 
 const (
@@ -68,11 +69,12 @@ type GarbageCollector struct {
 
 // NewGarbageCollector creates a new garbage collector instance.
 func NewGarbageCollector(
-	workClient workv1.WorkV1Interface,
+	workClientHolder *cloudeventswork.ClientHolder,
 	metadataClient metadata.Interface,
-	workInformer workv1informers.ManifestWorkInformer,
 	ownerGVRFilters map[schema.GroupVersionResource]*metav1.ListOptions) *GarbageCollector {
 
+	workClient := workClientHolder.WorkInterface().WorkV1()
+	workInformer := workClientHolder.ManifestWorkInformer()
 	if err := workInformer.Informer().AddIndexers(cache.Indexers{
 		manifestWorkByOwner: indexManifestWorkByOwner,
 	}); err != nil {

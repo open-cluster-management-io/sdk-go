@@ -3,6 +3,7 @@ package garbagecollector
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -16,10 +17,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/metadata"
 	fakemetadata "k8s.io/client-go/metadata/fake"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	workclientset "open-cluster-management.io/api/client/work/clientset/versioned"
@@ -73,7 +77,18 @@ func TestProcessManifestWorkEvent(t *testing.T) {
 	fakeWorkClient := fakework.NewSimpleClientset()
 	fakeWorkInformer := workinformers.NewSharedInformerFactory(fakeWorkClient, 10*time.Minute).Work().V1().ManifestWorks()
 	metadataClient := fakemetadata.NewSimpleMetadataClient(fakemetadata.NewTestScheme())
-	gc := NewGarbageCollector(fakeWorkClient.WorkV1(), metadataClient, fakeWorkInformer, nil)
+	if err := fakeWorkInformer.Informer().AddIndexers(cache.Indexers{
+		manifestWorkByOwner: indexManifestWorkByOwner,
+	}); err != nil {
+		utilruntime.HandleError(fmt.Errorf("failed to add indexers: %v", err))
+	}
+	gc := &GarbageCollector{
+		workClient:      fakeWorkClient.WorkV1(),
+		workIndexer:     fakeWorkInformer.Informer().GetIndexer(),
+		workInformer:    fakeWorkInformer,
+		metadataClient:  metadataClient,
+		attemptToDelete: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"),
+	}
 	go fakeWorkInformer.Informer().Run(ctx.Done())
 	for _, testCase := range cases {
 		for _, work := range testCase.manifestworks {
@@ -198,7 +213,14 @@ func setupGC(t *testing.T, config *rest.Config) *GarbageCollector {
 		addonapiv1alpha1.SchemeGroupVersion.WithResource("clustermanagementaddons"): listOptions,
 	}
 
-	return NewGarbageCollector(workClient.WorkV1(), metadataClient, workInformer.Work().V1().ManifestWorks(), ownerGVRFilters)
+	return &GarbageCollector{
+		workClient:      workClient.WorkV1(),
+		workIndexer:     workInformer.Work().V1().ManifestWorks().Informer().GetIndexer(),
+		workInformer:    workInformer.Work().V1().ManifestWorks(),
+		metadataClient:  metadataClient,
+		ownerGVRFilters: ownerGVRFilters,
+		attemptToDelete: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"),
+	}
 }
 
 func getWork(workName, workNamespace, workUID string, ownerReferences []metav1.OwnerReference) *workapiv1.ManifestWork {

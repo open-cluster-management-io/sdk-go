@@ -267,8 +267,6 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			workClient := sourceClientHolder.WorkInterface()
-			workInformers := sourceClientHolder.ManifestWorkInformer()
 			listOptions := &metav1.ListOptions{
 				LabelSelector: "test=test",
 				FieldSelector: "metadata.name=test",
@@ -277,7 +275,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				corev1.SchemeGroupVersion.WithResource("configmaps"): listOptions,
 				corev1.SchemeGroupVersion.WithResource("secrets"):    listOptions,
 			}
-			garbageCollector := garbagecollector.NewGarbageCollector(workClient.WorkV1(), metadataClient, workInformers, ownerGVRFilters)
+			garbageCollector := garbagecollector.NewGarbageCollector(sourceClientHolder, metadataClient, ownerGVRFilters)
 			go garbageCollector.Run(ctx, 1)
 
 			// wait for cache ready
