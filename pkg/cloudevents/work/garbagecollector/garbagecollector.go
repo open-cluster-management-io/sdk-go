@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -179,7 +180,11 @@ func (gc *GarbageCollector) monitorFor(logger klog.Logger, gvr schema.GroupVersi
 			}
 
 			for _, o := range objs {
-				manifestWork := o.(*workapiv1.ManifestWork)
+				manifestWork, ok := o.(*workapiv1.ManifestWork)
+				if !ok {
+					utilruntime.HandleError(fmt.Errorf("expect a *ManifestWork, got %v", o))
+					continue
+				}
 				namesapcedName := types.NamespacedName{Namespace: manifestWork.Namespace, Name: manifestWork.Name}
 				logger.V(4).Info("enqueue manifestWork because of owner deletion", "manifestwork", namesapcedName, "owner UID", ownerUID)
 				gc.attemptToDelete.Add(&dependent{ownerUID: ownerUID, namespacedName: namesapcedName})
@@ -266,8 +271,11 @@ func (gc *GarbageCollector) attemptToDeleteWorker(ctx context.Context, item inte
 	logger.V(4).Info("Attempting to delete manifestwork", "ownerUID", dep.ownerUID, "namespacedName", dep.namespacedName)
 
 	latest, err := gc.workClient.ManifestWorks(dep.namespacedName.Namespace).Get(ctx, dep.namespacedName.Name, metav1.GetOptions{})
-
 	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.V(4).Info("Manifestwork not found, skipping", "manifestwork", dep.namespacedName)
+			return forgetItem
+		}
 		return requeueItem
 	}
 
