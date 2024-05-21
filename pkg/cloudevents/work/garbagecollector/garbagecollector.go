@@ -156,6 +156,8 @@ func (gc *GarbageCollector) startMonitors(ctx context.Context, logger klog.Logge
 // monitorFor creates monitor for owner resource
 func (gc *GarbageCollector) monitorFor(logger klog.Logger, gvr schema.GroupVersionResource, listOptions *metav1.ListOptions) (*monitor, error) {
 	handlers := cache.ResourceEventHandlerFuncs{
+		// TODO: Handle the case where the owner resource is deleted
+		// while the garbage collector is restarting.
 		AddFunc:    func(obj interface{}) {},
 		UpdateFunc: func(oldObj, newObj interface{}) {},
 		DeleteFunc: func(obj interface{}) {
