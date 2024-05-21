@@ -90,6 +90,10 @@ func TestProcessManifestWorkEvent(t *testing.T) {
 		attemptToDelete: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"),
 	}
 	go fakeWorkInformer.Informer().Run(ctx.Done())
+	if !cache.WaitForCacheSync(ctx.Done(), fakeWorkInformer.Informer().HasSynced) {
+		t.Fatalf("failed to sync informer cache")
+	}
+
 	for _, testCase := range cases {
 		for _, work := range testCase.manifestworks {
 			if err := gc.workInformer.Informer().GetStore().Add(work); err != nil {
