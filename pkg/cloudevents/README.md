@@ -228,7 +228,7 @@ The garbage collector is an optional component running alongside the `ManifestWo
 Developers need to provide the following to build and run the garbage collector:
 1. Client Holder (`work.ClientHolder`): This contains the `ManifestWork` client and informer, which can be built using the builder mentioned in last two sections.
 2. Metadata Client (`metadata.Interface`): This is used to retrieve the owner resources of the `ManifestWork` resources.
-3. Owner rsource filters map (`map[schema.GroupVersionResource]*metav1.ListOptions`): This is used to filter the owner resources of the `ManifestWork` resources.
+3. Owner resource filters map (`map[schema.GroupVersionResource]*metav1.ListOptions`): This is used to filter the owner resources of the `ManifestWork` resources.
 
 ```golang
 listOptions := &metav1.ListOptions{
