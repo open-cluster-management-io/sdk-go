@@ -50,10 +50,9 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start an agent on cluster1")
-			clientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			informer := clientHolder.ManifestWorkInformer()
 			lister := informer.Lister().ManifestWorks(clusterName)
 			agentWorkClient := clientHolder.ManifestWorks(clusterName)
 
@@ -157,10 +156,10 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start an agent on cluster2")
-			clientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			lister := clientHolder.ManifestWorkInformer().Lister().ManifestWorks(clusterName)
+			lister := informer.Lister().ManifestWorks(clusterName)
 			agentWorkClient := clientHolder.ManifestWorks(clusterName)
 
 			gomega.Eventually(func() error {
@@ -409,16 +408,16 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			// cancel the context to gracefully shutdown the agent
 			cancel()
 		})
-		ginkgo.It("publish resource withou version from consumer and ensure resource can be received by source and agent", func() {
+		ginkgo.It("publish resource without version from consumer and ensure resource can be received by source and agent", func() {
 			ginkgo.By("Publish a resource from consumer")
 			resourceName := "resource1"
 			clusterName := "cluster3"
 
 			ginkgo.By("start an agent on cluster3")
-			clientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			lister := clientHolder.ManifestWorkInformer().Lister().ManifestWorks(clusterName)
+			lister := informer.Lister().ManifestWorks(clusterName)
 			agentWorkClient := clientHolder.ManifestWorks(clusterName)
 
 			ginkgo.By("create resource1 for cluster3 on the consumer and publish it to the source", func() {

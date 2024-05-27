@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/metadata"
 	fakemetadata "k8s.io/client-go/metadata/fake"
 
+	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
@@ -31,7 +32,7 @@ import (
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 )
 
-var _ = ginkgo.Describe("ManifestWork source client test", func() {
+var _ = ginkgo.Describe("ManifestWork clients test", func() {
 	ginkgo.Context("Publish a manifestwork", func() {
 		var ctx context.Context
 		var cancel context.CancelFunc
@@ -53,7 +54,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
+			sourceClientHolder, _, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -63,7 +64,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			agentClientHolder, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
+			agentClientHolder, _, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -120,7 +121,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 					// source update the work
 					newWork := work.DeepCopy()
-					newWork.Annotations[common.CloudEventsGenerationAnnotationKey] = "2"
+					newWork.Annotations[common.CloudEventsResourceVersionAnnotationKey] = "2"
 					newWork.Spec.Workload.Manifests = []workv1.Manifest{
 						newManifest("test1"),
 						newManifest("test2"),
@@ -221,6 +222,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 		var workName2 string
 		var sourceClientHolder *work.ClientHolder
 		var agentClientHolder *work.ClientHolder
+		var informer workv1informers.ManifestWorkInformer
 		var metadataClient metadata.Interface
 
 		ginkgo.BeforeEach(func() {
@@ -264,7 +266,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			err = metav1.AddMetaToScheme(scheme)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			metadataClient = fakemetadata.NewSimpleMetadataClient(scheme, cm, srt)
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
+			sourceClientHolder, informer, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			listOptions := &metav1.ListOptions{
@@ -275,7 +277,8 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				corev1.SchemeGroupVersion.WithResource("configmaps"): listOptions,
 				corev1.SchemeGroupVersion.WithResource("secrets"):    listOptions,
 			}
-			garbageCollector := garbagecollector.NewGarbageCollector(sourceClientHolder, metadataClient, ownerGVRFilters)
+			garbageCollector := garbagecollector.NewGarbageCollector(
+				sourceClientHolder, informer, metadataClient, ownerGVRFilters)
 			go garbageCollector.Run(ctx, 1)
 
 			// wait for cache ready
@@ -286,7 +289,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			agentClientHolder, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
+			agentClientHolder, _, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -510,7 +513,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			sourceClientHolder, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
+			sourceClientHolder, _, err = source.StartManifestWorkSourceClient(ctx, sourceID, sourceMQTTOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -520,7 +523,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
-			agentClientHolder, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
+			agentClientHolder, _, err = agent.StartWorkAgent(ctx, clusterName, agentMqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			// wait for cache ready
 			<-time.After(time.Second)
@@ -686,14 +689,14 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				SourceBroadcast: "sources/+/sourcebroadcast",
 			})
 
-			agentClientHolder, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
+			_, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			// wait for informer started
 			<-time.After(time.Second)
 
 			// add two works in the agent cache
-			store := agentClientHolder.ManifestWorkInformer().Informer().GetStore()
+			store := informer.Informer().GetStore()
 			work1UID := utils.UID(sourceID, clusterName, fmt.Sprintf("%s-1", workNamePrefix))
 			work1 := newManifestWorkWithStatus(clusterName, work1UID)
 			work1.UID = apitypes.UID(work1UID)
@@ -726,7 +729,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			})
 
 			// simulate a source client restart, recover two works
-			sourceClientHolder, err := source.StartManifestWorkSourceClient(ctx, sourceID, mqttOptions)
+			sourceClientHolder, _, err := source.StartManifestWorkSourceClient(ctx, sourceID, mqttOptions)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(ctx, newManifestWork(clusterName, fmt.Sprintf("%s-1", workNamePrefix)), metav1.CreateOptions{})
@@ -766,7 +769,7 @@ func newManifestWork(namespace, name string) *workv1.ManifestWork {
 			Name:      name,
 			Namespace: namespace,
 			Annotations: map[string]string{
-				common.CloudEventsGenerationAnnotationKey: "1",
+				common.CloudEventsResourceVersionAnnotationKey: "1",
 			},
 		},
 		Spec: workv1.ManifestWorkSpec{
