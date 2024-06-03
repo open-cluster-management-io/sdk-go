@@ -26,7 +26,7 @@ clean-integration-test:
 
 clean: clean-integration-test
 
-integration: test-cloudevents-integration test-basecontroller-integration
+integration: test-cloudevents-integration test-basecontroller-integration test-servingcertcontroller-integration
 .PHONY: integration
 
 test-cloudevents-integration:
@@ -38,3 +38,8 @@ test-basecontroller-integration: ensure-kubebuilder-tools
 	go test -c ./test/integration/basecontroller -o ./basecontroller.test
 	./basecontroller.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
 .PHONY: test-basecontroller-integration
+
+test-servingcertcontroller-integration: ensure-kubebuilder-tools
+	go test -c ./test/integration/servingcertcontroller -o ./servingcertcontroller.test
+	./servingcertcontroller.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
+.PHONY: test-servingcertcontroller-integration

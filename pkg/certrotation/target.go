@@ -1,10 +1,14 @@
 package certrotation
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"fmt"
 	"open-cluster-management.io/sdk-go/pkg/helpers"
+	"os"
+	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/openshift/library-go/pkg/certs"
@@ -24,6 +28,7 @@ import (
 type TargetRotation struct {
 	Namespace string
 	Name      string
+	LoadDir   string // load the secret to the local dir if LoadDir is not empty.
 	Validity  time.Duration
 	HostNames []string
 	Lister    corev1listers.SecretLister
@@ -53,10 +58,15 @@ func (c TargetRotation) EnsureTargetCertKeyPair(signingCertKeyPair *crypto.CA, c
 		return err
 	}
 
-	if _, _, err = helpers.ApplySecret(context.TODO(), c.Client, targetCertKeyPairSecret); err != nil {
+	if targetCertKeyPairSecret, _, err = helpers.ApplySecret(context.TODO(), c.Client, targetCertKeyPairSecret); err != nil {
 		return err
 	}
-	return nil
+
+	if c.LoadDir == "" {
+		return nil
+	}
+
+	return c.loadTargetSecret(targetCertKeyPairSecret)
 }
 
 // needNewTargetCertKeyPair returns a reason for creating a new target cert/key pair.
@@ -169,4 +179,38 @@ func (c TargetRotation) NewCertificate(signer *crypto.CA, validity time.Duration
 		return nil, fmt.Errorf("no hostnames set")
 	}
 	return signer.MakeServerCertForDuration(sets.NewString(c.HostNames...), validity, fns...)
+}
+
+func (c TargetRotation) loadTargetSecret(certKeySecret *corev1.Secret) error {
+	if c.LoadDir == "" {
+		return nil
+	}
+
+	err := os.MkdirAll(c.LoadDir, 0700)
+	if err != nil {
+		return fmt.Errorf("failed to create directory %q: %v", c.LoadDir, err)
+	}
+	for key, data := range certKeySecret.Data {
+		filename := path.Clean(path.Join(c.LoadDir, key))
+		lastData, err := os.ReadFile(filepath.Clean(filename))
+		switch {
+		case os.IsNotExist(err):
+			// create file
+			if err := os.WriteFile(filename, data, 0600); err != nil {
+				return fmt.Errorf("unable to write file %q: %w", filename, err)
+			}
+		case err != nil:
+			return fmt.Errorf("unable to write file %q: %w", filename, err)
+		case bytes.Equal(lastData, data):
+			// skip file without any change
+			continue
+		default:
+			// update file
+			if err := os.WriteFile(path.Clean(filename), data, 0600); err != nil {
+				return fmt.Errorf("unable to write file %q: %w", filename, err)
+			}
+		}
+	}
+
+	return nil
 }
