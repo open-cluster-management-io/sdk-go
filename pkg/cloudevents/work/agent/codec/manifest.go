@@ -65,6 +65,13 @@ func (c *ManifestCodec) Encode(source string, eventType types.CloudEventsType, w
 		return nil, fmt.Errorf("failed to find originalsource from the work %s", work.UID)
 	}
 
+	// for status update cases other than manifest deletion, there should be only one manifest in the work
+	if !meta.IsStatusConditionTrue(work.Status.Conditions, common.ManifestsDeleted) {
+		if len(work.Spec.Workload.Manifests) != 1 {
+			return nil, fmt.Errorf("too many manifests in the work %s", work.UID)
+		}
+	}
+
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(string(work.UID)).
 		WithStatusUpdateSequenceID(sequenceGenerator.Generate().String()).
