@@ -65,10 +65,6 @@ func (c *ManifestCodec) Encode(source string, eventType types.CloudEventsType, w
 		return nil, fmt.Errorf("failed to find originalsource from the work %s", work.UID)
 	}
 
-	if len(work.Spec.Workload.Manifests) != 1 {
-		return nil, fmt.Errorf("too many manifests in the work %s", work.UID)
-	}
-
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(string(work.UID)).
 		WithStatusUpdateSequenceID(sequenceGenerator.Generate().String()).

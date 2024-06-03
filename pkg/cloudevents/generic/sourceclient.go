@@ -243,6 +243,13 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 				return err
 			}
 		}
+
+		// respond with the deleting resource regardless of the resource version
+		if !obj.GetDeletionTimestamp().IsZero() {
+			if err := c.Publish(ctx, eventType, obj); err != nil {
+				return err
+			}
+		}
 	}
 
 	// the resources do not exist on the source, but exist on the agent, delete them
