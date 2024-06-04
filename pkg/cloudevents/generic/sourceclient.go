@@ -229,6 +229,14 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 	}
 
 	for _, obj := range objs {
+		// respond with the deleting resource regardless of the resource version
+		if !obj.GetDeletionTimestamp().IsZero() {
+			if err := c.Publish(ctx, eventType, obj); err != nil {
+				return err
+			}
+			continue
+		}
+
 		lastResourceVersion := findResourceVersion(string(obj.GetUID()), resourceVersions.Versions)
 		currentResourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
 		if err != nil {
@@ -239,13 +247,6 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 		// the version of the work is not maintained on source or the source's work is newer than agent, send
 		// the newer work to agent
 		if currentResourceVersion == 0 || currentResourceVersion > lastResourceVersion {
-			if err := c.Publish(ctx, eventType, obj); err != nil {
-				return err
-			}
-		}
-
-		// respond with the deleting resource regardless of the resource version
-		if !obj.GetDeletionTimestamp().IsZero() {
 			if err := c.Publish(ctx, eventType, obj); err != nil {
 				return err
 			}
