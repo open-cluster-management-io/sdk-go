@@ -229,6 +229,14 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 	}
 
 	for _, obj := range objs {
+		// respond with the deleting resource regardless of the resource version
+		if !obj.GetDeletionTimestamp().IsZero() {
+			if err := c.Publish(ctx, eventType, obj); err != nil {
+				return err
+			}
+			continue
+		}
+
 		lastResourceVersion := findResourceVersion(string(obj.GetUID()), resourceVersions.Versions)
 		currentResourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
 		if err != nil {

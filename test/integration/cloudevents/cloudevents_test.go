@@ -24,7 +24,7 @@ import (
 )
 
 var _ = ginkgo.Describe("Cloudevents clients test", func() {
-	ginkgo.Context("Resync resources", func() {
+	ginkgo.Context("Resync resource status", func() {
 		var ctx context.Context
 		var cancel context.CancelFunc
 		ginkgo.BeforeEach(func() {
@@ -34,7 +34,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			// cancel the context to gracefully shutdown the agent
 			cancel()
 		})
-		ginkgo.It("publish resource from consumer and resync resources between source and agent", func() {
+		ginkgo.It("publish resource from consumer and resync resource status from agent to source", func() {
 			ginkgo.By("Publish a resource from consumer")
 			resourceName := "resource1"
 			clusterName := "cluster1"
@@ -86,15 +86,14 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 				newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}}
 
 				// only update the status on the agent local part
-				store := informer.Informer().GetStore()
-				if err := store.Update(newWork); err != nil {
+				if err := informer.Informer().GetStore().Update(newWork); err != nil {
 					return err
 				}
 
 				return nil
 			}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 
-			ginkgo.By("resync the status from source")
+			ginkgo.By("resync the status from agent to source")
 			err = mqttSourceCloudEventsClient.Resync(ctx, clusterName)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
@@ -127,6 +126,172 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 
 				return nil
 			}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+		})
+	})
+
+	ginkgo.Context("Resync resource spec", func() {
+		var ctx, agentCtx context.Context
+		var cancel, agentCtxCancel context.CancelFunc
+		ginkgo.BeforeEach(func() {
+			ctx, cancel = context.WithCancel(context.Background())
+			agentCtx, agentCtxCancel = context.WithCancel(ctx)
+		})
+		ginkgo.AfterEach(func() {
+			// cancel the context to gracefully shutdown the agent
+			cancel()
+		})
+		ginkgo.It("publish resource from consumer and resync resource spec from source to agent", func() {
+			ginkgo.By("Publish a resource from consumer")
+			resourceName := "resource1"
+			clusterName := "cluster1"
+			ginkgo.By("create resource1 for cluster1 on the consumer and publish it to the source", func() {
+				res := source.NewResource(clusterName, resourceName)
+				consumerStore.Add(res)
+				err := grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
+					CloudEventsDataType: payload.ManifestEventDataType,
+					SubResource:         types.SubResourceSpec,
+					Action:              "test_create_request",
+				}, res)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			})
+
+			ginkgo.By("start an agent on cluster1")
+			clientHolder, _, err := agent.StartWorkAgent(agentCtx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			agentWorkClient := clientHolder.ManifestWorks(clusterName)
+
+			ginkgo.By("receive resource on cluster1", func() {
+				gomega.Eventually(func() error {
+					workName := source.ResourceID(clusterName, resourceName)
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					// add finalizers firstly
+					patchBytes, err := json.Marshal(map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"uid":             work.GetUID(),
+							"resourceVersion": work.GetResourceVersion(),
+							"finalizers":      []string{"work-test-finalizer"},
+						},
+					})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					work, err = agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					if len(work.Finalizers) != 1 {
+						return fmt.Errorf("expected finalizers on the work, but got %v", work.Finalizers)
+					}
+
+					// update the work status
+					newWork := work.DeepCopy()
+					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}}
+
+					oldData, err := json.Marshal(work)
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					newData, err := json.Marshal(newWork)
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					patchBytes, err = jsonpatch.CreateMergePatch(oldData, newData)
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+
+			ginkgo.By("stop work agent on cluster1")
+			agentCtxCancel()
+
+			ginkgo.By("mark resource to be deleting on the consumer and publish to the source", func() {
+				resourceID := source.ResourceID(clusterName, resourceName)
+				resource, err := consumerStore.Get(resourceID)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+				resource.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				err = consumerStore.Update(resource)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+				err = grpcSourceCloudEventsClient.Publish(ctx, types.CloudEventsType{
+					CloudEventsDataType: payload.ManifestEventDataType,
+					SubResource:         types.SubResourceSpec,
+					Action:              "test_delete_request",
+				}, resource)
+				gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			})
+
+			ginkgo.By("start work agent on cluster1 again")
+			clientHolder, _, err = agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+			agentWorkClient = clientHolder.ManifestWorks(clusterName)
+			ginkgo.By("receive deleting resource on the cluster1", func() {
+				gomega.Eventually(func() error {
+					workName := source.ResourceID(clusterName, resourceName)
+					work, err := agentWorkClient.Get(ctx, workName, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+
+					if work.DeletionTimestamp.IsZero() {
+						return fmt.Errorf("expected work is deleting, but got %v", work)
+					}
+
+					// remove the finalizers
+					patchBytes, err := json.Marshal(map[string]interface{}{
+						"metadata": map[string]interface{}{
+							"uid":             work.GetUID(),
+							"resourceVersion": work.GetResourceVersion(),
+							"finalizers":      []string{},
+						},
+					})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					_, err = agentWorkClient.Patch(ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
+
+			ginkgo.By("delete resource from store", func() {
+				gomega.Eventually(func() error {
+					resourceID := source.ResourceID(clusterName, resourceName)
+					resource, err := store.Get(resourceID)
+					if err != nil {
+						return err
+					}
+
+					if !meta.IsStatusConditionTrue(resource.Status.Conditions, "Deleted") {
+						return fmt.Errorf("expected ManifestsDeleted condition, but got %v", resource.Status.Conditions)
+					} else {
+						store.Delete(resourceID)
+					}
+
+					resource, err = consumerStore.Get(resourceID)
+					if err != nil {
+						return err
+					}
+
+					if !meta.IsStatusConditionTrue(resource.Status.Conditions, "Deleted") {
+						return fmt.Errorf("expected ManifestsDeleted condition, but got %v", resource.Status.Conditions)
+					} else {
+						consumerStore.Delete(resourceID)
+					}
+
+					return nil
+				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+			})
 		})
 	})
 
