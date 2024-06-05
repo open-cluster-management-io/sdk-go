@@ -71,13 +71,13 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 		clusterName := "cluster1"
 		agentCtx, agentCancel := context.WithCancel(context.Background())
 		agentID := clusterName + "-" + rand.String(5)
-		agentClientHolder, err := work.NewClientHolderBuilder(kafkaOptions).
+		agentClientHolder, informer, err := work.NewClientHolderBuilder(kafkaOptions).
 			WithClientID(agentID).
 			WithClusterName(clusterName).
 			WithCodecs(codec.NewManifestCodec(nil)).
-			NewAgentClientHolder(agentCtx)
+			NewAgentClientHolderWithInformer(agentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-		go agentClientHolder.ManifestWorkInformer().Informer().Run(agentCtx.Done())
+		go informer.Informer().Run(agentCtx.Done())
 
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		// agentManifestLister := agentClientHolder.ManifestWorkInformer().Lister().ManifestWorks(clusterName)
@@ -207,16 +207,16 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 		//        But the agent will wait a long time(test result is 56 seconds) to receive the message
 		agentID = clusterName + "-" + rand.String(5)
 		_ = kafkaOptions.ConfigMap.SetKey("group.id", agentID)
-		newAgentHolder, err := work.NewClientHolderBuilder(kafkaOptions).
+		newAgentHolder, informer, err := work.NewClientHolderBuilder(kafkaOptions).
 			WithClientID(agentID).
 			WithClusterName(clusterName).
 			WithCodecs(codec.NewManifestCodec(nil)).
-			NewAgentClientHolder(newAgentCtx)
+			NewAgentClientHolderWithInformer(newAgentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 		// case1: wait until the consumer is ready
 		time.Sleep(5 * time.Second)
-		go newAgentHolder.ManifestWorkInformer().Informer().Run(newAgentCtx.Done())
+		go informer.Informer().Run(newAgentCtx.Done())
 		newAgentManifestClient := newAgentHolder.ManifestWorks(clusterName)
 
 		gomega.Eventually(func() error {

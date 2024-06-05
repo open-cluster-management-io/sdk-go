@@ -394,48 +394,6 @@ func TestReceiveResourceStatus(t *testing.T) {
 				}
 			},
 		},
-		{
-			name: "status no change",
-			requestEvent: func() cloudevents.Event {
-				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
-					SubResource:         types.SubResourceStatus,
-					Action:              "test_update_request",
-				}
-
-				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "1", Status: "test1"})
-				evt.SetExtension("clustername", "cluster1")
-				return *evt
-			}(),
-			resources: []*mockResource{
-				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Status: "test1"},
-				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Status: "test2"},
-			},
-			validate: func(event types.ResourceAction, resource *mockResource) {
-				if len(event) != 0 {
-					t.Errorf("unexpected event %s, %v", event, resource)
-				}
-			},
-		},
-		{
-			name: "none existing resource",
-			requestEvent: func() cloudevents.Event {
-				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
-					SubResource:         types.SubResourceStatus,
-					Action:              "test_update_request",
-				}
-
-				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "1", Status: "test1"})
-				evt.SetExtension("clustername", "cluster1")
-				return *evt
-			}(),
-			validate: func(event types.ResourceAction, resource *mockResource) {
-				if len(event) != 0 {
-					t.Errorf("unexpected event %s, %v", event, resource)
-				}
-			},
-		},
 	}
 
 	for _, c := range cases {

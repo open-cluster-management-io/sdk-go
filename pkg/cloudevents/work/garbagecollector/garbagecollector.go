@@ -71,11 +71,11 @@ type GarbageCollector struct {
 // NewGarbageCollector creates a new garbage collector instance.
 func NewGarbageCollector(
 	workClientHolder *cloudeventswork.ClientHolder,
+	workInformer workv1informers.ManifestWorkInformer,
 	metadataClient metadata.Interface,
 	ownerGVRFilters map[schema.GroupVersionResource]*metav1.ListOptions) *GarbageCollector {
 
 	workClient := workClientHolder.WorkInterface().WorkV1()
-	workInformer := workClientHolder.ManifestWorkInformer()
 	if err := workInformer.Informer().AddIndexers(cache.Indexers{
 		manifestWorkByOwner: indexManifestWorkByOwner,
 	}); err != nil {

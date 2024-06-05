@@ -47,7 +47,8 @@ func TestManifestBundleEncode(t *testing.T) {
 			},
 			work: &workv1.ManifestWork{
 				ObjectMeta: metav1.ObjectMeta{
-					UID: "test",
+					UID:             "test",
+					ResourceVersion: "0",
 					Labels: map[string]string{
 						"cloudevents.open-cluster-management.io/originalsource": "source1",
 					},

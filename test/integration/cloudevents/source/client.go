@@ -6,12 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
+	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
@@ -19,6 +23,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
+	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 )
 
 type ResourceCodec struct{}
@@ -186,17 +191,29 @@ func StartGRPCResourceSourceClient(ctx context.Context, config *grpc.GRPCOptions
 	return client, nil
 }
 
-func StartManifestWorkSourceClient(ctx context.Context, sourceID string, config any) (*work.ClientHolder, error) {
+func StartManifestWorkSourceClient(
+	ctx context.Context,
+	sourceID string,
+	config any,
+) (*work.ClientHolder, workv1informers.ManifestWorkInformer, error) {
+	watcherStore := workstore.NewInformerWatcherStore(ctx)
+
 	clientHolder, err := work.NewClientHolderBuilder(config).
 		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 		WithSourceID(sourceID).
 		WithCodecs(codec.NewManifestBundleCodec()).
+		WithWorkClientWatcherStore(watcherStore).
 		NewSourceClientHolder(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	go clientHolder.ManifestWorkInformer().Informer().Run(ctx.Done())
+	factory := workinformers.NewSharedInformerFactoryWithOptions(clientHolder.WorkInterface(), 5*time.Minute)
+	informer := factory.Work().V1().ManifestWorks()
 
-	return clientHolder, nil
+	watcherStore.SetStore(informer.Informer().GetStore())
+
+	go informer.Informer().Run(ctx.Done())
+
+	return clientHolder, informer, nil
 }
