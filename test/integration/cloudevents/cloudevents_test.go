@@ -156,11 +156,8 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start an agent on cluster1")
-			clientHolder, err := agent.StartWorkAgent(agentCtx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, _, err := agent.StartWorkAgent(agentCtx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-			// informer := clientHolder.ManifestWorkInformer()
-			// lister := informer.Lister().ManifestWorks(clusterName)
 			agentWorkClient := clientHolder.ManifestWorks(clusterName)
 
 			ginkgo.By("receive resource on cluster1", func() {
@@ -234,7 +231,7 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 			})
 
 			ginkgo.By("start work agent on cluster1 again")
-			clientHolder, err = agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, _, err = agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			agentWorkClient = clientHolder.ManifestWorks(clusterName)
@@ -275,7 +272,9 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 						return err
 					}
 
-					if meta.IsStatusConditionTrue(resource.Status.Conditions, "Deleted") {
+					if !meta.IsStatusConditionTrue(resource.Status.Conditions, "Deleted") {
+						return fmt.Errorf("expected ManifestsDeleted condition, but got %v", resource.Status.Conditions)
+					} else {
 						store.Delete(resourceID)
 					}
 
@@ -284,7 +283,9 @@ var _ = ginkgo.Describe("Cloudevents clients test", func() {
 						return err
 					}
 
-					if meta.IsStatusConditionTrue(resource.Status.Conditions, "Deleted") {
+					if !meta.IsStatusConditionTrue(resource.Status.Conditions, "Deleted") {
+						return fmt.Errorf("expected ManifestsDeleted condition, but got %v", resource.Status.Conditions)
+					} else {
 						consumerStore.Delete(resourceID)
 					}
 
