@@ -1,4 +1,4 @@
-package source
+package store
 
 import (
 	"fmt"
@@ -28,10 +28,10 @@ type Resource struct {
 
 var _ generic.ResourceObject = &Resource{}
 
-func NewResource(namespace, name string) *Resource {
+func NewResource(namespace, name string, resourceVersion int64) *Resource {
 	return &Resource{
 		ResourceID:      ResourceID(namespace, name),
-		ResourceVersion: 1,
+		ResourceVersion: resourceVersion,
 		Namespace:       namespace,
 		Spec: unstructured.Unstructured{
 			Object: map[string]interface{}{

@@ -11,6 +11,7 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
@@ -18,11 +19,10 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
-	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
-const clusterName = "certrotationtest"
 const certDuration = 5 * time.Second
 
 var _ = ginkgo.Describe("Auto rotating client certs", func() {
@@ -31,6 +31,7 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 		var cancel context.CancelFunc
 
 		var agentID string
+		var clusterName = "cert-rotation-test"
 
 		var clientCertFile *os.File
 		var clientKeyFile *os.File
@@ -72,7 +73,7 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 			ginkgo.By("Create an agent client with short time cert")
 			mqttOptions := newTLSMQTTOptions(certPool, mqttTLSBrokerHost, clientCertFile.Name(), clientKeyFile.Name())
 			agentOptions := mqtt.NewAgentOptions(mqttOptions, clusterName, agentID)
-			agentClient, err := generic.NewCloudEventAgentClient[*source.Resource](
+			agentClient, err := generic.NewCloudEventAgentClient[*store.Resource](
 				ctx,
 				agentOptions,
 				nil,
@@ -88,7 +89,7 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 			}
 
 			ginkgo.By("Publishes an event")
-			err = agentClient.Publish(ctx, evtType, &source.Resource{})
+			err = agentClient.Publish(ctx, evtType, &store.Resource{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			ginkgo.By("Renew the client cert")
@@ -105,7 +106,7 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 			<-time.After(certDuration * 2)
 
 			ginkgo.By("Publishes an event again")
-			err = agentClient.Publish(ctx, evtType, &source.Resource{})
+			err = agentClient.Publish(ctx, evtType, &store.Resource{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		})
 	})
@@ -143,7 +144,7 @@ func (c *resourceCodec) EventDataType() types.CloudEventsDataType {
 	return payload.ManifestEventDataType
 }
 
-func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, resource *source.Resource) (*cloudevents.Event, error) {
+func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, resource *store.Resource) (*cloudevents.Event, error) {
 	evt := types.NewEventBuilder(source, eventType).NewEvent()
 	if err := evt.SetData(cloudevents.ApplicationJSON, &payload.Manifest{Manifest: resource.Spec}); err != nil {
 		return nil, fmt.Errorf("failed to encode manifests to cloud event: %v", err)
@@ -152,7 +153,7 @@ func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, r
 	return &evt, nil
 }
 
-func (c *resourceCodec) Decode(evt *cloudevents.Event) (*source.Resource, error) {
+func (c *resourceCodec) Decode(evt *cloudevents.Event) (*store.Resource, error) {
 	// do nothing
 	return nil, nil
 }

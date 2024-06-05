@@ -1,4 +1,4 @@
-package source
+package store
 
 import (
 	"fmt"
@@ -12,30 +12,17 @@ type MemoryStore struct {
 	resourceSpecChan chan *Resource
 }
 
-var (
-	once          sync.Once
-	store         *MemoryStore
-	consumerStore *MemoryStore
-)
-
-func InitStore(eventBroadcaster *EventBroadcaster) (*MemoryStore, *MemoryStore) {
-	once.Do(func() {
-		store = &MemoryStore{
-			resources:        make(map[string]*Resource),
-			eventBroadcaster: eventBroadcaster,
-			resourceSpecChan: make(chan *Resource),
-		}
-		consumerStore = &MemoryStore{
-			resources: make(map[string]*Resource),
-		}
-	})
-
-	return store, consumerStore
-}
-
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		resources: make(map[string]*Resource),
+	}
+}
+
+func NewServerStore(eventBroadcaster *EventBroadcaster) *MemoryStore {
+	return &MemoryStore{
+		resources:        make(map[string]*Resource),
+		eventBroadcaster: eventBroadcaster,
+		resourceSpecChan: make(chan *Resource),
 	}
 }
 
