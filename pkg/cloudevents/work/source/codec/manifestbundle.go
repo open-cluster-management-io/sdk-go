@@ -96,6 +96,12 @@ func (c *ManifestBundleCodec) Decode(evt *cloudevents.Event) (*workv1.ManifestWo
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
 	}
 
+	if manifestStatus.ManifestBundle != nil {
+		work.Spec.Workload.Manifests = manifestStatus.ManifestBundle.Manifests
+		work.Spec.DeleteOption = manifestStatus.ManifestBundle.DeleteOption
+		work.Spec.ManifestConfigs = manifestStatus.ManifestBundle.ManifestConfigs
+	}
+
 	work.Status = workv1.ManifestWorkStatus{
 		Conditions: manifestStatus.Conditions,
 		ResourceStatus: workv1.ManifestResourceStatus{
