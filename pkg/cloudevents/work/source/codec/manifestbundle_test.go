@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"encoding/json"
 	"testing"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -130,7 +131,6 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.status.test")
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
-				evt.SetExtension("clustername", "cluster1")
 				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{
 					Conditions: []metav1.Condition{
 						{
@@ -159,14 +159,26 @@ func TestManifestBundleDecode(t *testing.T) {
 			},
 		},
 		{
-			name: "decode a manifestbundle status cloudevent with spec",
+			name: "decode a manifestbundle status cloudevent with meta and spec",
 			event: func() *cloudevents.Event {
+				metaJson, err := json.Marshal(metav1.ObjectMeta{
+					UID:             kubetypes.UID("test"),
+					ResourceVersion: "13",
+					Name:            "test",
+					Namespace:       "cluster1",
+					Labels:          map[string]string{"test1": "test1"},
+					Annotations:     map[string]string{"test2": "test2"},
+					Finalizers:      []string{"test"},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
 				evt := cloudevents.NewEvent()
 				evt.SetSource("source1")
 				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.status.test")
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
-				evt.SetExtension("clustername", "cluster1")
+				evt.SetExtension("metadata", string(metaJson))
 				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{
 					ManifestBundle: &payload.ManifestBundle{
 						Manifests: []workv1.Manifest{
@@ -207,6 +219,11 @@ func TestManifestBundleDecode(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					UID:             kubetypes.UID("test"),
 					ResourceVersion: "13",
+					Name:            "test",
+					Namespace:       "cluster1",
+					Labels:          map[string]string{"test1": "test1"},
+					Annotations:     map[string]string{"test2": "test2"},
+					Finalizers:      []string{"test"},
 				},
 				Spec: workv1.ManifestWorkSpec{
 					Workload: workv1.ManifestsTemplate{
