@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"testing"
 	"time"
 
@@ -14,11 +13,11 @@ import (
 	"github.com/onsi/gomega"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
-	grpcoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
+
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
@@ -26,23 +25,18 @@ const (
 	mqttBrokerHost    = "127.0.0.1:1883"
 	mqttTLSBrokerHost = "127.0.0.1:8883"
 	grpcServerHost    = "127.0.0.1:8881"
-	sourceID          = "integration-test"
 )
 
 var (
-	// TODO: need a brokerInterface to consolidate the transport configurations
-	mqttBroker                  *mochimqtt.Server
-	mqttOptions                 *mqtt.MQTTOptions
-	mqttSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
-	grpcServer                  *source.GRPCServer
-	grpcOptions                 *grpcoptions.GRPCOptions
-	grpcSourceCloudEventsClient generic.CloudEventsClient[*source.Resource]
-	eventBroadcaster            *source.EventBroadcaster
-	store                       *source.MemoryStore
-	consumerStore               *source.MemoryStore
-	serverCertPairs             *util.ServerCertPairs
-	certPool                    *x509.CertPool
+	mqttBroker *mochimqtt.Server
+
+	grpcServer *server.GRPCServer
+
+	serverCertPairs *util.ServerCertPairs
+	certPool        *x509.CertPool
 )
+
+type GetSourceOptionsFn func(context.Context, string) *options.CloudEventsSourceOptions
 
 func TestIntegration(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
@@ -86,36 +80,17 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
 
-	ginkgo.By("init the event hub")
-	eventBroadcaster = source.NewEventBroadcaster()
+	// start the resource grpc server
+	eventBroadcaster := store.NewEventBroadcaster()
 	go func() {
 		eventBroadcaster.Start(ctx)
 	}()
 
-	ginkgo.By("init the resource store")
-	store, consumerStore = source.InitStore(eventBroadcaster)
-
-	ginkgo.By("start the resource grpc server")
-	grpcServer = source.NewGRPCServer(store, eventBroadcaster)
+	grpcServer = server.NewGRPCServer(eventBroadcaster)
 	go func() {
 		err := grpcServer.Start(grpcServerHost)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
-
-	ginkgo.By("start the resource grpc source client")
-	grpcOptions = grpcoptions.NewGRPCOptions()
-	grpcOptions.URL = grpcServerHost
-	grpcSourceCloudEventsClient, err = source.StartGRPCResourceSourceClient(ctx, grpcOptions)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-	ginkgo.By("start the resource mqtt source client")
-	mqttOptions = newMQTTOptions(types.Topics{
-		SourceEvents: fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-		AgentEvents:  fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-	})
-
-	mqttSourceCloudEventsClient, err = source.StartMQTTResourceSourceClient(ctx, mqttOptions, sourceID, store.GetResourceSpecChan())
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	close(done)
 }, 300)
@@ -126,16 +101,3 @@ var _ = ginkgo.AfterSuite(func() {
 	err := mqttBroker.Close()
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 })
-
-func newMQTTOptions(topics types.Topics) *mqtt.MQTTOptions {
-	return &mqtt.MQTTOptions{
-		KeepAlive: 60,
-		PubQoS:    1,
-		SubQoS:    1,
-		Topics:    topics,
-		Dialer: &mqtt.MQTTDialer{
-			BrokerHost: mqttBrokerHost,
-			Timeout:    5 * time.Second,
-		},
-	}
-}

@@ -1,4 +1,4 @@
-package source
+package server
 
 import (
 	"context"
@@ -9,25 +9,28 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
+
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	grpcprotocol "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 )
 
 type GRPCServer struct {
 	pbv1.UnimplementedCloudEventServiceServer
-	store            *MemoryStore
-	eventBroadcaster *EventBroadcaster
+	serverStore      *store.MemoryStore
+	eventBroadcaster *store.EventBroadcaster
 }
 
-func NewGRPCServer(store *MemoryStore, eventBroadcaster *EventBroadcaster) *GRPCServer {
+func NewGRPCServer(eventBroadcaster *store.EventBroadcaster) *GRPCServer {
 	return &GRPCServer{
-		store:            store,
+		serverStore:      store.NewServerStore(eventBroadcaster),
 		eventBroadcaster: eventBroadcaster,
 	}
 }
@@ -44,12 +47,12 @@ func (svr *GRPCServer) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 		return nil, fmt.Errorf("failed to decode cloudevent: %v", err)
 	}
 
-	store.UpSert(res)
+	svr.serverStore.UpSert(res)
 	return &emptypb.Empty{}, nil
 }
 
 func (svr *GRPCServer) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv1.CloudEventService_SubscribeServer) error {
-	clientID, errChan := svr.eventBroadcaster.Register(subReq.Source, func(res *Resource) error {
+	clientID, errChan := svr.eventBroadcaster.Register(subReq.Source, func(res *store.Resource) error {
 		evt, err := encode(res)
 		if err != nil {
 			return fmt.Errorf("failed to encode resource %s to cloudevent: %v", res.ResourceID, err)
@@ -91,7 +94,11 @@ func (svr *GRPCServer) Start(addr string) error {
 	return grpcServer.Serve(lis)
 }
 
-func encode(resource *Resource) (*cloudevents.Event, error) {
+func (svr *GRPCServer) GetStore() *store.MemoryStore {
+	return svr.serverStore
+}
+
+func encode(resource *store.Resource) (*cloudevents.Event, error) {
 	source := "test-source"
 	eventType := types.CloudEventsType{
 		CloudEventsDataType: payload.ManifestEventDataType,
@@ -113,7 +120,7 @@ func encode(resource *Resource) (*cloudevents.Event, error) {
 	return &evt, nil
 }
 
-func decode(evt *cloudevents.Event) (*Resource, error) {
+func decode(evt *cloudevents.Event) (*store.Resource, error) {
 	eventType, err := types.ParseCloudEventsType(evt.Type())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
@@ -145,7 +152,7 @@ func decode(evt *cloudevents.Event) (*Resource, error) {
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
 	}
 
-	resource := &Resource{
+	resource := &store.Resource{
 		Source:          evt.Source(),
 		ResourceID:      resourceID,
 		ResourceVersion: int64(resourceVersion),

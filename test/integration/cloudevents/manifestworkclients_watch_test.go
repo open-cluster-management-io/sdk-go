@@ -18,46 +18,49 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 	agentcodec "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	sourcecodec "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
 	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
-var _ = ginkgo.Describe("ManifestWork source client test", func() {
-	ginkgo.Context("CRUD the manifestwork with source client", func() {
+var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
+	var ctx context.Context
+	var cancel context.CancelFunc
 
-		var ctx context.Context
-		var cancel context.CancelFunc
+	var sourceOptions *mqtt.MQTTOptions
+	var sourceClient *work.ClientHolder
 
-		var sourceClient *work.ClientHolder
+	var sourceID string
+	var clusterName string
+	var workName string
 
-		var sourceID string
-		var clusterName string
-		var workName string
+	ginkgo.BeforeEach(func() {
+		ctx, cancel = context.WithCancel(context.Background())
 
-		ginkgo.BeforeEach(func() {
-			ctx, cancel = context.WithCancel(context.Background())
+		sourceID = fmt.Sprintf("watch-test-%s", rand.String(5))
+		clusterName = fmt.Sprintf("watch-test-cluster-%s", rand.String(5))
+		workName = fmt.Sprintf("watch-test-work-%s", rand.String(5))
 
-			sourceID = fmt.Sprintf("watch-test-%s", rand.String(5))
-			clusterName = fmt.Sprintf("watch-test-cluster-%s", rand.String(5))
-			workName = fmt.Sprintf("watch-test-work-%s", rand.String(5))
+		sourceOptions = util.NewMQTTSourceOptionsWithSourceBroadcast(mqttBrokerHost, sourceID)
+	})
 
-			sourceConfig := newMQTTOptions(types.Topics{
-				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-				SourceBroadcast: "sources/+/sourcebroadcast",
-			})
+	ginkgo.AfterEach(func() {
+		// cancel the context to stop the source client gracefully
+		cancel()
+	})
 
+	ginkgo.Context("CRUD the manifestworks with source client", func() {
+		ginkgo.JustBeforeEach(func() {
 			watcherStore, err := workstore.NewLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
 				return []*workv1.ManifestWork{}, nil
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			sourceClient, err = work.NewClientHolderBuilder(sourceConfig).
+			sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 				WithSourceID(sourceID).
 				WithCodecs(sourcecodec.NewManifestBundleCodec()).
@@ -66,14 +69,8 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		})
 
-		ginkgo.AfterEach(func() {
-			// cancel the context to stop the source client gracefully
-			cancel()
-		})
-
 		ginkgo.It("create/update/delete a manifestwork with source client", func() {
-			work := newManifestWork(clusterName, workName)
-			work.Spec.Workload.Manifests = []workv1.Manifest{newManifest("test1")}
+			work := util.NewManifestWork(clusterName, workName, true)
 			ginkgo.By("create a work with source client", func() {
 				_, err := sourceClient.ManifestWorks(clusterName).Create(ctx, work, metav1.CreateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -83,17 +80,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			})
 
 			ginkgo.By("update the work with source client", func() {
-				found, err := sourceClient.ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-				newWork := found.DeepCopy()
-				newWork.Spec.Workload.Manifests = []workv1.Manifest{
-					newManifest("test1"),
-					newManifest("test2"),
-				}
-				patchBytes := patchWork(found, newWork)
-				_, err = sourceClient.ManifestWorks(clusterName).Patch(
-					ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+				err := util.UpdateWork(ctx, sourceClient.ManifestWorks(clusterName), workName, true)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 				updatedWork, err := sourceClient.ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
@@ -113,44 +100,20 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 	})
 
 	ginkgo.Context("Watching the manifestworks with source client", func() {
-		var ctx context.Context
-		var cancel context.CancelFunc
-
 		// this store save the works that are watched by source client
-		var sourceWatcherStore cache.Store
+		var localStore cache.Store
 
-		var sourceClient *work.ClientHolder
 		var agentClient *work.ClientHolder
 
-		var sourceID string
-		var clusterName string
-		var workName string
-
-		ginkgo.BeforeEach(func() {
-			ctx, cancel = context.WithCancel(context.Background())
-
-			sourceID = fmt.Sprintf("watch-test-%s", rand.String(5))
-			clusterName = fmt.Sprintf("watch-test-cluster-%s", rand.String(5))
-			workName = fmt.Sprintf("watch-test-work-%s", rand.String(5))
-			sourceWatcherStore = cache.NewStore(cache.MetaNamespaceKeyFunc)
-
-			sourceConfig := newMQTTOptions(types.Topics{
-				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-				SourceBroadcast: "sources/+/sourcebroadcast",
-			})
-			agentConfig := newMQTTOptions(types.Topics{
-				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-				SourceBroadcast: "sources/+/sourcebroadcast",
-			})
+		ginkgo.JustBeforeEach(func() {
+			localStore = cache.NewStore(cache.MetaNamespaceKeyFunc)
 
 			watcherStore, err := workstore.NewLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
 				return []*workv1.ManifestWork{}, nil
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			sourceClient, err = work.NewClientHolderBuilder(sourceConfig).
+			sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 				WithSourceID(sourceID).
 				WithCodecs(sourcecodec.NewManifestBundleCodec()).
@@ -158,8 +121,8 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				NewSourceClientHolder(ctx)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			agentClient, _, err = agent.StartWorkAgent(
-				ctx, clusterName, agentConfig, agentcodec.NewManifestBundleCodec())
+			agentOptions := util.NewMQTTAgentOptionsWithSourceBroadcast(mqttBrokerHost, sourceID, clusterName)
+			agentClient, _, err = agent.StartWorkAgent(ctx, clusterName, agentOptions, agentcodec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			watcher, err := sourceClient.ManifestWorks(clusterName).Watch(ctx, metav1.ListOptions{})
@@ -178,13 +141,13 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 						switch event.Type {
 						case watch.Added:
-							err := sourceWatcherStore.Add(event.Object)
+							err := localStore.Add(event.Object)
 							gomega.Expect(err).ToNot(gomega.HaveOccurred())
 						case watch.Modified:
-							err := sourceWatcherStore.Update(event.Object)
+							err := localStore.Update(event.Object)
 							gomega.Expect(err).ToNot(gomega.HaveOccurred())
 						case watch.Deleted:
-							err := sourceWatcherStore.Delete(event.Object)
+							err := localStore.Delete(event.Object)
 							gomega.Expect(err).ToNot(gomega.HaveOccurred())
 						}
 					}
@@ -192,15 +155,8 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			}()
 		})
 
-		ginkgo.AfterEach(func() {
-			// cancel the context to stop the source client gracefully
-			cancel()
-		})
-
 		ginkgo.It("watch the Added/Modified/Deleted events", func() {
-			work := newManifestWork(clusterName, workName)
-			work.Spec.Workload.Manifests = []workv1.Manifest{newManifest("test1")}
-
+			work := util.NewManifestWork(clusterName, workName, true)
 			ginkgo.By("create a work with source client", func() {
 				_, err := sourceClient.ManifestWorks(clusterName).Create(ctx, work, metav1.CreateOptions{})
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -210,7 +166,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 
 				// this created work should be watched
 				gomega.Eventually(func() error {
-					_, exists, err := sourceWatcherStore.GetByKey(clusterName + "/" + workName)
+					_, exists, err := localStore.GetByKey(clusterName + "/" + workName)
 					if err != nil {
 						return err
 					}
@@ -223,50 +179,23 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			})
 
 			ginkgo.By("update a work with source client", func() {
-				found, err := sourceClient.ManifestWorks(clusterName).Get(ctx, workName, metav1.GetOptions{})
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-				newWork := found.DeepCopy()
-				newWork.Spec.Workload.Manifests = []workv1.Manifest{
-					newManifest("test1"),
-					newManifest("test2"),
-				}
-				patchBytes := patchWork(found, newWork)
-				_, err = sourceClient.ManifestWorks(clusterName).Patch(
-					ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
+				err := util.UpdateWork(ctx, sourceClient.ManifestWorks(clusterName), workName, true)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 				gomega.Eventually(func() error {
+					workClient := agentClient.ManifestWorks(clusterName)
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClient.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
-					if err != nil {
+
+					if err := util.AddWorkFinalizer(ctx, workClient, workID); err != nil {
 						return err
 					}
 
-					// add finalizers
-					newWork := work.DeepCopy()
-					newWork.Finalizers = []string{"test-finalizer"}
-					patchBytes := patchWork(work, newWork)
-					updateWork, err := agentClient.ManifestWorks(clusterName).Patch(
-						ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					// update the work status
-					newWork = updateWork.DeepCopy()
-					newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{
-						{Type: "Created", Status: metav1.ConditionTrue},
-					}}
-					patchBytes = patchWork(updateWork, newWork)
-					_, err = agentClient.ManifestWorks(clusterName).Patch(
-						ctx, work.Name, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{}, "status")
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					return nil
+					return util.UpdateWorkStatus(ctx, workClient, workID, util.WorkCreatedCondition)
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 
 				// this updated work should be watched
 				gomega.Eventually(func() error {
-					work, exists, err := sourceWatcherStore.GetByKey(clusterName + "/" + workName)
+					work, exists, err := localStore.GetByKey(clusterName + "/" + workName)
 					if err != nil {
 						return err
 					}
@@ -294,28 +223,13 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				// agent delete the work and send deleted status to source
 				gomega.Eventually(func() error {
 					workID := utils.UID(sourceID, clusterName, workName)
-					work, err := agentClient.ManifestWorks(clusterName).Get(ctx, workID, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-
-					if work.DeletionTimestamp.IsZero() {
-						return fmt.Errorf("work deletion timestamp is zero")
-					}
-
-					newWork := work.DeepCopy()
-					newWork.Finalizers = []string{}
-					patchBytes := patchWork(work, newWork)
-					_, err = agentClient.ManifestWorks(clusterName).Patch(
-						ctx, workID, apitypes.MergePatchType, patchBytes, metav1.PatchOptions{})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-					return nil
+					workClient := agentClient.ManifestWorks(clusterName)
+					return util.RemoveWorkFinalizer(ctx, workClient, workID)
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 
 				// the deleted work should be watched
 				gomega.Eventually(func() error {
-					_, exists, err := sourceWatcherStore.GetByKey(clusterName + "/" + workName)
+					_, exists, err := localStore.GetByKey(clusterName + "/" + workName)
 					if err != nil {
 						return err
 					}
@@ -330,36 +244,18 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 	})
 
 	ginkgo.Context("Resync the manifestworks by agent", func() {
-		var ctx context.Context
-		var cancel context.CancelFunc
-
-		var sourceID string
-		var clusterName string
-		var workName string
-
-		ginkgo.BeforeEach(func() {
-			ctx, cancel = context.WithCancel(context.Background())
-
-			sourceID = fmt.Sprintf("watch-test-%s", rand.String(5))
-			clusterName = fmt.Sprintf("watch-test-cluster-%s", rand.String(5))
-			workName = fmt.Sprintf("watch-test-work-%s", rand.String(5))
-
+		ginkgo.JustBeforeEach(func() {
 			watcherStore, err := workstore.NewLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
-				work := newManifestWork(clusterName, workName)
+				work := util.NewManifestWork(clusterName, workName, false)
 				work.UID = apitypes.UID(utils.UID(sourceID, clusterName, workName))
 				work.ResourceVersion = "0"
-				work.Spec.Workload.Manifests = []workv1.Manifest{newManifest("test1")}
+				work.Spec.Workload.Manifests = []workv1.Manifest{util.NewManifest("test1")}
 				work.Status.Conditions = []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}
 				return []*workv1.ManifestWork{work}, nil
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			sourceConfig := newMQTTOptions(types.Topics{
-				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-				SourceBroadcast: "sources/+/sourcebroadcast",
-			})
-			_, err = work.NewClientHolderBuilder(sourceConfig).
+			_, err = work.NewClientHolderBuilder(sourceOptions).
 				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 				WithSourceID(sourceID).
 				WithCodecs(sourcecodec.NewManifestBundleCodec()).
@@ -368,19 +264,9 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		})
 
-		ginkgo.AfterEach(func() {
-			// cancel the context to stop the source client gracefully
-			cancel()
-		})
-
 		ginkgo.It("agent resync the source manifestworks", func() {
-			agentConfig := newMQTTOptions(types.Topics{
-				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-				SourceBroadcast: "sources/+/sourcebroadcast",
-			})
-			agentClient, _, err := agent.StartWorkAgent(
-				ctx, clusterName, agentConfig, agentcodec.NewManifestBundleCodec())
+			agentOptions := util.NewMQTTAgentOptionsWithSourceBroadcast(mqttBrokerHost, sourceID, clusterName)
+			agentClient, _, err := agent.StartWorkAgent(ctx, clusterName, agentOptions, agentcodec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			ginkgo.By("get the work from agent", func() {
@@ -398,29 +284,17 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 	})
 
 	ginkgo.Context("Using the source client with customized lister", func() {
-		var ctx context.Context
-		var cancel context.CancelFunc
-
 		// simulate a server to receive the works from source and works status from work agent
 		var server cache.Store
 		var serverListFn workstore.ListLocalWorksFunc
 
-		var sourceConfig *mqtt.MQTTOptions
-
 		var sourceClient *work.ClientHolder
-
-		var sourceID string
-		var clusterName string
-		var workName string
 
 		var manifestWork *workv1.ManifestWork
 
 		ginkgo.BeforeEach(func() {
-			sourceID = fmt.Sprintf("watch-test-%s", rand.String(5))
-			clusterName = fmt.Sprintf("watch-test-cluster-%s", rand.String(5))
-			workName = fmt.Sprintf("watch-test-work-%s", rand.String(5))
-
 			server = cache.NewStore(cache.MetaNamespaceKeyFunc)
+
 			serverListFn = func(ctx context.Context) ([]*workv1.ManifestWork, error) {
 				works := []*workv1.ManifestWork{}
 				for _, obj := range server.List() {
@@ -433,20 +307,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				return works, nil
 			}
 
-			sourceConfig = newMQTTOptions(types.Topics{
-				SourceEvents:    fmt.Sprintf("sources/%s/consumers/+/sourceevents", sourceID),
-				AgentEvents:     fmt.Sprintf("sources/%s/consumers/+/agentevents", sourceID),
-				SourceBroadcast: "sources/+/sourcebroadcast",
-			})
-
-			manifestWork = newManifestWork(clusterName, workName)
-			manifestWork.Spec.Workload.Manifests = []workv1.Manifest{newManifest("test1")}
-		})
-
-		ginkgo.AfterEach(func() {
-			if cancel != nil {
-				cancel()
-			}
+			manifestWork = util.NewManifestWork(clusterName, workName, true)
 		})
 
 		ginkgo.It("restart a source client with customized lister", func() {
@@ -456,7 +317,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				watcherStore, err := workstore.NewLocalWatcherStore(ctx, serverListFn)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				sourceClient, err = work.NewClientHolderBuilder(sourceConfig).
+				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 					WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 					WithSourceID(sourceID).
 					WithCodecs(sourcecodec.NewManifestBundleCodec()).
@@ -499,7 +360,7 @@ var _ = ginkgo.Describe("ManifestWork source client test", func() {
 				watcherStore, err := workstore.NewLocalWatcherStore(ctx, serverListFn)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				sourceClient, err = work.NewClientHolderBuilder(sourceConfig).
+				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 					WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 					WithSourceID(sourceID).
 					WithCodecs(sourcecodec.NewManifestBundleCodec()).

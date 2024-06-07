@@ -11,6 +11,7 @@ import (
 	confluentkafka "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	jsonpatch "github.com/evanphx/json-patch"
+
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	workv1 "open-cluster-management.io/api/work/v1"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	kafkaoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
@@ -28,12 +30,15 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 )
 
-var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
+var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 	var err error
+
 	var ctx context.Context
 	var cancel context.CancelFunc
+
 	var kafkaCluster *confluentkafka.MockCluster
 	var kafkaOptions *kafka.KafkaOptions
 
@@ -80,7 +85,6 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 		go informer.Informer().Run(agentCtx.Done())
 
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-		// agentManifestLister := agentClientHolder.ManifestWorkInformer().Lister().ManifestWorks(clusterName)
 		agentManifestClient := agentClientHolder.ManifestWorks(clusterName)
 
 		ginkgo.By("Start an source cloudevent client")
@@ -90,7 +94,7 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 				"bootstrap.servers": kafkaCluster.BootstrapServers(),
 			},
 		}
-		sourceCloudEventClient, err := generic.NewCloudEventSourceClient[*source.Resource](
+		sourceCloudEventClient, err := generic.NewCloudEventSourceClient[*store.Resource](
 			ctx,
 			kafkaoptions.NewSourceOptions(sourceOptions, "source1"),
 			sourceStoreLister,
@@ -100,7 +104,7 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 		ginkgo.By("Subscribe agent topics to update resource status")
-		sourceCloudEventClient.Subscribe(ctx, func(action types.ResourceAction, resource *source.Resource) error {
+		sourceCloudEventClient.Subscribe(ctx, func(action types.ResourceAction, resource *store.Resource) error {
 			return sourceStoreLister.store.UpdateStatus(resource)
 		})
 
@@ -110,7 +114,7 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 		gomega.Eventually(func() error {
 			ginkgo.By("Create the manifest resource and publish it to agent")
 			resourceName := "resource-" + rand.String(5)
-			newResource := source.NewResource(clusterName, resourceName)
+			newResource := store.NewResource(clusterName, resourceName, 1)
 			err = sourceCloudEventClient.Publish(ctx, types.CloudEventsType{
 				CloudEventsDataType: payload.ManifestEventDataType,
 				SubResource:         types.SubResourceSpec,
@@ -124,7 +128,7 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 			time.Sleep(2 * time.Second)
 
 			// ensure the work can be get by work client
-			workName := source.ResourceID(clusterName, resourceName)
+			workName := store.ResourceID(clusterName, resourceName)
 			manifestWork, err = agentManifestClient.Get(ctx, workName, metav1.GetOptions{})
 			if err != nil {
 				return err
@@ -175,13 +179,13 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 		ginkgo.By("Agent resync resource from source")
 		// add a new resource to the source
 		resourceName2 := "resource1-" + rand.String(5)
-		sourceStoreLister.store.Add(source.NewResource(clusterName, resourceName2))
+		sourceStoreLister.store.Add(store.NewResource(clusterName, resourceName2, 1))
 
 		// agent resync resources from sources
 		_, err = agentManifestClient.List(ctx, metav1.ListOptions{})
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-		workName := source.ResourceID(clusterName, resourceName2)
+		workName := store.ResourceID(clusterName, resourceName2)
 
 		gomega.Eventually(func() error {
 			work, err := agentManifestClient.Get(ctx, workName, metav1.GetOptions{})
@@ -220,8 +224,8 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 		newAgentManifestClient := newAgentHolder.ManifestWorks(clusterName)
 
 		gomega.Eventually(func() error {
-			workName1 := source.ResourceID(clusterName, resourceName1)
-			workName2 := source.ResourceID(clusterName, resourceName2)
+			workName1 := store.ResourceID(clusterName, resourceName1)
+			workName2 := store.ResourceID(clusterName, resourceName2)
 
 			work1, err := newAgentManifestClient.Get(ctx, workName1, metav1.GetOptions{})
 			if err != nil {
@@ -239,17 +243,17 @@ var _ = ginkgo.Describe("CloudeventKafkaClient", func() {
 })
 
 type resourceLister struct {
-	store *source.MemoryStore
+	store *store.MemoryStore
 }
 
-var _ generic.Lister[*source.Resource] = &resourceLister{}
+var _ generic.Lister[*store.Resource] = &resourceLister{}
 
 func NewResourceLister() *resourceLister {
 	return &resourceLister{
-		store: source.NewMemoryStore(),
+		store: store.NewMemoryStore(),
 	}
 }
 
-func (resLister *resourceLister) List(listOpts types.ListOptions) ([]*source.Resource, error) {
+func (resLister *resourceLister) List(listOpts types.ListOptions) ([]*store.Resource, error) {
 	return resLister.store.List(listOpts.ClusterName), nil
 }
