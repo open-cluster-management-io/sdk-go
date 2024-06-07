@@ -220,3 +220,26 @@ manifestWorkInformer := clientHolder.ManifestWorkInformer()
 // Start the ManifestWork informer
 go manifestWorkInformer.Informer().Run(ctx.Done())
 ```
+
+### Building garbage collector for work controllers on the hub cluster
+
+The garbage collector is an optional component running alongside the `ManifestWork` source client. It is used to clean up `ManifestWork` resources owned by other resources. For example, in the addon-framework, `ManifestWork` resources, created by addon controllers, have owner references pointing to `ManagedClusterAddon` resources, and when the owner resources are deleted, the `ManifestWork` resources should be deleted as well.
+
+Developers need to provide the following to build and run the garbage collector:
+1. Client Holder (`work.ClientHolder`): This contains the `ManifestWork` client and informer, which can be built using the builder mentioned in last two sections.
+2. Metadata Client (`metadata.Interface`): This is used to retrieve the owner resources of the `ManifestWork` resources.
+3. Owner resource filters map (`map[schema.GroupVersionResource]*metav1.ListOptions`): This is used to filter the owner resources of the `ManifestWork` resources.
+
+```golang
+listOptions := &metav1.ListOptions{
+    FieldSelector: fmt.Sprintf("metadata.name=%s", addonName),
+}
+ownerGVRFilters := map[schema.GroupVersionResource]*metav1.ListOptions{
+    // ManagedClusterAddon is the owner of the ManifestWork resources filtered by the addon name
+    addonv1alpha1.SchemeGroupVersion.WithResource("managedclusteraddons"): listOptions,
+}
+// Initialize the garbage collector
+garbageCollector := garbagecollector.NewGarbageCollector(clientHolder, metadataClient, ownerGVRFilters)
+// Run the garbage collector with 1 worker to handle the garbage collection
+go garbageCollector.Run(ctx, 1)
+```
