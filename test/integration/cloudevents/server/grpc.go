@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	grpcprotocol "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
@@ -22,16 +23,21 @@ import (
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 )
 
+type resourceHandler func(res *store.Resource) error
+
 type GRPCServer struct {
 	pbv1.UnimplementedCloudEventServiceServer
-	serverStore      *store.MemoryStore
-	eventBroadcaster *store.EventBroadcaster
+	serverStore  *store.MemoryStore
+	resourceChan chan *store.Resource
+	handlers     map[string]resourceHandler
 }
 
-func NewGRPCServer(eventBroadcaster *store.EventBroadcaster) *GRPCServer {
+// func NewGRPCServer(eventBroadcaster *store.EventBroadcaster) *GRPCServer {
+func NewGRPCServer() *GRPCServer {
 	return &GRPCServer{
-		serverStore:      store.NewServerStore(eventBroadcaster),
-		eventBroadcaster: eventBroadcaster,
+		serverStore:  store.NewMemoryStore(),
+		resourceChan: make(chan *store.Resource),
+		handlers:     make(map[string]resourceHandler),
 	}
 }
 
@@ -48,11 +54,12 @@ func (svr *GRPCServer) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 	}
 
 	svr.serverStore.UpSert(res)
+	svr.resourceChan <- res
 	return &emptypb.Empty{}, nil
 }
 
 func (svr *GRPCServer) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv1.CloudEventService_SubscribeServer) error {
-	clientID, errChan := svr.eventBroadcaster.Register(subReq.Source, func(res *store.Resource) error {
+	svr.handlers[subReq.Source] = func(res *store.Resource) error {
 		evt, err := encode(res)
 		if err != nil {
 			return fmt.Errorf("failed to encode resource %s to cloudevent: %v", res.ResourceID, err)
@@ -67,20 +74,15 @@ func (svr *GRPCServer) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		// send the cloudevent to the subscriber
 		// TODO: error handling to address errors beyond network issues.
 		if err := subServer.Send(pbEvt); err != nil {
-			return err
+			klog.Errorf("failed to send grpc event, %v", err)
 		}
 
 		return nil
-	})
-
-	select {
-	case err := <-errChan:
-		svr.eventBroadcaster.Unregister(clientID)
-		return err
-	case <-subServer.Context().Done():
-		svr.eventBroadcaster.Unregister(clientID)
-		return nil
 	}
+
+	<-subServer.Context().Done()
+
+	return nil
 }
 
 func (svr *GRPCServer) Start(addr string) error {
@@ -96,6 +98,23 @@ func (svr *GRPCServer) Start(addr string) error {
 
 func (svr *GRPCServer) GetStore() *store.MemoryStore {
 	return svr.serverStore
+}
+
+func (svr *GRPCServer) UpdateResourceStatus(resource *store.Resource) error {
+	handleFn, ok := svr.handlers[resource.Source]
+	if !ok {
+		return fmt.Errorf("failed to find handler for resource %s (%s)", resource.ResourceID, resource.Source)
+	}
+
+	if err := handleFn(resource); err != nil {
+		return err
+	}
+
+	return svr.serverStore.UpdateStatus(resource)
+}
+
+func (svr *GRPCServer) ResourceChan() <-chan *store.Resource {
+	return svr.resourceChan
 }
 
 func encode(resource *store.Resource) (*cloudevents.Event, error) {

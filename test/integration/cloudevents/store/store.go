@@ -7,22 +7,13 @@ import (
 
 type MemoryStore struct {
 	sync.RWMutex
-	resources        map[string]*Resource
-	eventBroadcaster *EventBroadcaster
-	resourceSpecChan chan *Resource
+
+	resources map[string]*Resource
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		resources: make(map[string]*Resource),
-	}
-}
-
-func NewServerStore(eventBroadcaster *EventBroadcaster) *MemoryStore {
-	return &MemoryStore{
-		resources:        make(map[string]*Resource),
-		eventBroadcaster: eventBroadcaster,
-		resourceSpecChan: make(chan *Resource),
 	}
 }
 
@@ -33,9 +24,6 @@ func (s *MemoryStore) Add(resource *Resource) {
 	_, ok := s.resources[resource.ResourceID]
 	if !ok {
 		s.resources[resource.ResourceID] = resource
-	}
-	if s.eventBroadcaster != nil {
-		s.resourceSpecChan <- resource
 	}
 }
 
@@ -49,9 +37,6 @@ func (s *MemoryStore) Update(resource *Resource) error {
 	}
 
 	s.resources[resource.ResourceID] = resource
-	if s.eventBroadcaster != nil {
-		s.resourceSpecChan <- resource
-	}
 	return nil
 }
 
@@ -60,9 +45,6 @@ func (s *MemoryStore) UpSert(resource *Resource) {
 	defer s.Unlock()
 
 	s.resources[resource.ResourceID] = resource
-	if s.eventBroadcaster != nil {
-		s.resourceSpecChan <- resource
-	}
 }
 
 func (s *MemoryStore) UpdateStatus(resource *Resource) error {
@@ -76,9 +58,6 @@ func (s *MemoryStore) UpdateStatus(resource *Resource) error {
 
 	last.Status = resource.Status
 	s.resources[resource.ResourceID] = last
-	if s.eventBroadcaster != nil {
-		s.eventBroadcaster.Broadcast(resource)
-	}
 	return nil
 }
 
@@ -114,8 +93,4 @@ func (s *MemoryStore) List(namespace string) []*Resource {
 		resources = append(resources, res)
 	}
 	return resources
-}
-
-func (s *MemoryStore) GetResourceSpecChan() <-chan *Resource {
-	return s.resourceSpecChan
 }

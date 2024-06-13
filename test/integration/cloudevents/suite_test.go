@@ -11,13 +11,13 @@ import (
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	"k8s.io/klog/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
-	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
@@ -38,6 +38,11 @@ var (
 
 type GetSourceOptionsFn func(context.Context, string) *options.CloudEventsSourceOptions
 
+func init() {
+	klog.InitFlags(nil)
+	klog.SetOutput(ginkgo.GinkgoWriter)
+}
+
 func TestIntegration(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	ginkgo.RunSpecs(t, "CloudEvents Client Integration Suite")
@@ -50,7 +55,6 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	cert.CertCallbackRefreshDuration = 2 * time.Second
 
 	ginkgo.By("bootstrapping test environment")
-	ctx := context.TODO()
 
 	// start a MQTT broker
 	mqttBroker = mochimqtt.New(&mochimqtt.Options{})
@@ -81,12 +85,7 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	}()
 
 	// start the resource grpc server
-	eventBroadcaster := store.NewEventBroadcaster()
-	go func() {
-		eventBroadcaster.Start(ctx)
-	}()
-
-	grpcServer = server.NewGRPCServer(eventBroadcaster)
+	grpcServer = server.NewGRPCServer()
 	go func() {
 		err := grpcServer.Start(grpcServerHost)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())

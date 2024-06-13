@@ -3,11 +3,11 @@ package util
 import (
 	"bytes"
 	"crypto/tls"
-	"fmt"
 	"time"
 
 	mqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/packets"
+	"k8s.io/klog/v2"
 )
 
 type AllowHook struct {
@@ -38,7 +38,7 @@ func (h *AllowHook) OnACLCheck(cl *mqtt.Client, topic string, write bool) bool {
 	if ok {
 		now := time.Now().UTC()
 		if err := tlsConn.Handshake(); err != nil {
-			fmt.Printf("Error: mqtt handshake failed: %v\n", err)
+			klog.Errorf("mqtt handshake failed: %v", err)
 			return false
 		}
 		state := tlsConn.ConnectionState()
@@ -48,7 +48,7 @@ func (h *AllowHook) OnACLCheck(cl *mqtt.Client, topic string, write bool) bool {
 			}
 
 			if cert.NotAfter.Before(now) {
-				fmt.Printf("Error: mqtt client cert expired (NotAfter=%v, Now=%v)\n", cert.NotAfter, now)
+				klog.Errorf("mqtt client cert expired (NotAfter=%v, Now=%v)\n", cert.NotAfter, now)
 				return false
 			}
 		}
