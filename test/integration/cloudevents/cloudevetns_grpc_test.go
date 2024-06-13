@@ -38,15 +38,16 @@ func GetGRPCSourceOptions(ctx context.Context, sourceID string) *options.CloudEv
 	}
 
 	client.Subscribe(ctx, func(action types.ResourceAction, resource *store.Resource) error {
-		return grpcServer.GetStore().UpdateStatus(resource)
+		return grpcServer.UpdateResourceStatus(resource)
 	})
 
+	// forward the resource to agent
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case res := <-grpcServer.GetStore().GetResourceSpecChan():
+			case res := <-grpcServer.ResourceChan():
 				requestType := createOrUpdateRequest
 				if !res.DeletionTimestamp.IsZero() {
 					requestType = deleteRequest

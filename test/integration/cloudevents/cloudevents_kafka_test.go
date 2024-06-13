@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
+	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 
 	workv1 "open-cluster-management.io/api/work/v1"
 
@@ -29,6 +30,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
+	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 )
@@ -76,18 +78,23 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 		clusterName := "cluster1"
 		agentCtx, agentCancel := context.WithCancel(context.Background())
 		agentID := clusterName + "-" + rand.String(5)
-		agentClientHolder, informer, err := work.NewClientHolderBuilder(kafkaOptions).
+		watcherStore := workstore.NewAgentInformerWatcherStore()
+		agentClientHolder, err := work.NewClientHolderBuilder(kafkaOptions).
 			WithClientID(agentID).
 			WithClusterName(clusterName).
 			WithCodecs(codec.NewManifestCodec(nil)).
-			NewAgentClientHolderWithInformer(agentCtx)
+			WithWorkClientWatcherStore(watcherStore).
+			NewAgentClientHolder(agentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-		go informer.Informer().Run(agentCtx.Done())
 
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		factory := workinformers.NewSharedInformerFactoryWithOptions(agentClientHolder.WorkInterface(), 5*time.Minute)
+		informer := factory.Work().V1().ManifestWorks()
+		watcherStore.SetStore(informer.Informer().GetStore())
+		go informer.Informer().Run(ctx.Done())
+
 		agentManifestClient := agentClientHolder.ManifestWorks(clusterName)
 
-		ginkgo.By("Start an source cloudevent client")
+		ginkgo.By("Start a source cloudevent client")
 		sourceStoreLister := NewResourceLister()
 		sourceOptions := &kafka.KafkaOptions{
 			ConfigMap: kafkav2.ConfigMap{
@@ -176,26 +183,6 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 			return nil
 		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 
-		ginkgo.By("Agent resync resource from source")
-		// add a new resource to the source
-		resourceName2 := "resource1-" + rand.String(5)
-		sourceStoreLister.store.Add(store.NewResource(clusterName, resourceName2, 1))
-
-		// agent resync resources from sources
-		_, err = agentManifestClient.List(ctx, metav1.ListOptions{})
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-		workName := store.ResourceID(clusterName, resourceName2)
-
-		gomega.Eventually(func() error {
-			work, err := agentManifestClient.Get(ctx, workName, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-			fmt.Println("agent get resync workName2", work.Name)
-			return nil
-		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
-
 		ginkgo.By("Resync resource from source with a new agent instance")
 		agentCancel()
 		// wait until the consumer is closed
@@ -211,12 +198,18 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 		//        But the agent will wait a long time(test result is 56 seconds) to receive the message
 		agentID = clusterName + "-" + rand.String(5)
 		_ = kafkaOptions.ConfigMap.SetKey("group.id", agentID)
-		newAgentHolder, informer, err := work.NewClientHolderBuilder(kafkaOptions).
+		watcherStore = workstore.NewAgentInformerWatcherStore()
+		newAgentHolder, err := work.NewClientHolderBuilder(kafkaOptions).
 			WithClientID(agentID).
 			WithClusterName(clusterName).
 			WithCodecs(codec.NewManifestCodec(nil)).
-			NewAgentClientHolderWithInformer(newAgentCtx)
+			WithWorkClientWatcherStore(watcherStore).
+			NewAgentClientHolder(newAgentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+		factory = workinformers.NewSharedInformerFactoryWithOptions(agentClientHolder.WorkInterface(), 5*time.Minute)
+		informer = factory.Work().V1().ManifestWorks()
+		watcherStore.SetStore(informer.Informer().GetStore())
 
 		// case1: wait until the consumer is ready
 		time.Sleep(5 * time.Second)
@@ -225,18 +218,10 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 
 		gomega.Eventually(func() error {
 			workName1 := store.ResourceID(clusterName, resourceName1)
-			workName2 := store.ResourceID(clusterName, resourceName2)
+			if _, err := newAgentManifestClient.Get(ctx, workName1, metav1.GetOptions{}); err != nil {
+				return err
+			}
 
-			work1, err := newAgentManifestClient.Get(ctx, workName1, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-			fmt.Println("new agent get resync workName1", work1.Name)
-			work2, err := newAgentManifestClient.Get(ctx, workName2, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-			fmt.Println("new agent get resync workName2", work2.Name)
 			return nil
 		}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
 	})

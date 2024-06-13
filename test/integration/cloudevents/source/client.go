@@ -47,7 +47,7 @@ func StartManifestWorkSourceClient(
 	sourceID string,
 	config any,
 ) (*work.ClientHolder, workv1informers.ManifestWorkInformer, error) {
-	watcherStore := workstore.NewInformerWatcherStore(ctx)
+	watcherStore := workstore.NewSourceInformerWatcherStore(ctx)
 
 	clientHolder, err := work.NewClientHolderBuilder(config).
 		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).

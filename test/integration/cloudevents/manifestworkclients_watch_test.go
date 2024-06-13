@@ -55,7 +55,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 
 	ginkgo.Context("CRUD the manifestworks with source client", func() {
 		ginkgo.JustBeforeEach(func() {
-			watcherStore, err := workstore.NewLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
+			watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
 				return []*workv1.ManifestWork{}, nil
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -108,7 +108,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 		ginkgo.JustBeforeEach(func() {
 			localStore = cache.NewStore(cache.MetaNamespaceKeyFunc)
 
-			watcherStore, err := workstore.NewLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
+			watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
 				return []*workv1.ManifestWork{}, nil
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -245,7 +245,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 
 	ginkgo.Context("Resync the manifestworks by agent", func() {
 		ginkgo.JustBeforeEach(func() {
-			watcherStore, err := workstore.NewLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
+			watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
 				work := util.NewManifestWork(clusterName, workName, false)
 				work.UID = apitypes.UID(utils.UID(sourceID, clusterName, workName))
 				work.ResourceVersion = "0"
@@ -314,7 +314,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			ginkgo.By("start a source client with customized lister", func() {
 				ctx, cancel = context.WithCancel(context.Background())
 
-				watcherStore, err := workstore.NewLocalWatcherStore(ctx, serverListFn)
+				watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, serverListFn)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
@@ -357,7 +357,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			ginkgo.By("restart a source client with customized lister", func() {
 				ctx, cancel = context.WithCancel(context.Background())
 
-				watcherStore, err := workstore.NewLocalWatcherStore(ctx, serverListFn)
+				watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, serverListFn)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
