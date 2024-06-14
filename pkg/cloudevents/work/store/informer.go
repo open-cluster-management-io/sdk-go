@@ -103,7 +103,7 @@ func (s *AgentInformerWatcherStore) Delete(work *workv1.ManifestWork) error {
 func (s *AgentInformerWatcherStore) HandleReceivedWork(action types.ResourceAction, work *workv1.ManifestWork) error {
 	switch action {
 	case types.Added:
-		return s.Add(work)
+		return s.Add(work.DeepCopy())
 	case types.Modified:
 		lastWork, err := s.Get(work.Namespace, work.Name)
 		if err != nil {
@@ -118,7 +118,7 @@ func (s *AgentInformerWatcherStore) HandleReceivedWork(action types.ResourceActi
 		updatedWork.Finalizers = lastWork.Finalizers
 		updatedWork.Status = lastWork.Status
 
-		return s.Update(work)
+		return s.Update(updatedWork)
 	case types.Deleted:
 		// the manifestwork is deleting on the source, we just update its deletion timestamp.
 		lastWork, err := s.Get(work.Namespace, work.Name)
@@ -132,7 +132,7 @@ func (s *AgentInformerWatcherStore) HandleReceivedWork(action types.ResourceActi
 
 		updatedWork := lastWork.DeepCopy()
 		updatedWork.DeletionTimestamp = work.DeletionTimestamp
-		return s.Update(work)
+		return s.Update(updatedWork)
 	default:
 		return fmt.Errorf("unsupported resource action %s", action)
 	}
