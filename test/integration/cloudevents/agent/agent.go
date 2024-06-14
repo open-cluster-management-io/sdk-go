@@ -33,7 +33,11 @@ func StartWorkAgent(ctx context.Context,
 		return nil, nil, err
 	}
 
-	factory := workinformers.NewSharedInformerFactoryWithOptions(clientHolder.WorkInterface(), 5*time.Minute)
+	factory := workinformers.NewSharedInformerFactoryWithOptions(
+		clientHolder.WorkInterface(),
+		5*time.Minute,
+		workinformers.WithNamespace(clusterName),
+	)
 	informer := factory.Work().V1().ManifestWorks()
 	watcherStore.SetStore(informer.Informer().GetStore())
 

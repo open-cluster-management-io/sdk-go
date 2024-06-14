@@ -125,7 +125,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			agentClient, _, err = agent.StartWorkAgent(ctx, clusterName, agentOptions, agentcodec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			watcher, err := sourceClient.ManifestWorks(clusterName).Watch(ctx, metav1.ListOptions{})
+			watcher, err := sourceClient.ManifestWorks(metav1.NamespaceAll).Watch(ctx, metav1.ListOptions{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			go func() {
