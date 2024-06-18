@@ -91,6 +91,7 @@ func TestListWithOptions(t *testing.T) {
 	cases := []struct {
 		name          string
 		works         []runtime.Object
+		workNamespace string
 		opts          metav1.ListOptions
 		expectedWorks int
 	}{
@@ -115,7 +116,52 @@ func TestListWithOptions(t *testing.T) {
 						},
 					},
 				},
+				&workv1.ManifestWork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "t1",
+						Namespace: "cluster2",
+						Labels: map[string]string{
+							"test": "true",
+						},
+					},
+				},
 			},
+			workNamespace: metav1.NamespaceAll,
+			opts:          metav1.ListOptions{},
+			expectedWorks: 3,
+		},
+		{
+			name: "list works from a given namespace",
+			works: []runtime.Object{
+				&workv1.ManifestWork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "t1",
+						Namespace: "cluster1",
+						Labels: map[string]string{
+							"test": "true",
+						},
+					},
+				},
+				&workv1.ManifestWork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "t2",
+						Namespace: "cluster1",
+						Labels: map[string]string{
+							"test": "true",
+						},
+					},
+				},
+				&workv1.ManifestWork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "t1",
+						Namespace: "cluster2",
+						Labels: map[string]string{
+							"test": "true",
+						},
+					},
+				},
+			},
+			workNamespace: "cluster1",
 			opts:          metav1.ListOptions{},
 			expectedWorks: 2,
 		},
@@ -151,9 +197,10 @@ func TestListWithOptions(t *testing.T) {
 				},
 			},
 			opts: metav1.ListOptions{
-				FieldSelector: "metadata.namespace=cluster1",
+				FieldSelector: "metadata.name=t1",
 			},
-			expectedWorks: 2,
+			workNamespace: "cluster1",
+			expectedWorks: 1,
 		},
 		{
 			name: "list with labels",
@@ -180,6 +227,7 @@ func TestListWithOptions(t *testing.T) {
 			opts: metav1.ListOptions{
 				LabelSelector: "test=true",
 			},
+			workNamespace: "cluster1",
 			expectedWorks: 1,
 		},
 		{
@@ -217,6 +265,7 @@ func TestListWithOptions(t *testing.T) {
 				LabelSelector: "test=true",
 				FieldSelector: "metadata.name=t1",
 			},
+			workNamespace: "cluster1",
 			expectedWorks: 1,
 		},
 	}
@@ -229,7 +278,7 @@ func TestListWithOptions(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			works, err := ListWorksWithOptions(store, c.opts)
+			works, err := ListWorksWithOptions(store, c.workNamespace, c.opts)
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
 			}

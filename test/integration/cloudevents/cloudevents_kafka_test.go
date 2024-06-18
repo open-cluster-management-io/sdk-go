@@ -87,7 +87,11 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 			NewAgentClientHolder(agentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-		factory := workinformers.NewSharedInformerFactoryWithOptions(agentClientHolder.WorkInterface(), 5*time.Minute)
+		factory := workinformers.NewSharedInformerFactoryWithOptions(
+			agentClientHolder.WorkInterface(),
+			5*time.Minute,
+			workinformers.WithNamespace(clusterName),
+		)
 		informer := factory.Work().V1().ManifestWorks()
 		watcherStore.SetStore(informer.Informer().GetStore())
 		go informer.Informer().Run(ctx.Done())
@@ -207,8 +211,13 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 			NewAgentClientHolder(newAgentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-		factory = workinformers.NewSharedInformerFactoryWithOptions(agentClientHolder.WorkInterface(), 5*time.Minute)
+		factory = workinformers.NewSharedInformerFactoryWithOptions(
+			agentClientHolder.WorkInterface(),
+			5*time.Minute,
+			workinformers.WithNamespace(clusterName),
+		)
 		informer = factory.Work().V1().ManifestWorks()
+
 		watcherStore.SetStore(informer.Informer().GetStore())
 
 		// case1: wait until the consumer is ready
