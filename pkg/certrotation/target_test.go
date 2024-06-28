@@ -274,7 +274,7 @@ func newServingCertKeyPairWithSigner(signer *crypto.CA, hostName, signerName str
 		return nil, nil, nil, err
 	}
 
-	certKeyPair, err := signer.MakeServerCertForDuration(sets.NewString(hostName), validity)
+	certKeyPair, err := signer.MakeServerCertForDuration(sets.New[string](hostName), validity)
 	if err != nil {
 		return nil, nil, nil, err
 	}
