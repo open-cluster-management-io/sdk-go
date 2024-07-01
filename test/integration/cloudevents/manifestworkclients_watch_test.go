@@ -251,6 +251,10 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 				work.ResourceVersion = "0"
 				work.Spec.Workload.Manifests = []workv1.Manifest{util.NewManifest("test1")}
 				work.Status.Conditions = []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}
+
+				if err := utils.Encode(work); err != nil {
+					return nil, err
+				}
 				return []*workv1.ManifestWork{work}, nil
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())

@@ -81,6 +81,10 @@ func (c *ManifestWorkSourceClient) Create(ctx context.Context, manifestWork *wor
 	newWork.Namespace = c.namespace
 	newWork.ResourceVersion = getWorkResourceVersion(manifestWork)
 
+	if err := utils.Encode(newWork); err != nil {
+		return nil, err
+	}
+
 	if err := utils.Validate(newWork); err != nil {
 		return nil, err
 	}
