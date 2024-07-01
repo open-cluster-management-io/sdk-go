@@ -9,9 +9,9 @@ import (
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
 	workv1client "open-cluster-management.io/api/client/work/clientset/versioned/typed/work/v1"
@@ -206,20 +206,19 @@ func NewManifestWorkWithStatus(namespace, name string) *workv1.ManifestWork {
 }
 
 func NewManifest(name string) workv1.Manifest {
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "Secret",
-			"metadata": map[string]interface{}{
-				"namespace": "test",
-				"name":      name,
-			},
-			"data": "test",
+	cm := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
 		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test",
+			Name:      name,
+		},
+		Data: map[string]string{"test": "test"},
 	}
-	objectStr, _ := obj.MarshalJSON()
 	manifest := workv1.Manifest{}
-	manifest.Raw = objectStr
+	manifest.Object = cm
 	return manifest
 }
 

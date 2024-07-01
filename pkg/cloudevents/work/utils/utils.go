@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -9,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1validation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -156,4 +158,25 @@ func Validate(work *workv1.ManifestWork) error {
 	}
 
 	return fmt.Errorf(errs.ToAggregate().Error())
+}
+
+// Encode ensures the given work's manifests are encoded
+func Encode(work *workv1.ManifestWork) error {
+	for index, manifest := range work.Spec.Workload.Manifests {
+		if manifest.Raw == nil {
+			if manifest.Object == nil {
+				return fmt.Errorf("the Object and Raw of the manifest[%d] for the work (%s/%s) are both `nil`",
+					index, work.Namespace, work.Name)
+			}
+
+			var buf bytes.Buffer
+			if err := unstructured.UnstructuredJSONScheme.Encode(manifest.Object, &buf); err != nil {
+				return err
+			}
+
+			work.Spec.Workload.Manifests[index].Raw = buf.Bytes()
+		}
+	}
+
+	return nil
 }
