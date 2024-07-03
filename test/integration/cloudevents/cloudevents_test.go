@@ -13,8 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/constants"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
@@ -60,7 +61,9 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 		var clusterName string
 		var resourceName string
 
-		var mqttOptions *mqtt.MQTTOptions
+		var sourceOptions *options.CloudEventsSourceOptions
+		var driver string
+		var agentOptions any
 
 		var sourceCloudEventsClient generic.CloudEventsClient[*store.Resource]
 
@@ -73,11 +76,17 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 
 			sourceStore = store.NewMemoryStore()
 
-			mqttOptions = util.NewMQTTAgentOptions(mqttBrokerHost, sourceID, clusterName)
+			sourceOptions, driver = getSourceOptionsFn(ctx, sourceID)
+			switch driver {
+			case constants.ConfigTypeMQTT:
+				agentOptions = util.NewMQTTAgentOptions(mqttBrokerHost, sourceID, clusterName)
+			case constants.ConfigTypeGRPC:
+				agentOptions = util.NewGRPCAgentOptions(grpcBrokerHost)
+			}
 
 			sourceCloudEventsClient, err = source.StartResourceSourceClient(
 				ctx,
-				getSourceOptionsFn(ctx, sourceID),
+				sourceOptions,
 				sourceID,
 				source.NewResourceLister(sourceStore),
 			)
@@ -93,7 +102,7 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 			ginkgo.It("CRUD a resource by cloudevents clients", func() {
 				crudResource(
 					ctx,
-					mqttOptions,
+					agentOptions,
 					sourceStore,
 					sourceCloudEventsClient,
 					clusterName,
@@ -107,7 +116,7 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 			ginkgo.It("CRUD a resource without version by cloudevents clients", func() {
 				crudResource(
 					ctx,
-					mqttOptions,
+					agentOptions,
 					sourceStore,
 					sourceCloudEventsClient,
 					clusterName,
@@ -121,14 +130,14 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 
 func crudResource(
 	ctx context.Context,
-	mqttOptions *mqtt.MQTTOptions,
+	config any,
 	sourceStore *store.MemoryStore,
 	sourceCloudEventsClient generic.CloudEventsClient[*store.Resource],
 	clusterName, resourceName string,
 	withVersion bool,
 ) {
 	ginkgo.By("start a work agent")
-	clientHolder, _, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+	clientHolder, _, err := agent.StartWorkAgent(ctx, clusterName, config, codec.NewManifestCodec(nil))
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	agentWorkClient := clientHolder.ManifestWorks(clusterName)

@@ -17,6 +17,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
@@ -24,19 +25,20 @@ import (
 const (
 	mqttBrokerHost    = "127.0.0.1:1883"
 	mqttTLSBrokerHost = "127.0.0.1:8883"
+	grpcBrokerHost    = "127.0.0.1:8882"
 	grpcServerHost    = "127.0.0.1:8881"
 )
 
 var (
 	mqttBroker *mochimqtt.Server
-
+	grpcBroker *broker.GRPCBroker
 	grpcServer *server.GRPCServer
 
 	serverCertPairs *util.ServerCertPairs
 	certPool        *x509.CertPool
 )
 
-type GetSourceOptionsFn func(context.Context, string) *options.CloudEventsSourceOptions
+type GetSourceOptionsFn func(context.Context, string) (*options.CloudEventsSourceOptions, string)
 
 func init() {
 	klog.InitFlags(nil)
@@ -81,6 +83,13 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 
 	go func() {
 		err := mqttBroker.Serve()
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	}()
+
+	// start the grpc broker
+	grpcBroker = broker.NewGRPCBroker()
+	go func() {
+		err := grpcBroker.Start(grpcBrokerHost)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
 

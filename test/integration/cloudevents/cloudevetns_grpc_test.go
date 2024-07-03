@@ -7,6 +7,7 @@ import (
 
 	"github.com/onsi/ginkgo"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/constants"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
@@ -21,7 +22,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - GRPC", runCloudeventsClientP
 
 // The GRPC test simulates there is a server between the source and agent, the GRPC source client
 // sends/receives events to/from server, then server forward the events to agent with mqtt
-func GetGRPCSourceOptions(ctx context.Context, sourceID string) *options.CloudEventsSourceOptions {
+func GetGRPCSourceOptions(ctx context.Context, sourceID string) (*options.CloudEventsSourceOptions, string) {
 	client, err := generic.NewCloudEventSourceClient[*store.Resource](
 		ctx,
 		mqtt.NewSourceOptions(
@@ -41,7 +42,10 @@ func GetGRPCSourceOptions(ctx context.Context, sourceID string) *options.CloudEv
 		return grpcServer.UpdateResourceStatus(resource)
 	})
 
-	// forward the resource to agent
+	// set sourceID for grpc broker
+	grpcBroker.SetSourceID(sourceID)
+
+	// forward the resource to agent and listen for the status from grpc broker
 	go func() {
 		for {
 			select {
@@ -56,11 +60,20 @@ func GetGRPCSourceOptions(ctx context.Context, sourceID string) *options.CloudEv
 				if err != nil {
 					log.Printf("failed to publish resource to mqtt %s, %v", res.ResourceID, err)
 				}
+				if err := grpcBroker.UpdateResourceSpec(res); err != nil {
+					log.Printf("failed to update resource spec via gRPC broker %s, %v", res.ResourceID, err)
+				}
+			case res := <-grpcBroker.ResourceStatusChan():
+				// replace the source id with the original source id
+				res.Source = sourceID
+				if err := grpcServer.UpdateResourceStatus(res); err != nil {
+					log.Printf("failed to update resource status %s, %v", res.ResourceID, err)
+				}
 			}
 		}
 	}()
 
 	grpcOptions := grpc.NewGRPCOptions()
 	grpcOptions.URL = grpcServerHost
-	return grpc.NewSourceOptions(grpcOptions, sourceID)
+	return grpc.NewSourceOptions(grpcOptions, sourceID), constants.ConfigTypeGRPC
 }
