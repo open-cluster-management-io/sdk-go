@@ -36,11 +36,6 @@ var (
 		SubResource:         types.SubResourceSpec,
 		Action:              "test_update_request",
 	}
-	createOrUpdateRequest = types.CloudEventsType{
-		CloudEventsDataType: payload.ManifestEventDataType,
-		SubResource:         types.SubResourceSpec,
-		Action:              "test_create_update_request",
-	}
 	deleteRequest = types.CloudEventsType{
 		CloudEventsDataType: payload.ManifestEventDataType,
 		SubResource:         types.SubResourceSpec,
@@ -141,6 +136,7 @@ func crudResource(
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	agentWorkClient := clientHolder.ManifestWorks(clusterName)
+	time.Sleep(3 * time.Second) // sleep for the agent is subscribed to the broker
 
 	ginkgo.By("create a resource by source")
 	resourceVersion := 0
