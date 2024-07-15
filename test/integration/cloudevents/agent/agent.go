@@ -11,14 +11,13 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 )
 
 func StartWorkAgent(ctx context.Context,
 	clusterName string,
-	config *mqtt.MQTTOptions,
+	config any,
 	codecs ...generic.Codec[*workv1.ManifestWork],
 ) (*work.ClientHolder, workv1informers.ManifestWorkInformer, error) {
 	watcherStore := store.NewAgentInformerWatcherStore()
