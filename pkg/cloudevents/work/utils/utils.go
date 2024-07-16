@@ -117,7 +117,7 @@ func ListWorksWithOptions(store cache.Store, namespace string, opts metav1.ListO
 	return works, nil
 }
 
-func Validate(work *workv1.ManifestWork) error {
+func Validate(work *workv1.ManifestWork) field.ErrorList {
 	fldPath := field.NewPath("metadata")
 	errs := field.ErrorList{}
 
@@ -153,11 +153,7 @@ func Validate(work *workv1.ManifestWork) error {
 		errs = append(errs, field.Invalid(field.NewPath("spec"), "spec", err.Error()))
 	}
 
-	if len(errs) == 0 {
-		return nil
-	}
-
-	return fmt.Errorf(errs.ToAggregate().Error())
+	return errs
 }
 
 // Encode ensures the given work's manifests are encoded
