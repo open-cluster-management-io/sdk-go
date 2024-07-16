@@ -34,7 +34,7 @@ status hash when resyncing the resource status between sources and agents.
 resource object with a given cloudevent data type. We have provided two data types (`io.open-cluster-management.works.v1alpha1.manifests`
 that contains a single resource object in the cloudevent payload and `io.open-cluster-management.works.v1alpha1.manifestbundles`
 that contains a list of resource objects in the cloudevent payload) for `ManifestWork`, they can be found in the `work/payload`
-package.
+package. Refer to [this doc](https://github.com/open-cluster-management-io/enhancements/tree/main/enhancements/sig-architecture/224-event-based-manifestwork) to find the events schema and examples
 
 5. Resource handler methods (`generic.ResourceHandler`), they are used to handle the resources status after the client
 received the resources status from agents.
@@ -51,15 +51,19 @@ client, err := generic.NewCloudEventSourceClient[*CustomerResource](
 		customerResourceCodec,
 	)
 
-// start a go routine to receive the resources status from agents
+// subscribe to a broker to receive the resources status from agents
+client.Subscribe(ctx, customerResourceHandler)
+
+// start a go routine to receive client reconnect signal
 go func() {
-	if err := client.Subscribe(ctx, customerResourceHandler); err != nil {
-		//TODO handle this error when subscribing the cloudevents failed
-	}
+    for {
+        select {
+        case <-cloudEventsClient.ReconnectedChan():
+            // handle the cloudevents reconnect
+        }
+    }
 }()
 ```
-
-You may refer to the [cloudevents client integration test](../test/integration/cloudevents/source) as an example.
 
 ### Building a generic client on a manged cluster
 
@@ -83,7 +87,7 @@ status hash when resyncing the resource status between sources and agents.
 resource object with a given cloudevent data type. We have provided two data types (`io.open-cluster-management.works.v1alpha1.manifests`
 that contains a single resource object in the cloudevent payload and `io.open-cluster-management.works.v1alpha1.manifestbundles`
 that contains a list of resource objects in the cloudevent payload) for `ManifestWork`, they can be found in the `work/payload`
-package.
+package. Refer to [this doc](https://github.com/open-cluster-management-io/enhancements/tree/main/enhancements/sig-architecture/224-event-based-manifestwork) to find the events schema and examples
 
 5. Resource handler methods (`generic.ResourceHandler`), they are used to handle the resources after the client received
 the resources from sources.
@@ -100,11 +104,17 @@ client, err := generic.NewCloudEventAgentClient[*CustomerResource](
 		&ManifestBundleCodec{},
 	)
 
-// start a go routine to receive the resources from sources
+// subscribe to a broker to receive the resources from sources
+client.Subscribe(ctx, NewManifestWorkAgentHandler())
+
+// start a go routine to receive client reconnect signal
 go func() {
-	if err := client.Subscribe(ctx, NewManifestWorkAgentHandler()); err != nil {
-		//TODO handle this error when subscribing the cloudevents failed
-	}
+    for {
+        select {
+        case <-cloudEventsClient.ReconnectedChan():
+            // handle the cloudevents reconnect
+        }
+    }
 }()
 ```
 
@@ -163,62 +173,112 @@ For detailed configuration options for the Kafka driver, refer to the [Kafka dri
 
 ## Work Clients
 
-We have provided a builder to build the `ManifestWork` client (`ManifestWorkInterface`) and informer (`ManifestWorkInformer`)
-based on the generic client.
-
-### Building work client for work controllers on the hub cluster
-
-Developers can use the builder to build the `ManifestWork` client and informer with the source ID on the hub cluster.
+### Building a ManifestWorkSourceClient on the hub cluster with SourceLocalWatcherStore
 
 ```golang
 sourceID := "example-controller"
+
 // Building the clients based on cloudevents with MQTT
 config := mqtt.BuildMQTTOptionsFromFlags("path/to/mqtt-config.yaml")
+// Define a function to list works for initializing the store
+listLocalWorksFunc :=func(ctx context.Context) (works []*workv1.ManifestWork, err error) {
+    // list the works ...
+    return works, err
+}
+
+// New a SourceLocalWatcherStore
+watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, listLocalWorksFunc)
+if err != nil {
+	return err
+}
 
 clientHolder, err := work.NewClientHolderBuilder(config).
     WithClientID(fmt.Sprintf("%s-client", sourceID)).
     WithSourceID(sourceID).
     WithCodecs(codec.NewManifestBundleCodec()).
+    WithWorkClientWatcherStore(watcherStore).
     NewSourceClientHolder(ctx)
 if err != nil {
 	return err
 }
 
-manifestWorkClient := clientHolder.ManifestWorks(clusterName)
-manifestWorkInformer := clientHolder.ManifestWorkInformer()
+manifestWorkClient := clientHolder.ManifestWorks(metav1.NamespaceAll)
 
-// Building controllers with ManifestWork client and informer ...
-
-// Start the ManifestWork informer
-go manifestWorkInformer.Informer().Run(ctx.Done())
+// Use the manifestWorkClient to create/update/delete/watch manifestworks...
 ```
 
-### Building work client for work agent on the managed cluster
+### Building a ManifestWorkSourceClient on the hub cluster with SourceInformerWatcherStore
 
-Developers can use the builder to build the `ManifestWork` client and informer with the cluster name on the managed cluster.
+```golang
+sourceID := "example-controller"
+
+// Building the clients based on cloudevents with MQTT
+config := mqtt.BuildMQTTOptionsFromFlags("path/to/mqtt-config.yaml")
+// New a SourceInformerWatcherStore
+watcherStore := workstore.NewSourceInformerWatcherStore(ctx)
+
+clientHolder, err := work.NewClientHolderBuilder(config).
+		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
+		WithSourceID(sourceID).
+		WithCodecs(codec.NewManifestBundleCodec()).
+		WithWorkClientWatcherStore(watcherStore).
+		NewSourceClientHolder(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+factory := workinformers.NewSharedInformerFactoryWithOptions(clientHolder.WorkInterface(), 5*time.Minute)
+informer := factory.Work().V1().ManifestWorks()
+
+// Use the informer's store as the SourceInformerWatcherStore's store
+watcherStore.SetStore(informer.Informer().GetStore())
+
+// Building controllers with ManifestWork informer ...
+
+go informer.Informer().Run(ctx.Done())
+
+// Use the manifestWorkClient to create/update/delete manifestworks
+```
+
+### Building a ManifestWorkAgentClient on the managed cluster with AgentInformerWatcherStore
 
 ```golang
 clusterName := "cluster1"
+
 // Building the clients based on cloudevents with MQTT
 config := mqtt.BuildMQTTOptionsFromFlags("path/to/mqtt-config.yaml")
+// New a AgentInformerWatcherStore
+watcherStore := store.NewAgentInformerWatcherStore()
 
 clientHolder, err := work.NewClientHolderBuilder(config).
     WithClientID(fmt.Sprintf("%s-work-agent", clusterName)).
     WithClusterName(clusterName).
     // Supports two event data types for ManifestWork
     WithCodecs(codec.NewManifestBundleCodec(), codec.NewManifestCodec(restMapper)).
+    WithWorkClientWatcherStore(watcherStore).
     NewAgentClientHolder(ctx)
 if err != nil {
 	return err
 }
 
 manifestWorkClient := clientHolder.ManifestWorks(clusterName)
-manifestWorkInformer := clientHolder.ManifestWorkInformer()
 
-// Building controllers with ManifestWork client and informer ...
+factory := workinformers.NewSharedInformerFactoryWithOptions(
+		clientHolder.WorkInterface(),
+		5*time.Minute,
+		workinformers.WithNamespace(clusterName),
+)
+informer := factory.Work().V1().ManifestWorks()
+
+// Use the informer's store as the AgentInformerWatcherStore's store
+watcherStore.SetStore(informer.Informer().GetStore())
+
+// Building controllers with ManifestWork informer ...
 
 // Start the ManifestWork informer
 go manifestWorkInformer.Informer().Run(ctx.Done())
+
+// Use the manifestWorkClient to update work status
 ```
 
 ### Building garbage collector for work controllers on the hub cluster
@@ -239,7 +299,7 @@ ownerGVRFilters := map[schema.GroupVersionResource]*metav1.ListOptions{
     addonv1alpha1.SchemeGroupVersion.WithResource("managedclusteraddons"): listOptions,
 }
 // Initialize the garbage collector
-garbageCollector := garbagecollector.NewGarbageCollector(clientHolder, metadataClient, ownerGVRFilters)
+garbageCollector := garbagecollector.NewGarbageCollector(clientHolder, workInformer, metadataClient, ownerGVRFilters)
 // Run the garbage collector with 1 worker to handle the garbage collection
 go garbageCollector.Run(ctx, 1)
 ```
