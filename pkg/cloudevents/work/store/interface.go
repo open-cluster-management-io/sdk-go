@@ -45,7 +45,7 @@ type WorkClientWatcherStore interface {
 	ListAll() ([]*workv1.ManifestWork, error)
 
 	// Get returns a work from store with work namespace and name
-	Get(namespace, name string) (*workv1.ManifestWork, error)
+	Get(namespace, name string) (*workv1.ManifestWork, bool, error)
 
 	// HasInitiated marks the store has been initiated, A resync may be required after the store is initiated
 	// when building a work client.
