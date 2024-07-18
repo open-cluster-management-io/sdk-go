@@ -3,6 +3,7 @@ package cloudevents
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/onsi/ginkgo"
 
@@ -41,5 +42,12 @@ func GetGRPCSourceOptions(ctx context.Context, sourceID string) (*options.CloudE
 
 	grpcOptions := grpc.NewGRPCOptions()
 	grpcOptions.URL = grpcServerHost
+	grpcOptions.KeepAliveOptions = grpc.KeepAliveOptions{
+		Enable:              true,
+		Time:                10 * time.Second,
+		Timeout:             5 * time.Second,
+		PermitWithoutStream: true,
+	}
+
 	return grpc.NewSourceOptions(grpcOptions, sourceID), constants.ConfigTypeGRPC
 }
