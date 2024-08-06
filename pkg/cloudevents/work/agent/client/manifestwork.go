@@ -90,12 +90,7 @@ func (c *ManifestWorkAgentClient) List(ctx context.Context, opts metav1.ListOpti
 		return nil, errors.NewInternalError(err)
 	}
 
-	items := []workv1.ManifestWork{}
-	for _, work := range works {
-		items = append(items, *work)
-	}
-
-	return &workv1.ManifestWorkList{Items: items}, nil
+	return works, nil
 }
 
 func (c *ManifestWorkAgentClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {

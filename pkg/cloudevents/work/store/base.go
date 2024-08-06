@@ -33,11 +33,21 @@ type baseStore struct {
 }
 
 // List the works from the store with the list options
-func (b *baseStore) List(namespace string, opts metav1.ListOptions) ([]*workv1.ManifestWork, error) {
+func (b *baseStore) List(namespace string, opts metav1.ListOptions) (*workv1.ManifestWorkList, error) {
 	b.RLock()
 	defer b.RUnlock()
 
-	return utils.ListWorksWithOptions(b.store, namespace, opts)
+	works, err := utils.ListWorksWithOptions(b.store, namespace, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	items := []workv1.ManifestWork{}
+	for _, work := range works {
+		items = append(items, *work)
+	}
+
+	return &workv1.ManifestWorkList{Items: items}, nil
 }
 
 // Get a works from the store
