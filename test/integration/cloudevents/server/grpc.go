@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -91,7 +93,15 @@ func (svr *GRPCServer) Start(addr string) error {
 		log.Printf("failed to listen: %v", err)
 		return err
 	}
-	grpcServer := grpc.NewServer()
+	kaep := keepalive.EnforcementPolicy{
+		MinTime:             5 * time.Second, // If a client pings more than once every 5 seconds, terminate the connection
+		PermitWithoutStream: true,            // Allow pings even when there are no active streams
+	}
+	kasp := keepalive.ServerParameters{
+		Time:    5 * time.Second,
+		Timeout: 1 * time.Second,
+	}
+	grpcServer := grpc.NewServer(grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
 	pbv1.RegisterCloudEventServiceServer(grpcServer, svr)
 	return grpcServer.Serve(lis)
 }
