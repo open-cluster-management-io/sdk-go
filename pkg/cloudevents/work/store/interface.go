@@ -39,7 +39,7 @@ type WorkClientWatcherStore interface {
 	Delete(work *workv1.ManifestWork) error
 
 	// List returns the works from store for a given namespace with list options
-	List(namespace string, opts metav1.ListOptions) ([]*workv1.ManifestWork, error)
+	List(namespace string, opts metav1.ListOptions) (*workv1.ManifestWorkList, error)
 
 	// ListAll list all of the works from store
 	ListAll() ([]*workv1.ManifestWork, error)

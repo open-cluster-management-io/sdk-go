@@ -21,5 +21,15 @@ func NewWatcherStoreLister(store store.WorkClientWatcherStore) *WatcherStoreList
 
 // List returns the ManifestWorks from the WorkClientWatcherCache with list options.
 func (l *WatcherStoreLister) List(options types.ListOptions) ([]*workv1.ManifestWork, error) {
-	return l.store.List(options.ClusterName, metav1.ListOptions{})
+	list, err := l.store.List(options.ClusterName, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	works := []*workv1.ManifestWork{}
+	for _, work := range list.Items {
+		works = append(works, &work)
+	}
+
+	return works, nil
 }
