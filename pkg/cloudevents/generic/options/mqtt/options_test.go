@@ -3,7 +3,6 @@ package mqtt
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 const (
@@ -44,12 +44,6 @@ topics:
 )
 
 func TestBuildMQTTOptionsFromFlags(t *testing.T) {
-	file, err := os.CreateTemp("", "mqtt-config-test-")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer os.Remove(file.Name())
-
 	cases := []struct {
 		name             string
 		config           string
@@ -126,9 +120,11 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if err := os.WriteFile(file.Name(), []byte(c.config), 0644); err != nil {
+			file, err := clienttesting.WriteToTempFile("mqtt-config-test-", []byte(c.config))
+			if err != nil {
 				t.Fatal(err)
 			}
+			defer os.Remove(file.Name())
 
 			options, err := BuildMQTTOptionsFromFlags(file.Name())
 			if err != nil {
@@ -326,19 +322,15 @@ func TestGetSourceFromEventsTopic(t *testing.T) {
 }
 
 func TestConnectionTimeout(t *testing.T) {
-	file, err := os.CreateTemp("", "mqtt-config-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(file.Name())
-
 	ln := newLocalListener(t)
 	defer ln.Close()
 
 	config := strings.Replace(testYamlConfig, "test", ln.Addr().String(), 1)
-	if err := os.WriteFile(file.Name(), []byte(config), 0644); err != nil {
+	file, err := clienttesting.WriteToTempFile("mqtt-config-test-", []byte(config))
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.Remove(file.Name())
 
 	options, err := BuildMQTTOptionsFromFlags(file.Name())
 	if err != nil {

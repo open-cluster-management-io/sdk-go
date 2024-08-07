@@ -3,21 +3,15 @@
 package kafka
 
 import (
-	"log"
 	"os"
 	"testing"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/stretchr/testify/require"
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 func TestBuildKafkaOptionsFromFlags(t *testing.T) {
-	file, err := os.CreateTemp("", "kafka-config-test-")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer os.Remove(file.Name())
-
 	cases := []struct {
 		name             string
 		config           string
@@ -90,8 +84,9 @@ func TestBuildKafkaOptionsFromFlags(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := os.WriteFile(file.Name(), []byte(c.config), 0o644)
+			file, err := clienttesting.WriteToTempFile("kafka-config-test-", []byte(c.config))
 			require.Nil(t, err)
+			defer os.Remove(file.Name())
 
 			options, err := BuildKafkaOptionsFromFlags(file.Name())
 			if c.expectedErrorMsg != "" {

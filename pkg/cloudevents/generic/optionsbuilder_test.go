@@ -12,6 +12,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 const sourceId = "source"
@@ -71,12 +72,8 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 }
 
 func configFile(t *testing.T, prefix string, data []byte) *os.File {
-	configFile, err := os.CreateTemp("", prefix)
+	configFile, err := clienttesting.WriteToTempFile(prefix, data)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(configFile.Name(), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

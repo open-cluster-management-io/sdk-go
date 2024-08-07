@@ -1,19 +1,14 @@
 package grpc
 
 import (
-	"log"
 	"os"
 	"reflect"
 	"testing"
+
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 func TestBuildGRPCOptionsFromFlags(t *testing.T) {
-	file, err := os.CreateTemp("", "grpc-config-test-")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer os.Remove(file.Name())
-
 	cases := []struct {
 		name             string
 		config           string
@@ -85,9 +80,11 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if err := os.WriteFile(file.Name(), []byte(c.config), 0644); err != nil {
+			file, err := clienttesting.WriteToTempFile("grpc-config-test-", []byte(c.config))
+			if err != nil {
 				t.Fatal(err)
 			}
+			defer os.Remove(file.Name())
 
 			options, err := BuildGRPCOptionsFromFlags(file.Name())
 			if err != nil {

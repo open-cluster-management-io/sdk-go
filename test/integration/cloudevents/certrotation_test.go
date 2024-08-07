@@ -19,6 +19,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
+	"open-cluster-management.io/sdk-go/pkg/testing"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
@@ -44,16 +45,10 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 			clientCertPairs, err := util.SignClientCert(serverCertPairs.CA, serverCertPairs.CAKey, certDuration)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			clientCertFile, err = os.CreateTemp("", "mqtt-client-cert-*.pem")
+			clientCertFile, err = testing.WriteToTempFile("mqtt-client-cert-*.pem", clientCertPairs.ClientCert)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			clientKeyFile, err = os.CreateTemp("", "client-key-*.pem")
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-			err = os.WriteFile(clientCertFile.Name(), clientCertPairs.ClientCert, 0o644)
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-			err = os.WriteFile(clientKeyFile.Name(), clientCertPairs.ClientKey, 0o644)
+			clientKeyFile, err = testing.WriteToTempFile("client-key-*.pem", clientCertPairs.ClientKey)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		})
 

@@ -19,6 +19,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
@@ -126,8 +127,8 @@ var _ = ginkgo.AfterSuite(func() {
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	// remove the temp files
-	err = util.RemoveTempFile(serverCAFile)
+	err = clienttesting.RemoveTempFile(serverCAFile)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	err = util.RemoveTempFile(tokenFile)
+	err = clienttesting.RemoveTempFile(tokenFile)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 })

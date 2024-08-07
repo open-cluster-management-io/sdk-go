@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"os"
 	"time"
 
 	certutil "k8s.io/client-go/util/cert"
+	"open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 const RSAPrivateKeyBlockType = "RSA PRIVATE KEY"
@@ -159,40 +159,23 @@ func SignClientCert(caCert *x509.Certificate, caKey *rsa.PrivateKey, d time.Dura
 
 func WriteCertToTempFile(cert *x509.Certificate) (string, error) {
 	// create temp file and write cert to it
-	return WriteToTempFile(pem.EncodeToMemory(&pem.Block{
+	tmpFile, err := testing.WriteToTempFile("cert-", pem.EncodeToMemory(&pem.Block{
 		Type:  certutil.CertificateBlockType,
 		Bytes: cert.Raw,
 	}))
-}
-
-func WriteTokenToTempFile(token string) (string, error) {
-	// create temp file and write token to it
-	return WriteToTempFile([]byte(token))
-}
-
-// WriteToTempFile writes data to a temporary file and returns the file path.
-func WriteToTempFile(data []byte) (string, error) {
-	tmpFile, err := os.CreateTemp("", "tempfile")
 	if err != nil {
-		return "", err
-	}
-
-	if _, err := tmpFile.Write(data); err != nil {
-		return "", err
-	}
-
-	if err := tmpFile.Close(); err != nil {
 		return "", err
 	}
 
 	return tmpFile.Name(), nil
 }
 
-// RemoveTempFile removes a temporary file if it exists.
-func RemoveTempFile(file string) error {
-	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
-		return err
+func WriteTokenToTempFile(token string) (string, error) {
+	// create temp file and write token to it
+	tmpFile, err := testing.WriteToTempFile("token-", []byte(token))
+	if err != nil {
+		return "", err
 	}
 
-	return nil
+	return tmpFile.Name(), nil
 }

@@ -9,6 +9,7 @@ import (
 	cloudeventscontext "github.com/cloudevents/sdk-go/v2/context"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 const testSourceConfig = `
@@ -19,15 +20,11 @@ topics:
 `
 
 func TestSourceContext(t *testing.T) {
-	file, err := os.CreateTemp("", "mqtt-config-test-")
+	file, err := clienttesting.WriteToTempFile("mqtt-config-test-", []byte(testSourceConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(file.Name())
-
-	if err := os.WriteFile(file.Name(), []byte(testSourceConfig), 0644); err != nil {
-		t.Fatal(err)
-	}
 
 	options, err := BuildMQTTOptionsFromFlags(file.Name())
 	if err != nil {

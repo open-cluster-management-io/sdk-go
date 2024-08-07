@@ -14,6 +14,7 @@ import (
 
 	confluent "github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 var mockEventDataType = types.CloudEventsDataType{
@@ -24,15 +25,12 @@ var mockEventDataType = types.CloudEventsDataType{
 
 func TestAgentContext(t *testing.T) {
 	clusterName := "cluster1"
-	file, err := os.CreateTemp("", "kafka-agent-config-test-")
+
+	file, err := clienttesting.WriteToTempFile("kafka-agent-config-test-", []byte(`{"bootstrapServer":"testBroker","groupID":"id"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(file.Name())
-
-	if err := os.WriteFile(file.Name(), []byte(`{"bootstrapServer":"testBroker","groupID":"id"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
 
 	kafkaOptions, err := BuildKafkaOptionsFromFlags(file.Name())
 	if err != nil {
