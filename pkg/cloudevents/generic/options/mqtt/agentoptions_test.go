@@ -9,6 +9,7 @@ import (
 	cloudeventscontext "github.com/cloudevents/sdk-go/v2/context"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 const testAgentConfig = `
@@ -26,15 +27,11 @@ var mockEventDataType = types.CloudEventsDataType{
 }
 
 func TestAgentContext(t *testing.T) {
-	file, err := os.CreateTemp("", "mqtt-config-test-")
+	file, err := clienttesting.WriteToTempFile("mqtt-config-test-", []byte(testAgentConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.Remove(file.Name())
-
-	if err := os.WriteFile(file.Name(), []byte(testAgentConfig), 0644); err != nil {
-		t.Fatal(err)
-	}
 
 	options, err := BuildMQTTOptionsFromFlags(file.Name())
 	if err != nil {

@@ -11,12 +11,15 @@ import (
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"k8s.io/klog/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 
+	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
@@ -27,6 +30,7 @@ const (
 	mqttTLSBrokerHost = "127.0.0.1:8883"
 	grpcBrokerHost    = "127.0.0.1:8882"
 	grpcServerHost    = "127.0.0.1:8881"
+	grpcStaticToken   = "test-static-token"
 )
 
 var (
@@ -36,6 +40,8 @@ var (
 
 	serverCertPairs *util.ServerCertPairs
 	certPool        *x509.CertPool
+	serverCAFile    string
+	tokenFile       string
 )
 
 type GetSourceOptionsFn func(context.Context, string) (*options.CloudEventsSourceOptions, string)
@@ -96,9 +102,20 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	// start the resource grpc server
 	grpcServer = server.NewGRPCServer()
 	go func() {
-		err := grpcServer.Start(grpcServerHost)
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{serverCertPairs.ServerTLSCert},
+			MinVersion:   tls.VersionTLS13,
+			MaxVersion:   tls.VersionTLS13,
+		}
+		err := grpcServer.Start(grpcServerHost, []grpc.ServerOption{grpc.UnaryInterceptor(ensureValidTokenUnary), grpc.StreamInterceptor(ensureValidTokenStream), grpc.Creds(credentials.NewTLS(tlsConfig))})
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
+
+	// write the server CA and token to tmp files
+	serverCAFile, err = util.WriteCertToTempFile(serverCertPairs.CA)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	tokenFile, err = util.WriteTokenToTempFile(grpcStaticToken)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	close(done)
 }, 300)
@@ -107,5 +124,11 @@ var _ = ginkgo.AfterSuite(func() {
 	ginkgo.By("tearing down the test environment")
 
 	err := mqttBroker.Close()
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	// remove the temp files
+	err = clienttesting.RemoveTempFile(serverCAFile)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	err = clienttesting.RemoveTempFile(tokenFile)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 })

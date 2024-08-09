@@ -13,6 +13,7 @@ import (
 	"time"
 
 	certutil "k8s.io/client-go/util/cert"
+	"open-cluster-management.io/sdk-go/pkg/testing"
 )
 
 const RSAPrivateKeyBlockType = "RSA PRIVATE KEY"
@@ -154,4 +155,27 @@ func SignClientCert(caCert *x509.Certificate, caKey *rsa.PrivateKey, d time.Dura
 			Bytes: x509.MarshalPKCS1PrivateKey(clientKey),
 		}),
 	}, nil
+}
+
+func WriteCertToTempFile(cert *x509.Certificate) (string, error) {
+	// create temp file and write cert to it
+	tmpFile, err := testing.WriteToTempFile("cert-", pem.EncodeToMemory(&pem.Block{
+		Type:  certutil.CertificateBlockType,
+		Bytes: cert.Raw,
+	}))
+	if err != nil {
+		return "", err
+	}
+
+	return tmpFile.Name(), nil
+}
+
+func WriteTokenToTempFile(token string) (string, error) {
+	// create temp file and write token to it
+	tmpFile, err := testing.WriteToTempFile("token-", []byte(token))
+	if err != nil {
+		return "", err
+	}
+
+	return tmpFile.Name(), nil
 }

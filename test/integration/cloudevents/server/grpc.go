@@ -85,13 +85,13 @@ func (svr *GRPCServer) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 	return nil
 }
 
-func (svr *GRPCServer) Start(addr string) error {
+func (svr *GRPCServer) Start(addr string, serverOpts []grpc.ServerOption) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("failed to listen: %v", err)
 		return err
 	}
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(serverOpts...)
 	pbv1.RegisterCloudEventServiceServer(grpcServer, svr)
 	return grpcServer.Serve(lis)
 }
