@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -117,6 +118,11 @@ func (s *AgentInformerWatcherStore) HandleReceivedWork(action types.ResourceActi
 		}
 		if !exists {
 			return fmt.Errorf("the work %s/%s does not exist", work.Namespace, work.Name)
+		}
+		// prevent the work from being updated if it is deleting
+		if !lastWork.GetDeletionTimestamp().IsZero() {
+			klog.Warningf("the work %s/%s is deleting, ignore the update", work.Namespace, work.Name)
+			return nil
 		}
 
 		updatedWork := work.DeepCopy()
