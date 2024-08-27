@@ -15,6 +15,7 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
@@ -50,6 +51,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work1.UID = apitypes.UID(work1UID)
 			work1.ResourceVersion = "1"
 			work1.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}
+			work1.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
 			gomega.Expect(store.Add(work1)).ToNot(gomega.HaveOccurred())
 
 			work2UID := utils.UID(sourceID, clusterName, fmt.Sprintf("%s-2", workNamePrefix))
@@ -57,6 +59,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work2.UID = apitypes.UID(work2UID)
 			work2.ResourceVersion = "1"
 			work2.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}
+			work2.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
 			gomega.Expect(store.Add(work2)).ToNot(gomega.HaveOccurred())
 
 			// wait for cache ready
