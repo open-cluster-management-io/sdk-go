@@ -38,6 +38,11 @@ func (l *WatcherStoreLister) List(options types.ListOptions) ([]*workv1.Manifest
 
 	works := []*workv1.ManifestWork{}
 	for _, work := range list.Items {
+		cloudEventsDataType := work.Annotations[common.CloudEventsDataTypeAnnotationKey]
+		if cloudEventsDataType != options.CloudEventsDataType.String() {
+			continue
+		}
+
 		works = append(works, &work)
 	}
 

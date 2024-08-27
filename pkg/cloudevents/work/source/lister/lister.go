@@ -5,6 +5,7 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 )
 
@@ -28,6 +29,12 @@ func (l *WatcherStoreLister) List(options types.ListOptions) ([]*workv1.Manifest
 
 	works := []*workv1.ManifestWork{}
 	for _, work := range list.Items {
+		// Currently, the source client only support the ManifestBundle
+		// TODO: when supporting multiple cloud events data types, need a way
+		// to known the work event data type
+		if options.CloudEventsDataType != payload.ManifestBundleEventDataType {
+			continue
+		}
 		works = append(works, &work)
 	}
 
