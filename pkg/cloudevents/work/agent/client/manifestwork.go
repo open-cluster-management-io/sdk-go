@@ -137,6 +137,8 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 
 	if statusUpdated {
 		eventType.Action = common.UpdateRequestAction
+		// publish the status update event to source, source will check the resource version
+		// and reject the update if it's status update is outdated.
 		if err := c.cloudEventsClient.Publish(ctx, eventType, newWork); err != nil {
 			return nil, workerrors.NewPublishError(common.ManifestWorkGR, name, err)
 		}
@@ -162,6 +164,8 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 		}
 		// ensure the resource version of the work is not outdated
 		if newResourceVersion < lastResourceVersion {
+			// It's safe to return a conflict error here, even if the status update event
+			// has already been sent. The source may reject the update due to an outdated resource version.
 			return nil, errors.NewConflict(common.ManifestWorkGR, name, fmt.Errorf("the resource version of the work is outdated"))
 		}
 		if err := c.watcherStore.Update(newWork); err != nil {
