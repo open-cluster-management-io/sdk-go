@@ -145,8 +145,6 @@ func (c *CloudEventSourceClient[T]) Subscribe(ctx context.Context, handlers ...R
 }
 
 func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents.Event, handlers ...ResourceHandler[T]) {
-	klog.V(4).Infof("Received event:\n%s", evt)
-
 	eventType, err := types.ParseCloudEventsType(evt.Type())
 	if err != nil {
 		klog.Errorf("failed to parse cloud event type, %v", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -136,13 +137,39 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 
 	if statusUpdated {
 		eventType.Action = common.UpdateRequestAction
+		// publish the status update event to source, source will check the resource version
+		// and reject the update if it's status update is outdated.
 		if err := c.cloudEventsClient.Publish(ctx, eventType, newWork); err != nil {
 			return nil, workerrors.NewPublishError(common.ManifestWorkGR, name, err)
 		}
 
+		// Fetch the latest work from the store and verify the resource version to avoid updating the store
+		// with outdated work. Return a conflict error if the resource version is outdated.
+		// Due to the lack of read-modify-write guarantees in the store, race conditions may occur between
+		// this update operation and one from the agent informer after receiving the event from the source.
+		latestWork, exists, err := c.watcherStore.Get(c.namespace, name)
+		if err != nil {
+			return nil, errors.NewInternalError(err)
+		}
+		if !exists {
+			return nil, errors.NewNotFound(common.ManifestWorkGR, name)
+		}
+		lastResourceVersion, err := strconv.ParseInt(latestWork.GetResourceVersion(), 10, 64)
+		if err != nil {
+			return nil, errors.NewInternalError(err)
+		}
+		newResourceVersion, err := strconv.ParseInt(newWork.GetResourceVersion(), 10, 64)
+		if err != nil {
+			return nil, errors.NewInternalError(err)
+		}
+		// ensure the resource version of the work is not outdated
+		if newResourceVersion < lastResourceVersion {
+			// It's safe to return a conflict error here, even if the status update event
+			// has already been sent. The source may reject the update due to an outdated resource version.
+			return nil, errors.NewConflict(common.ManifestWorkGR, name, fmt.Errorf("the resource version of the work is outdated"))
+		}
 		if err := c.watcherStore.Update(newWork); err != nil {
 			return nil, errors.NewInternalError(err)
-
 		}
 		return newWork, nil
 	}
