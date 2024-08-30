@@ -69,7 +69,10 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	err := mqttBroker.AddHook(new(util.AllowHook), nil)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-	err = mqttBroker.AddListener(listeners.NewTCP("mqtt-test-broker", mqttBrokerHost, nil))
+	err = mqttBroker.AddListener(listeners.NewTCP(listeners.Config{
+		ID:      "mqtt-test-broker",
+		Address: mqttBrokerHost,
+	}))
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	serverCertPairs, err = util.NewServerCertPairs()
@@ -78,13 +81,16 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	certPool, err = util.AppendCAToCertPool(serverCertPairs.CA)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-	err = mqttBroker.AddListener(listeners.NewTCP("mqtt-tls-test-broker", mqttTLSBrokerHost, &listeners.Config{
-		TLSConfig: &tls.Config{
-			ClientCAs:    certPool,
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			Certificates: []tls.Certificate{serverCertPairs.ServerTLSCert},
-		},
-	}))
+	err = mqttBroker.AddListener(listeners.NewTCP(
+		listeners.Config{
+			ID:      "mqtt-tls-test-broker",
+			Address: mqttTLSBrokerHost,
+			TLSConfig: &tls.Config{
+				ClientCAs:    certPool,
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+				Certificates: []tls.Certificate{serverCertPairs.ServerTLSCert},
+			},
+		}))
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	go func() {

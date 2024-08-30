@@ -122,7 +122,7 @@ github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
 # github.com/moby/term v0.0.0-20221205130635-1aeaba878587
 ## explicit; go 1.18
-# github.com/mochi-mqtt/server/v2 v2.4.6
+# github.com/mochi-mqtt/server/v2 v2.6.5
 ## explicit; go 1.21
 github.com/mochi-mqtt/server/v2
 github.com/mochi-mqtt/server/v2/hooks/storage
@@ -224,8 +224,6 @@ go.uber.org/zap/internal/exit
 go.uber.org/zap/internal/pool
 go.uber.org/zap/internal/stacktrace
 go.uber.org/zap/zapcore
-# golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
-## explicit; go 1.20
 # golang.org/x/net v0.23.0
 ## explicit; go 1.18
 golang.org/x/net/html
