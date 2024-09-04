@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
@@ -157,9 +158,17 @@ func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents
 			return
 		}
 
+		clusterName, err := evt.Context.GetExtension(types.ExtensionClusterName)
+		if err != nil {
+			klog.Errorf("failed to get cluster name extension, %v", err)
+			return
+		}
+
+		startTime := time.Now()
 		if err := c.respondResyncSpecRequest(ctx, eventType.CloudEventsDataType, evt); err != nil {
 			klog.Errorf("failed to resync resources spec, %v", err)
 		}
+		updateResourceSpecResyncDurationMetric(c.sourceID, fmt.Sprintf("%s", clusterName), eventType.CloudEventsDataType.String(), startTime)
 
 		return
 	}
