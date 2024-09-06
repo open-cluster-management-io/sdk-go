@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
@@ -163,9 +164,11 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 			return
 		}
 
+		startTime := time.Now()
 		if err := c.respondResyncStatusRequest(ctx, eventType.CloudEventsDataType, evt); err != nil {
 			klog.Errorf("failed to resync manifestsstatus, %v", err)
 		}
+		updateResourceStatusResyncDurationMetric(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String(), startTime)
 
 		return
 	}
