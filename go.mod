@@ -20,6 +20,7 @@ require (
 	github.com/openshift/build-machinery-go v0.0.0-20240419090851-af9c868bcf52
 	github.com/openshift/library-go v0.0.0-20240621150525-4bb4238aef81
 	github.com/prometheus/client_golang v1.18.0
+	github.com/prometheus/client_model v0.5.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/oauth2 v0.16.0
 	google.golang.org/grpc v1.62.1
@@ -63,7 +64,6 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rs/xid v1.4.0 // indirect
