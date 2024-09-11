@@ -91,7 +91,7 @@ func (o *mqttSourceOptions) Protocol(ctx context.Context) (options.CloudEventsPr
 
 	if len(o.Topics.AgentBroadcast) != 0 {
 		// receiving spec resync events from all agents
-		subscribe.Subscriptions = append(subscribe.Subscriptions, paho.SubscribeOptions{
+		subscribe.Subscriptions = appendSubscriptions(subscribe.Subscriptions, paho.SubscribeOptions{
 			Topic: o.Topics.AgentBroadcast,
 			QoS:   byte(o.SubQoS),
 		})

@@ -45,14 +45,10 @@ github.com/confluentinc/confluent-kafka-go/v2/kafka/librdkafka_vendor
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/eclipse/paho.golang v0.21.0
-## explicit; go 1.21
+# github.com/eclipse/paho.golang v0.12.0
+## explicit; go 1.20
 github.com/eclipse/paho.golang/packets
 github.com/eclipse/paho.golang/paho
-github.com/eclipse/paho.golang/paho/log
-github.com/eclipse/paho.golang/paho/session
-github.com/eclipse/paho.golang/paho/session/state
-github.com/eclipse/paho.golang/paho/store/memory
 # github.com/emicklei/go-restful/v3 v3.11.0
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
@@ -278,6 +274,7 @@ golang.org/x/oauth2/jws
 golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.8.0
 ## explicit; go 1.18
+golang.org/x/sync/semaphore
 # golang.org/x/sys v0.19.0
 ## explicit; go 1.18
 golang.org/x/sys/plan9

@@ -9,7 +9,7 @@ require (
 	github.com/cloudevents/sdk-go/v2 v2.15.3-0.20240911135016-682f3a9684e4
 	github.com/confluentinc/confluent-kafka-go/v2 v2.5.3
 	github.com/davecgh/go-spew v1.1.1
-	github.com/eclipse/paho.golang v0.21.0
+	github.com/eclipse/paho.golang v0.12.0
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.6.0
