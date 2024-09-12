@@ -13,7 +13,7 @@ github.com/bwmarrin/snowflake
 # github.com/cespare/xxhash/v2 v2.2.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 v2.0.0-20240911135016-682f3a9684e4
+# github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 v2.0.0-20240413090539-7fef29478991
 ## explicit; go 1.18
 github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2
 # github.com/cloudevents/sdk-go/protocol/mqtt_paho/v2 v2.0.0-20240911135016-682f3a9684e4
@@ -38,8 +38,8 @@ github.com/cloudevents/sdk-go/v2/protocol/gochan
 github.com/cloudevents/sdk-go/v2/protocol/http
 github.com/cloudevents/sdk-go/v2/test
 github.com/cloudevents/sdk-go/v2/types
-# github.com/confluentinc/confluent-kafka-go/v2 v2.5.3
-## explicit; go 1.21
+# github.com/confluentinc/confluent-kafka-go/v2 v2.3.0
+## explicit; go 1.17
 github.com/confluentinc/confluent-kafka-go/v2/kafka
 github.com/confluentinc/confluent-kafka-go/v2/kafka/librdkafka_vendor
 # github.com/davecgh/go-spew v1.1.1

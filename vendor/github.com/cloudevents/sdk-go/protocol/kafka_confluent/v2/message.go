@@ -11,15 +11,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-
 	"github.com/cloudevents/sdk-go/v2/binding"
 	"github.com/cloudevents/sdk-go/v2/binding/format"
 	"github.com/cloudevents/sdk-go/v2/binding/spec"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 const (
-	prefix         = "ce_"
+	prefix         = "ce-"
 	contentTypeKey = "content-type"
 )
 
