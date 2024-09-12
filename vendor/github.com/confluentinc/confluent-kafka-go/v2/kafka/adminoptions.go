@@ -51,6 +51,8 @@ func (ao AdminOptionOperationTimeout) supportsDeleteTopics() {
 }
 func (ao AdminOptionOperationTimeout) supportsCreatePartitions() {
 }
+func (ao AdminOptionOperationTimeout) supportsDeleteRecords() {
+}
 
 func (ao AdminOptionOperationTimeout) apply(cOptions *C.rd_kafka_AdminOptions_t) error {
 	if !ao.isSet {
@@ -143,6 +145,8 @@ func (ao AdminOptionRequestTimeout) supportsDescribeUserScramCredentials() {
 }
 func (ao AdminOptionRequestTimeout) supportsAlterUserScramCredentials() {
 }
+func (ao AdminOptionRequestTimeout) supportsDeleteRecords() {
+}
 func (ao AdminOptionRequestTimeout) apply(cOptions *C.rd_kafka_AdminOptions_t) error {
 	if !ao.isSet {
 		return nil
@@ -182,9 +186,9 @@ type IsolationLevel int
 
 const (
 	// IsolationLevelReadUncommitted - read uncommitted isolation level
-	IsolationLevelReadUncommitted = IsolationLevel(C.RD_KAFKA_ISOLATION_LEVEL_READ_UNCOMMITTED)
+	IsolationLevelReadUncommitted IsolationLevel = C.RD_KAFKA_ISOLATION_LEVEL_READ_UNCOMMITTED
 	// IsolationLevelReadCommitted - read committed isolation level
-	IsolationLevelReadCommitted = IsolationLevel(C.RD_KAFKA_ISOLATION_LEVEL_READ_COMMITTED)
+	IsolationLevelReadCommitted IsolationLevel = C.RD_KAFKA_ISOLATION_LEVEL_READ_COMMITTED
 )
 
 // AdminOptionIsolationLevel sets the overall request IsolationLevel.
@@ -560,6 +564,14 @@ type AlterUserScramCredentialsAdminOption interface {
 // See SetAdminRequestTimeout, SetAdminIsolationLevel.
 type ListOffsetsAdminOption interface {
 	supportsListOffsets()
+	apply(cOptions *C.rd_kafka_AdminOptions_t) error
+}
+
+// DeleteRecordsAdminOption - see setter.
+//
+// See SetAdminRequestTimeout, SetAdminOperationTimeout.
+type DeleteRecordsAdminOption interface {
+	supportsDeleteRecords()
 	apply(cOptions *C.rd_kafka_AdminOptions_t) error
 }
 
