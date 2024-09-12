@@ -96,7 +96,7 @@ func (o *mqttAgentOptions) Protocol(ctx context.Context) (options.CloudEventsPro
 
 	// receiving status resync events from all sources
 	if len(o.Topics.SourceBroadcast) != 0 {
-		subscribe.Subscriptions = appendSubscriptions(subscribe.Subscriptions, paho.SubscribeOptions{
+		subscribe.Subscriptions = append(subscribe.Subscriptions, paho.SubscribeOptions{
 			Topic: o.Topics.SourceBroadcast,
 			QoS:   byte(o.SubQoS),
 		})
@@ -115,17 +115,4 @@ func (o *mqttAgentOptions) Protocol(ctx context.Context) (options.CloudEventsPro
 
 func (o *mqttAgentOptions) ErrorChan() <-chan error {
 	return o.errorChan
-}
-
-func appendSubscriptions(options []paho.SubscribeOptions, option paho.SubscribeOptions) []paho.SubscribeOptions {
-	exist := false
-	for _, sub := range options {
-		if sub.Topic == option.Topic {
-			exist = true
-		}
-	}
-	if !exist {
-		options = append(options, option)
-	}
-	return options
 }
