@@ -200,6 +200,23 @@ func (b *workProcessor) handleWork(work *workv1.ManifestWork) error {
 		return nil
 	}
 
+	if updatedWork.Annotations == nil {
+		updatedWork.Annotations = map[string]string{}
+	}
+	lastSequenceID := lastWork.Annotations[common.CloudEventsSequenceIDAnnotationKey]
+	sequenceID := work.Annotations[common.CloudEventsSequenceIDAnnotationKey]
+	greater, err := utils.CompareSnowflakeSequenceIDs(lastSequenceID, sequenceID)
+	if err != nil {
+		klog.Errorf("invalid sequenceID for work %s/%s, %v", lastWork.Namespace, lastWork.Name, err)
+		return nil
+	}
+
+	if !greater {
+		klog.Warningf("the work %s/%s current sequenceID %s is less than its last %s, ignore",
+			lastWork.Namespace, lastWork.Name, sequenceID, lastSequenceID)
+		return nil
+	}
+
 	// no status change
 	if equality.Semantic.DeepEqual(lastWork.Status, work.Status) {
 		return nil
@@ -207,6 +224,7 @@ func (b *workProcessor) handleWork(work *workv1.ManifestWork) error {
 
 	// the work has been handled by agent, we ensure a finalizer on the work
 	updatedWork.Finalizers = ensureFinalizers(updatedWork.Finalizers)
+	updatedWork.Annotations[common.CloudEventsSequenceIDAnnotationKey] = sequenceID
 	updatedWork.Status = work.Status
 	// update the work with status in the local cache.
 	return b.store.Update(updatedWork)

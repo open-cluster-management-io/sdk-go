@@ -47,7 +47,7 @@ func NewSourceLocalWatcherStore(ctx context.Context, listFunc ListLocalWorksFunc
 	store := cache.NewStore(cache.MetaNamespaceKeyFunc)
 	for _, work := range works {
 		if errs := utils.Validate(work); len(errs) != 0 {
-			return nil, fmt.Errorf(errs.ToAggregate().Error())
+			return nil, fmt.Errorf("%s", errs.ToAggregate().Error())
 		}
 
 		if err := store.Add(work.DeepCopy()); err != nil {

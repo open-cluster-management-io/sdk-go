@@ -131,6 +131,7 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.status.test")
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
+				evt.SetExtension("sequenceid", "1834773391719010304")
 				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{
 					Conditions: []metav1.Condition{
 						{
@@ -147,6 +148,9 @@ func TestManifestBundleDecode(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					UID:             kubetypes.UID("test"),
 					ResourceVersion: "13",
+					Annotations: map[string]string{
+						"cloudevents.open-cluster-management.io/sequenceid": "1834773391719010304",
+					},
 				},
 				Status: workv1.ManifestWorkStatus{
 					Conditions: []metav1.Condition{
@@ -179,6 +183,7 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
 				evt.SetExtension("metadata", string(metaJson))
+				evt.SetExtension("sequenceid", "1834773391719010304")
 				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{
 					ManifestBundle: &payload.ManifestBundle{
 						Manifests: []workv1.Manifest{
@@ -222,8 +227,11 @@ func TestManifestBundleDecode(t *testing.T) {
 					Name:            "test",
 					Namespace:       "cluster1",
 					Labels:          map[string]string{"test1": "test1"},
-					Annotations:     map[string]string{"test2": "test2"},
-					Finalizers:      []string{"test"},
+					Annotations: map[string]string{
+						"cloudevents.open-cluster-management.io/sequenceid": "1834773391719010304",
+						"test2": "test2",
+					},
+					Finalizers: []string{"test"},
 				},
 				Spec: workv1.ManifestWorkSpec{
 					Workload: workv1.ManifestsTemplate{
