@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -27,6 +28,8 @@ import (
 // ManifestWorkAgentClient implements the ManifestWorkInterface. It sends the manifestworks status back to source by
 // CloudEventAgentClient.
 type ManifestWorkAgentClient struct {
+	sync.RWMutex
+
 	cloudEventsClient *generic.CloudEventAgentClient[*workv1.ManifestWork]
 	watcherStore      store.WorkClientWatcherStore
 
@@ -136,6 +139,10 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 	}
 
 	if statusUpdated {
+		// avoid race conditions among the agent's go routines
+		c.Lock()
+		defer c.Unlock()
+
 		eventType.Action = common.UpdateRequestAction
 		// publish the status update event to source, source will check the resource version
 		// and reject the update if it's status update is outdated.
