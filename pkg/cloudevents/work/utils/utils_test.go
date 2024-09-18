@@ -345,6 +345,42 @@ func TestEncode(t *testing.T) {
 	}
 }
 
+func TestCompareSnowflakeSequenceIDs(t *testing.T) {
+	cases := []struct {
+		name       string
+		lastSID    string
+		currentSID string
+		expected   bool
+	}{
+		{
+			name:       "last sid is empty",
+			lastSID:    "",
+			currentSID: "1834773391719010304",
+			expected:   true,
+		},
+		{
+			name:       "compare two sids",
+			lastSID:    "1834773391719010304",
+			currentSID: "1834773613329256448",
+			expected:   true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			actual, err := CompareSnowflakeSequenceIDs(c.lastSID, c.currentSID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if actual != c.expected {
+				t.Errorf("expected %v, but %v", c.expected, actual)
+			}
+
+		})
+	}
+}
+
 func configMap() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{

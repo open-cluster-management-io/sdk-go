@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/bwmarrin/snowflake"
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/google/uuid"
 
@@ -175,4 +176,33 @@ func Encode(work *workv1.ManifestWork) error {
 	}
 
 	return nil
+}
+
+// CompareSnowflakeSequenceIDs compares two snowflake sequence IDs.
+// Returns true if the current ID is greater than the last.
+// If the last sequence ID is empty, then the current is greater.
+func CompareSnowflakeSequenceIDs(last, current string) (bool, error) {
+	if current != "" && last == "" {
+		return true, nil
+	}
+
+	lastSID, err := snowflake.ParseString(last)
+	if err != nil {
+		return false, fmt.Errorf("unable to parse last sequence ID: %s, %v", last, err)
+	}
+
+	currentSID, err := snowflake.ParseString(current)
+	if err != nil {
+		return false, fmt.Errorf("unable to parse current sequence ID: %s %v", current, err)
+	}
+
+	if currentSID.Node() != lastSID.Node() {
+		return false, fmt.Errorf("sequence IDs (%s,%s) are not from the same node", last, current)
+	}
+
+	if currentSID.Time() != lastSID.Time() {
+		return currentSID.Time() > lastSID.Time(), nil
+	}
+
+	return currentSID.Step() > lastSID.Step(), nil
 }
