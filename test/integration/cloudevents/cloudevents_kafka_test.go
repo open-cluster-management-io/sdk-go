@@ -55,16 +55,6 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 				"bootstrap.servers": kafkaCluster.BootstrapServers(),
 			},
 		}
-
-		// prepare topics in advance
-		err = kafkaCluster.CreateTopic("sourcebroadcast.source1", 1, 1)
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-		err = kafkaCluster.CreateTopic("sourceevents.source1.cluster1", 1, 1)
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-		err = kafkaCluster.CreateTopic("agentevents.source1.cluster1", 1, 1)
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-		err = kafkaCluster.CreateTopic("agentbroadcast.cluster1", 1, 1)
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	})
 
 	ginkgo.AfterEach(func() {
