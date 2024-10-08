@@ -186,7 +186,7 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 		return
 	}
 	if clusterName != c.clusterName {
-		klog.Warningf("event clustername %s and agent clustername %s do not match, ignore", clusterName, c.clusterName)
+		klog.Infof("event clustername %s and agent clustername %s do not match, ignore", clusterName, c.clusterName)
 		return
 	}
 
