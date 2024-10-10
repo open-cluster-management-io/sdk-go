@@ -43,6 +43,7 @@ func NewCloudEventSourceClient[T ResourceObject](
 	codecs ...Codec[T],
 ) (*CloudEventSourceClient[T], error) {
 	baseClient := &baseClient{
+		clientID:               sourceOptions.SourceID,
 		cloudEventsOptions:     sourceOptions.CloudEventsOptions,
 		cloudEventsRateLimiter: NewRateLimiter(sourceOptions.EventRateLimit),
 		reconnectedChan:        make(chan struct{}),

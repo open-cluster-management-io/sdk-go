@@ -10,11 +10,12 @@ import (
 
 type CloudEventsFakeOptions struct {
 	protocol options.CloudEventsProtocol
+	errChan  chan error
 }
 
-func NewAgentOptions(protocol options.CloudEventsProtocol, clusterName, agentID string) *options.CloudEventsAgentOptions {
+func NewAgentOptions(protocol options.CloudEventsProtocol, errChan chan error, clusterName, agentID string) *options.CloudEventsAgentOptions {
 	return &options.CloudEventsAgentOptions{
-		CloudEventsOptions: &CloudEventsFakeOptions{protocol: protocol},
+		CloudEventsOptions: &CloudEventsFakeOptions{protocol: protocol, errChan: errChan},
 		AgentID:            agentID,
 		ClusterName:        clusterName,
 	}
@@ -36,5 +37,5 @@ func (o *CloudEventsFakeOptions) Protocol(ctx context.Context) (options.CloudEve
 }
 
 func (o *CloudEventsFakeOptions) ErrorChan() <-chan error {
-	return nil
+	return o.errChan
 }
