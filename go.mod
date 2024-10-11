@@ -5,11 +5,11 @@ go 1.22.0
 require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 v2.0.0-20240413090539-7fef29478991
-	github.com/cloudevents/sdk-go/protocol/mqtt_paho/v2 v2.0.0-20240911135016-682f3a9684e4
+	github.com/cloudevents/sdk-go/protocol/mqtt_paho/v2 v2.0.0-20241008145627-6bcc075b5b6c
 	github.com/cloudevents/sdk-go/v2 v2.15.3-0.20240911135016-682f3a9684e4
 	github.com/confluentinc/confluent-kafka-go/v2 v2.3.0
 	github.com/davecgh/go-spew v1.1.1
-	github.com/eclipse/paho.golang v0.12.0
+	github.com/eclipse/paho.golang v0.21.0
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.6.0
@@ -70,7 +70,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect
 	golang.org/x/term v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect

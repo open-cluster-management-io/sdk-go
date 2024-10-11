@@ -16,6 +16,8 @@ groupID: source
 clientCertFile: cert
 clientKeyFile: key
 caFile: ca
+auto.commit.interval.ms: 8000
+enable.random.seed: false
 `
 
 func TestBuildCloudEventsSourceOptionsWithKafka(t *testing.T) {
@@ -26,8 +28,8 @@ func TestBuildCloudEventsSourceOptionsWithKafka(t *testing.T) {
 			configFile: configFile(t, "kafka-config-test-", []byte(kafkaConfig)),
 			expectedOptions: &kafka.KafkaOptions{
 				ConfigMap: confluentkafka.ConfigMap{
-					"acks":                                  "1",
-					"auto.commit.interval.ms":               5000,
+					"acks":                                  1,
+					"auto.commit.interval.ms":               8000,
 					"auto.offset.reset":                     "earliest",
 					"bootstrap.servers":                     "broker1",
 					"enable.auto.commit":                    true,
@@ -36,13 +38,14 @@ func TestBuildCloudEventsSourceOptionsWithKafka(t *testing.T) {
 					"group.id":                              sourceId,
 					"log.connection.close":                  false,
 					"queued.max.messages.kbytes":            32768,
-					"retries":                               "0",
+					"retries":                               0,
 					"security.protocol":                     "ssl",
 					"socket.keepalive.enable":               true,
 					"ssl.ca.location":                       "ca",
 					"ssl.certificate.location":              "cert",
 					"ssl.endpoint.identification.algorithm": "none",
 					"ssl.key.location":                      "key",
+					"enable.random.seed":                    false,
 				},
 			},
 		},
