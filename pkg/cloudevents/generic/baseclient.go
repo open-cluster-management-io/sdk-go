@@ -41,6 +41,7 @@ type baseClient struct {
 	cloudEventsRateLimiter flowcontrol.RateLimiter
 	receiverChan           chan int
 	reconnectedChan        chan struct{}
+	clientReady            bool
 }
 
 func (c *baseClient) connect(ctx context.Context) error {
@@ -53,10 +54,10 @@ func (c *baseClient) connect(ctx context.Context) error {
 	// start a go routine to handle cloudevents client connection errors
 	go func() {
 		for {
-			if c.currentClient() == nil {
+			if !c.isClientReady() {
 				klog.V(4).Infof("reconnecting the cloudevents client")
 
-				cloudEventsClient, err := c.newCloudEventsClient(ctx)
+				c.cloudEventsClient, err = c.newCloudEventsClient(ctx)
 				// TODO enhance the cloudevents SKD to avoid wrapping the error type to distinguish the net connection
 				// errors
 				if err != nil {
@@ -65,10 +66,9 @@ func (c *baseClient) connect(ctx context.Context) error {
 					<-wait.RealTimer(DelayFn()).C()
 					continue
 				}
-				// the cloudevents network connection is back, refresh the current cloudevents client and send the
-				// receiver restart signal
+				// the cloudevents network connection is back, mark the client ready and send the receiver restart signal
 				klog.V(4).Infof("the cloudevents client is reconnected")
-				c.resetClient(cloudEventsClient)
+				c.setClientReady(true)
 				c.sendReceiverSignal(restartReceiverSignal)
 				c.sendReconnectedSignal()
 			}
@@ -87,15 +87,13 @@ func (c *baseClient) connect(ctx context.Context) error {
 
 				runtime.HandleError(fmt.Errorf("the cloudevents client is disconnected, %v", err))
 
-				// the cloudevents client network connection is closed, send the receiver stop signal, set the current
-				// client to nil and retry
+				// the cloudevents client network connection is closed, send the receiver stop signal, set the current client not ready
+				// and close the current client
 				c.sendReceiverSignal(stopReceiverSignal)
-
-				err = c.cloudEventsProtocol.Close(ctx)
-				if err != nil {
+				c.setClientReady(false)
+				if err := c.cloudEventsProtocol.Close(ctx); err != nil {
 					runtime.HandleError(fmt.Errorf("failed to close the cloudevents protocol, %v", err))
 				}
-				c.resetClient(nil)
 
 				<-wait.RealTimer(DelayFn()).C()
 			}
@@ -123,14 +121,12 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 		return err
 	}
 
-	cloudEventsClient := c.currentClient()
-
-	if cloudEventsClient == nil {
+	if !c.isClientReady() {
 		return fmt.Errorf("the cloudevents client is not ready")
 	}
 
 	klog.V(4).Infof("Sending event: %v\n%s", sendingCtx, evt)
-	if result := cloudEventsClient.Send(sendingCtx, evt); cloudevents.IsUndelivered(result) {
+	if result := c.cloudEventsClient.Send(sendingCtx, evt); cloudevents.IsUndelivered(result) {
 		return fmt.Errorf("failed to send event %s, %v", evt.Context, result)
 	}
 
@@ -152,18 +148,19 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 	// start a go routine to handle cloudevents subscription
 	go func() {
 		receiverCtx, receiverCancel := context.WithCancel(context.TODO())
-		cloudEventsClient := c.currentClient()
+		startReceiving := true
 
 		for {
-			if cloudEventsClient != nil {
+			if startReceiving {
 				go func() {
-					if err := cloudEventsClient.StartReceiver(receiverCtx, func(evt cloudevents.Event) {
+					if err := c.cloudEventsClient.StartReceiver(receiverCtx, func(evt cloudevents.Event) {
 						klog.V(4).Infof("Received event: %s", evt)
 						receive(receiverCtx, evt)
 					}); err != nil {
 						runtime.HandleError(fmt.Errorf("failed to receive cloudevents, %v", err))
 					}
 				}()
+				startReceiving = false
 			}
 
 			select {
@@ -180,35 +177,18 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 				switch signal {
 				case restartReceiverSignal:
 					klog.V(4).Infof("restart the cloudevents receiver")
-					// refresh the client
-					cloudEventsClient = c.currentClient()
-					// rebuild the receiver context
+					// rebuild the receiver context and restart receiving
 					receiverCtx, receiverCancel = context.WithCancel(context.TODO())
+					startReceiving = true
 				case stopReceiverSignal:
 					klog.V(4).Infof("stop the cloudevents receiver")
 					receiverCancel()
-					cloudEventsClient = nil
 				default:
 					runtime.HandleError(fmt.Errorf("unknown receiver signal %d", signal))
 				}
 			}
 		}
 	}()
-}
-
-func (c *baseClient) currentClient() cloudevents.Client {
-	// make sure the current client is the newest
-	c.RLock()
-	defer c.RUnlock()
-
-	return c.cloudEventsClient
-}
-
-func (c *baseClient) resetClient(client cloudevents.Client) {
-	c.Lock()
-	defer c.Unlock()
-
-	c.cloudEventsClient = client
 }
 
 func (c *baseClient) sendReceiverSignal(signal int) {
@@ -226,6 +206,18 @@ func (c *baseClient) sendReconnectedSignal() {
 	c.reconnectedChan <- struct{}{}
 }
 
+func (c *baseClient) isClientReady() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.clientReady
+}
+
+func (c *baseClient) setClientReady(ready bool) {
+	c.Lock()
+	defer c.Unlock()
+	c.clientReady = ready
+}
+
 func (c *baseClient) newCloudEventsClient(ctx context.Context) (cloudevents.Client, error) {
 	var err error
 	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx)
@@ -237,5 +229,8 @@ func (c *baseClient) newCloudEventsClient(ctx context.Context) (cloudevents.Clie
 	if err != nil {
 		return nil, err
 	}
+
+	c.setClientReady(true)
+
 	return cloudEventsClient, nil
 }
