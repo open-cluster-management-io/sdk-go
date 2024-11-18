@@ -60,7 +60,7 @@ func TestAgentResync(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			lister := newMockResourceLister(c.resources...)
-			agent, err := NewCloudEventAgentClient[*mockResource](ctx, fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName), lister, statusHash, newMockResourceCodec())
+			agent, err := NewCloudEventAgentClient[*mockResource](ctx, fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName), lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
 
 			// start a cloudevents receiver client go to receive the event
@@ -127,7 +127,7 @@ func TestAgentPublish(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
-			agentOptions := fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
 			lister := newMockResourceLister()
 			agent, err := NewCloudEventAgentClient[*mockResource](context.TODO(), agentOptions, lister, statusHash, newMockResourceCodec())
 			require.Nil(t, err)
@@ -281,7 +281,7 @@ func TestStatusResyncResponse(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			agentOptions := fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
 			lister := newMockResourceLister(c.resources...)
 			agent, err := NewCloudEventAgentClient[*mockResource](ctx, agentOptions, lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
@@ -463,7 +463,7 @@ func TestReceiveResourceSpec(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			agentOptions := fake.NewAgentOptions(gochan.New(), c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
 			lister := newMockResourceLister(c.resources...)
 			agent, err := NewCloudEventAgentClient[*mockResource](context.TODO(), agentOptions, lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)

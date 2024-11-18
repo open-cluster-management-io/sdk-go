@@ -35,6 +35,7 @@ type receiveFn func(ctx context.Context, evt cloudevents.Event)
 
 type baseClient struct {
 	sync.RWMutex
+	clientID               string // the client id is used to identify the client, either a source or an agent ID
 	cloudEventsOptions     options.CloudEventsOptions
 	cloudEventsProtocol    options.CloudEventsProtocol
 	cloudEventsClient      cloudevents.Client
@@ -68,6 +69,7 @@ func (c *baseClient) connect(ctx context.Context) error {
 				}
 				// the cloudevents network connection is back, mark the client ready and send the receiver restart signal
 				klog.V(4).Infof("the cloudevents client is reconnected")
+				increaseClientReconnectedCounter(c.clientID)
 				c.setClientReady(true)
 				c.sendReceiverSignal(restartReceiverSignal)
 				c.sendReconnectedSignal()
