@@ -115,6 +115,8 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 		if err := c.publish(ctx, evt); err != nil {
 			return err
 		}
+
+		increaseCloudEventsSentCounter(evt.Source(), c.clusterName, eventDataType.String())
 	}
 
 	return nil
@@ -140,6 +142,8 @@ func (c *CloudEventAgentClient[T]) Publish(ctx context.Context, eventType types.
 		return err
 	}
 
+	increaseCloudEventsSentCounter(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String())
+
 	return nil
 }
 
@@ -158,6 +162,8 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 		klog.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
 		return
 	}
+
+	increaseCloudEventsReceivedCounter(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String())
 
 	if eventType.Action == types.ResyncRequestAction {
 		if eventType.SubResource != types.SubResourceStatus {

@@ -73,7 +73,9 @@ func TestCloudEventsMetrics(t *testing.T) {
 			require.NoError(t, err)
 
 			// start agent subscription
-			agent.subscribe(ctx, func(ctx context.Context, evt cloudevents.Event) {})
+			agent.subscribe(ctx, func(ctx context.Context, evt cloudevents.Event) {
+				agent.receive(ctx, evt)
+			})
 
 			eventType := types.CloudEventsType{
 				CloudEventsDataType: c.dataType,

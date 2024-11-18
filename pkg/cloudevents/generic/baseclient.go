@@ -15,7 +15,6 @@ import (
 	"k8s.io/utils/clock"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 const (
@@ -133,14 +132,6 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 		return fmt.Errorf("failed to send event %s, %v", evt.Context, result)
 	}
 
-	clusterName := evt.Context.GetExtensions()[types.ExtensionClusterName].(string)
-
-	eventType, err := types.ParseCloudEventsType(evt.Type())
-	if err == nil {
-		// only increase the sent counter for the known event types
-		increaseCloudEventsSentCounter(evt.Source(), clusterName, eventType.CloudEventsDataType.String())
-	}
-
 	return nil
 }
 
@@ -166,12 +157,6 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 				go func() {
 					if err := c.cloudEventsClient.StartReceiver(receiverCtx, func(evt cloudevents.Event) {
 						klog.V(4).Infof("Received event: %s", evt)
-						clusterName := evt.Context.GetExtensions()[types.ExtensionClusterName].(string)
-						eventType, err := types.ParseCloudEventsType(evt.Type())
-						if err == nil {
-							// only increase the received counter for the known event types
-							increaseCloudEventsReceivedCounter(evt.Source(), clusterName, eventType.CloudEventsDataType.String())
-						}
 						receive(receiverCtx, evt)
 					}); err != nil {
 						runtime.HandleError(fmt.Errorf("failed to receive cloudevents, %v", err))
