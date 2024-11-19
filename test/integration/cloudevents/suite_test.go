@@ -13,6 +13,7 @@ import (
 	"github.com/onsi/gomega"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"k8s.io/klog/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
@@ -113,7 +114,15 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 			MinVersion:   tls.VersionTLS13,
 			MaxVersion:   tls.VersionTLS13,
 		}
-		err := grpcServer.Start(grpcServerHost, []grpc.ServerOption{grpc.UnaryInterceptor(ensureValidTokenUnary), grpc.StreamInterceptor(ensureValidTokenStream), grpc.Creds(credentials.NewTLS(tlsConfig))})
+		kaep := keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second, // If a client pings more than once every 5 seconds, terminate the connection
+			PermitWithoutStream: true,            // Allow pings even when there are no active streams
+		}
+		kasp := keepalive.ServerParameters{
+			Time:    5 * time.Second,
+			Timeout: 1 * time.Second,
+		}
+		err := grpcServer.Start(grpcServerHost, []grpc.ServerOption{grpc.UnaryInterceptor(ensureValidTokenUnary), grpc.StreamInterceptor(ensureValidTokenStream), grpc.Creds(credentials.NewTLS(tlsConfig)), grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp)})
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
 
