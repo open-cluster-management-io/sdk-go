@@ -61,7 +61,7 @@ func StartManifestWorkSourceClient(
 
 	factory := workinformers.NewSharedInformerFactoryWithOptions(clientHolder.WorkInterface(), 5*time.Minute)
 	informer := factory.Work().V1().ManifestWorks()
-	watcherStore.SetStore(informer.Informer().GetStore())
+	watcherStore.SetInformer(informer.Informer())
 
 	go informer.Informer().Run(ctx.Done())
 

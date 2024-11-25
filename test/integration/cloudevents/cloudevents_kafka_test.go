@@ -93,7 +93,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 			workinformers.WithNamespace(clusterName),
 		)
 		informer := factory.Work().V1().ManifestWorks()
-		watcherStore.SetStore(informer.Informer().GetStore())
+		watcherStore.SetInformer(informer.Informer())
 		go informer.Informer().Run(ctx.Done())
 
 		agentManifestClient := agentClientHolder.ManifestWorks(clusterName)
@@ -218,7 +218,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 		)
 		informer = factory.Work().V1().ManifestWorks()
 
-		watcherStore.SetStore(informer.Informer().GetStore())
+		watcherStore.SetInformer(informer.Informer())
 
 		// case1: wait until the consumer is ready
 		time.Sleep(5 * time.Second)
