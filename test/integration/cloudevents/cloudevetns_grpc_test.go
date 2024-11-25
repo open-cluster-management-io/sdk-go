@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/onsi/ginkgo"
 
@@ -49,6 +50,12 @@ func GetGRPCSourceOptions(ctx context.Context, sourceID string) (*options.CloudE
 	grpcOptions.URL = grpcServerHost
 	grpcOptions.CAFile = serverCAFile
 	grpcOptions.TokenFile = tokenFile
+	grpcOptions.KeepAliveOptions = grpcoptions.KeepAliveOptions{
+		Enable:              true,
+		Time:                10 * time.Second,
+		Timeout:             5 * time.Second,
+		PermitWithoutStream: true,
+	}
 
 	return grpcoptions.NewSourceOptions(grpcOptions, sourceID), constants.ConfigTypeGRPC
 }
