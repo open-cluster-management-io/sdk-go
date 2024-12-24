@@ -372,7 +372,7 @@ func TestReceiveResourceSpec(t *testing.T) {
 					Action:              "test_create_request",
 				}
 
-				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "1"})
+				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "1", Namespace: "cluster1"})
 				return *evt
 			}(),
 			validate: func(event types.ResourceAction, resource *mockResource) {
@@ -391,12 +391,12 @@ func TestReceiveResourceSpec(t *testing.T) {
 					Action:              "test_update_request",
 				}
 
-				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "2"})
+				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "2", Namespace: "cluster1"})
 				return *evt
 			}(),
 			resources: []*mockResource{
-				{UID: kubetypes.UID("test1"), ResourceVersion: "1"},
-				{UID: kubetypes.UID("test2"), ResourceVersion: "1"},
+				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Namespace: "cluster1"},
+				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Namespace: "cluster1"},
 			},
 			validate: func(event types.ResourceAction, resource *mockResource) {
 				if event != types.Modified {
@@ -420,12 +420,12 @@ func TestReceiveResourceSpec(t *testing.T) {
 					Action:              "test_delete_request",
 				}
 				now := metav1.Now()
-				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test2"), ResourceVersion: "2", DeletionTimestamp: &now})
+				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test2"), ResourceVersion: "2", DeletionTimestamp: &now, Namespace: "cluster1"})
 				return *evt
 			}(),
 			resources: []*mockResource{
-				{UID: kubetypes.UID("test1"), ResourceVersion: "1"},
-				{UID: kubetypes.UID("test2"), ResourceVersion: "1"},
+				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Namespace: "cluster1"},
+				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Namespace: "cluster1"},
 			},
 			validate: func(event types.ResourceAction, resource *mockResource) {
 				if event != types.Deleted {
@@ -446,12 +446,12 @@ func TestReceiveResourceSpec(t *testing.T) {
 					Action:              "test_create_request",
 				}
 
-				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "2"})
+				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "2", Namespace: "cluster1"})
 				return *evt
 			}(),
 			resources: []*mockResource{
-				{UID: kubetypes.UID("test1"), ResourceVersion: "2"},
-				{UID: kubetypes.UID("test2"), ResourceVersion: "1"},
+				{UID: kubetypes.UID("test1"), ResourceVersion: "2", Namespace: "cluster1"},
+				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Namespace: "cluster1"},
 			},
 			validate: func(event types.ResourceAction, resource *mockResource) {
 				if len(event) != 0 {
