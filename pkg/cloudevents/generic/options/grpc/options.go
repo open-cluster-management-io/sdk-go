@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/keepalive"
 	"gopkg.in/yaml.v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
@@ -22,11 +23,20 @@ import (
 
 // GRPCOptions holds the options that are used to build gRPC client.
 type GRPCOptions struct {
-	URL            string
-	CAFile         string
-	ClientCertFile string
-	ClientKeyFile  string
-	TokenFile      string
+	URL              string
+	CAFile           string
+	ClientCertFile   string
+	ClientKeyFile    string
+	TokenFile        string
+	KeepAliveOptions KeepAliveOptions
+}
+
+// KeepAliveOptions holds the keepalive options for the gRPC client.
+type KeepAliveOptions struct {
+	Enable              bool
+	Time                time.Duration
+	Timeout             time.Duration
+	PermitWithoutStream bool
 }
 
 // GRPCConfig holds the information needed to build connect to gRPC server as a given user.
@@ -41,6 +51,26 @@ type GRPCConfig struct {
 	ClientKeyFile string `json:"clientKeyFile,omitempty" yaml:"clientKeyFile,omitempty"`
 	// TokenFile is the file path to a token file for authentication.
 	TokenFile string `json:"tokenFile,omitempty" yaml:"tokenFile,omitempty"`
+	// keepalive options
+	KeepAliveConfig KeepAliveConfig `json:"keepAliveConfig,omitempty" yaml:"keepAliveConfig,omitempty"`
+}
+
+// KeepAliveConfig holds the keepalive options for the gRPC client.
+type KeepAliveConfig struct {
+	// Enable specifies whether the keepalive option is enabled.
+	// When disabled, other keepalive configurations are ignored. Default is false.
+	Enable bool `json:"enable,omitempty" yaml:"enable,omitempty"`
+	// Time sets the duration after which the client pings the server if no activity is seen.
+	// A minimum value of 10s is enforced if set below that. Default is 30s.
+	Time *time.Duration `json:"time,omitempty" yaml:"time,omitempty"`
+
+	// Timeout sets the duration the client waits for a response after a keepalive ping.
+	// If no response is received, the connection is closed. Default is 10s.
+	Timeout *time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+
+	// PermitWithoutStream determines if keepalive pings are sent when there are no active RPCs.
+	// If false, pings are not sent and Time and Timeout are ignored. Default is false.
+	PermitWithoutStream bool `json:"permitWithoutStream,omitempty" yaml:"permitWithoutStream,omitempty"`
 }
 
 // BuildGRPCOptionsFromFlags builds configs from a config filepath.
@@ -70,13 +100,33 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 		return nil, fmt.Errorf("setting tokenFile requires caFile")
 	}
 
-	return &GRPCOptions{
+	options := &GRPCOptions{
 		URL:            config.URL,
 		CAFile:         config.CAFile,
 		ClientCertFile: config.ClientCertFile,
 		ClientKeyFile:  config.ClientKeyFile,
 		TokenFile:      config.TokenFile,
-	}, nil
+		KeepAliveOptions: KeepAliveOptions{
+			Enable:              false,
+			Time:                30 * time.Second,
+			Timeout:             10 * time.Second,
+			PermitWithoutStream: false,
+		},
+	}
+
+	options.KeepAliveOptions.Enable = config.KeepAliveConfig.Enable
+
+	if config.KeepAliveConfig.Time != nil {
+		options.KeepAliveOptions.Time = *config.KeepAliveConfig.Time
+	}
+
+	if config.KeepAliveConfig.Timeout != nil {
+		options.KeepAliveOptions.Timeout = *config.KeepAliveConfig.Timeout
+	}
+
+	options.KeepAliveOptions.PermitWithoutStream = config.KeepAliveConfig.PermitWithoutStream
+
+	return options, nil
 }
 
 func NewGRPCOptions() *GRPCOptions {
@@ -84,6 +134,18 @@ func NewGRPCOptions() *GRPCOptions {
 }
 
 func (o *GRPCOptions) GetGRPCClientConn() (*grpc.ClientConn, error) {
+	var kacp = keepalive.ClientParameters{
+		Time:                o.KeepAliveOptions.Time,
+		Timeout:             o.KeepAliveOptions.Timeout,
+		PermitWithoutStream: o.KeepAliveOptions.PermitWithoutStream,
+	}
+
+	// Prepare gRPC dial options.
+	dialOpts := []grpc.DialOption{}
+	if o.KeepAliveOptions.Enable {
+		dialOpts = append(dialOpts, grpc.WithKeepaliveParams(kacp))
+	}
+
 	if len(o.CAFile) != 0 {
 		certPool, err := x509.SystemCertPool()
 		if err != nil {
@@ -99,8 +161,6 @@ func (o *GRPCOptions) GetGRPCClientConn() (*grpc.ClientConn, error) {
 			return nil, fmt.Errorf("invalid CA %s", o.CAFile)
 		}
 
-		// Prepare gRPC dial options.
-		diaOpts := []grpc.DialOption{}
 		// Create a TLS configuration with CA pool and TLS 1.3.
 		tlsConfig := &tls.Config{
 			RootCAs:    certPool,
@@ -117,10 +177,10 @@ func (o *GRPCOptions) GetGRPCClientConn() (*grpc.ClientConn, error) {
 			}
 			// Add client certificates to the TLS configuration.
 			tlsConfig.Certificates = []tls.Certificate{clientCerts}
-			diaOpts = append(diaOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 		} else {
 			// token based authentication requires the configuration of transport credentials.
-			diaOpts = append(diaOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 			if len(o.TokenFile) != 0 {
 				// Use token-based authentication if token file is provided.
 				token, err := os.ReadFile(o.TokenFile)
@@ -132,12 +192,12 @@ func (o *GRPCOptions) GetGRPCClientConn() (*grpc.ClientConn, error) {
 						AccessToken: string(token),
 					})}
 				// Add per-RPC credentials to the dial options.
-				diaOpts = append(diaOpts, grpc.WithPerRPCCredentials(perRPCCred))
+				dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(perRPCCred))
 			}
 		}
 
 		// Establish a connection to the gRPC server.
-		conn, err := grpc.Dial(o.URL, diaOpts...)
+		conn, err := grpc.Dial(o.URL, dialOpts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to grpc server %s, %v", o.URL, err)
 		}
@@ -146,7 +206,8 @@ func (o *GRPCOptions) GetGRPCClientConn() (*grpc.ClientConn, error) {
 	}
 
 	// Insecure connection option; should not be used in production.
-	conn, err := grpc.Dial(o.URL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(o.URL, dialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to grpc server %s, %v", o.URL, err)
 	}

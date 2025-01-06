@@ -4,6 +4,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
@@ -40,6 +41,12 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			config: "{\"url\":\"test\"}",
 			expectedOptions: &GRPCOptions{
 				URL: "test",
+				KeepAliveOptions: KeepAliveOptions{
+					Enable:              false,
+					Time:                30 * time.Second,
+					Timeout:             10 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
 		},
 		{
@@ -47,6 +54,25 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			config: "url: test",
 			expectedOptions: &GRPCOptions{
 				URL: "test",
+				KeepAliveOptions: KeepAliveOptions{
+					Enable:              false,
+					Time:                30 * time.Second,
+					Timeout:             10 * time.Second,
+					PermitWithoutStream: false,
+				},
+			},
+		},
+		{
+			name:   "customized options with keepalive",
+			config: "{\"url\":\"test\",\"keepAliveConfig\":{\"enable\":true,\"time\":10s,\"timeout\":5s,\"permitWithoutStream\":true}}",
+			expectedOptions: &GRPCOptions{
+				URL: "test",
+				KeepAliveOptions: KeepAliveOptions{
+					Enable:              true,
+					Time:                10 * time.Second,
+					Timeout:             5 * time.Second,
+					PermitWithoutStream: true,
+				},
 			},
 		},
 		{
@@ -55,6 +81,12 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			expectedOptions: &GRPCOptions{
 				URL:    "test",
 				CAFile: "test",
+				KeepAliveOptions: KeepAliveOptions{
+					Enable:              false,
+					Time:                30 * time.Second,
+					Timeout:             10 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
 		},
 		{
@@ -65,6 +97,12 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 				CAFile:         "test",
 				ClientCertFile: "test",
 				ClientKeyFile:  "test",
+				KeepAliveOptions: KeepAliveOptions{
+					Enable:              false,
+					Time:                30 * time.Second,
+					Timeout:             10 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
 		},
 		{
@@ -74,6 +112,12 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 				URL:       "test",
 				CAFile:    "test",
 				TokenFile: "test",
+				KeepAliveOptions: KeepAliveOptions{
+					Enable:              false,
+					Time:                30 * time.Second,
+					Timeout:             10 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
 		},
 	}
