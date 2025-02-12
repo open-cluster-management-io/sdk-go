@@ -17,6 +17,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/internal"
 	sourceclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/client"
 	sourcelister "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/lister"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/statushash"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 )
 
@@ -127,7 +128,7 @@ func (b *ClientHolderBuilder) NewSourceClientHolder(ctx context.Context) (*Clien
 		ctx,
 		options,
 		sourcelister.NewWatcherStoreLister(b.watcherStore),
-		ManifestWorkStatusHash,
+		statushash.ManifestWorkStatusHash,
 		b.codecs...,
 	)
 	if err != nil {
@@ -200,7 +201,7 @@ func (b *ClientHolderBuilder) NewAgentClientHolder(ctx context.Context) (*Client
 		ctx,
 		options,
 		agentlister.NewWatcherStoreLister(b.watcherStore),
-		ManifestWorkStatusHash,
+		statushash.ManifestWorkStatusHash,
 		b.codecs...,
 	)
 	if err != nil {

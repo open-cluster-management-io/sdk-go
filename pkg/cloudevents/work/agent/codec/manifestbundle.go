@@ -15,6 +15,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/statushash"
 )
 
 // ManifestBundleCodec is a codec to encode/decode a ManifestWork/cloudevent with ManifestBundle for an agent.
@@ -52,6 +53,13 @@ func (c *ManifestBundleCodec) Encode(source string, eventType types.CloudEventsT
 		WithClusterName(work.Namespace).
 		WithOriginalSource(originalSource).
 		NewEvent()
+
+	statusHash, err := statushash.ManifestWorkStatusHash(work)
+	if err != nil {
+		return nil, err
+	}
+
+	evt.SetExtension(types.ExtensionStatusHash, statusHash)
 
 	manifestBundleStatus := &payload.ManifestBundleStatus{
 		Conditions:     work.Status.Conditions,
