@@ -31,6 +31,8 @@ func TestCloudEventsMetrics(t *testing.T) {
 		sourceID    string
 		resources   []*mockResource
 		dataType    types.CloudEventsDataType
+		subresource types.EventSubResource
+		action      types.EventAction
 	}{
 		{
 			name:        "receive single resource",
@@ -39,7 +41,9 @@ func TestCloudEventsMetrics(t *testing.T) {
 			resources: []*mockResource{
 				{Namespace: "cluster1", UID: kubetypes.UID("test1"), ResourceVersion: "2", Status: "test1"},
 			},
-			dataType: mockEventDataType,
+			dataType:    mockEventDataType,
+			subresource: types.SubResourceSpec,
+			action:      types.EventAction("test_create_request"),
 		},
 		{
 			name:        "receive multiple resources",
@@ -49,7 +53,9 @@ func TestCloudEventsMetrics(t *testing.T) {
 				{Namespace: "cluster1", UID: kubetypes.UID("test1"), ResourceVersion: "2", Status: "test1"},
 				{Namespace: "cluster1", UID: kubetypes.UID("test2"), ResourceVersion: "3", Status: "test2"},
 			},
-			dataType: mockEventDataType,
+			dataType:    mockEventDataType,
+			subresource: types.SubResourceSpec,
+			action:      types.EventAction("test_create_request"),
 		},
 	}
 	for _, c := range cases {
@@ -79,8 +85,8 @@ func TestCloudEventsMetrics(t *testing.T) {
 
 			eventType := types.CloudEventsType{
 				CloudEventsDataType: c.dataType,
-				SubResource:         types.SubResourceSpec,
-				Action:              "test_create_request",
+				SubResource:         c.subresource,
+				Action:              c.action,
 			}
 
 			// publish resources to agent
@@ -93,9 +99,9 @@ func TestCloudEventsMetrics(t *testing.T) {
 			time.Sleep(time.Second)
 
 			// ensure metrics are updated
-			sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String())
+			sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
-			receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String())
+			receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(receivedTotal)))
 
 			cancel()
@@ -174,6 +180,7 @@ func TestResyncMetrics(t *testing.T) {
 		resyncType  testResyncType
 		clusterName string
 		sourceID    string
+		resources   []*mockResource
 		dataType    types.CloudEventsDataType
 	}{
 		{
@@ -181,14 +188,21 @@ func TestResyncMetrics(t *testing.T) {
 			resyncType:  testSpecResync,
 			clusterName: "cluster1",
 			sourceID:    "source1",
-			dataType:    mockEventDataType,
+			resources: []*mockResource{
+				{Namespace: "cluster1", UID: kubetypes.UID("test1"), ResourceVersion: "2", Status: "test1"},
+				{Namespace: "cluster1", UID: kubetypes.UID("test2"), ResourceVersion: "3", Status: "test2"},
+			},
+			dataType: mockEventDataType,
 		},
 		{
 			name:        "resync status",
 			resyncType:  testStatusResync,
 			clusterName: "cluster1",
 			sourceID:    "source1",
-			dataType:    mockEventDataType,
+			resources: []*mockResource{
+				{Namespace: "cluster1", UID: kubetypes.UID("test1"), ResourceVersion: "2", Status: "test1"},
+			},
+			dataType: mockEventDataType,
 		},
 	}
 
@@ -201,7 +215,7 @@ func TestResyncMetrics(t *testing.T) {
 
 			if c.resyncType == testSpecResync {
 				sourceOptions := fake.NewSourceOptions(gochan.New(), c.sourceID)
-				lister := newMockResourceLister([]*mockResource{}...)
+				lister := newMockResourceLister(c.resources...)
 				source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
 				require.NoError(t, err)
 
@@ -211,28 +225,36 @@ func TestResyncMetrics(t *testing.T) {
 					Action:              types.ResyncRequestAction,
 				}
 				evt := cloudevents.NewEvent()
+				evt.SetSource(c.clusterName)
 				evt.SetType(eventType.String())
 				evt.SetExtension("clustername", c.clusterName)
-				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ResourceStatusHashList{}); err != nil {
+				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ResourceVersionList{}); err != nil {
 					t.Errorf("failed to set data for event: %v", err)
 				}
 
 				// receive resync request and publish associated resources
 				source.receive(ctx, evt)
-				// wait 1 seconds to respond to the resync request
-				time.Sleep(2 * time.Second)
+
+				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.clusterName, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncRequestAction))
+				require.Equal(t, 1, int(toFloat64Counter(receivedTotal)))
+
+				// wait 1 seconds to respond to the spec resync request
+				time.Sleep(1 * time.Second)
 
 				// check spec resync duration metric as a histogram
-				h := resourceSpecResyncDurationMetric.WithLabelValues(c.sourceID, c.clusterName, mockEventDataType.String())
+				h := resourceSpecResyncDurationMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String())
 				count, sum := toFloat64HistCountAndSum(h)
 				require.Equal(t, uint64(1), count)
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
+
+				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncResponseAction))
+				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 
 			if c.resyncType == testStatusResync {
 				agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
-				lister := newMockResourceLister([]*mockResource{}...)
+				lister := newMockResourceLister(c.resources...)
 				agent, err := NewCloudEventAgentClient[*mockResource](ctx, agentOptions, lister, statusHash, newMockResourceCodec())
 				require.NoError(t, err)
 
@@ -242,23 +264,31 @@ func TestResyncMetrics(t *testing.T) {
 					Action:              types.ResyncRequestAction,
 				}
 				evt := cloudevents.NewEvent()
-				evt.SetType(eventType.String())
 				evt.SetSource(c.sourceID)
+				evt.SetType(eventType.String())
+				evt.SetExtension("clustername", c.clusterName)
 				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ResourceStatusHashList{}); err != nil {
 					t.Errorf("failed to set data for event: %v", err)
 				}
 
 				// receive resync request and publish associated resources
 				agent.receive(ctx, evt)
+
+				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncRequestAction))
+				require.Equal(t, 1, int(toFloat64Counter(receivedTotal)))
+
 				// wait 1 seconds to respond to the resync request
 				time.Sleep(1 * time.Second)
 
 				// check status resync duration metric as a histogram
-				h := resourceStatusResyncDurationMetric.WithLabelValues(c.sourceID, c.clusterName, mockEventDataType.String())
+				h := resourceStatusResyncDurationMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String())
 				count, sum := toFloat64HistCountAndSum(h)
 				require.Equal(t, uint64(1), count)
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
+
+				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
+				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 
 			cancel()
