@@ -117,7 +117,7 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 			return err
 		}
 
-		increaseCloudEventsSentCounter(evt.Source(), c.clusterName, eventDataType.String())
+		increaseCloudEventsSentCounter(source, c.clusterName, eventDataType.String(), string(eventType.SubResource), string(eventType.Action))
 	}
 
 	return nil
@@ -143,8 +143,6 @@ func (c *CloudEventAgentClient[T]) Publish(ctx context.Context, eventType types.
 		return err
 	}
 
-	increaseCloudEventsSentCounter(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String())
-
 	return nil
 }
 
@@ -164,7 +162,7 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 		return
 	}
 
-	increaseCloudEventsReceivedCounter(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String())
+	increaseCloudEventsReceivedCounter(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 
 	if eventType.Action == types.ResyncRequestAction {
 		if eventType.SubResource != types.SubResourceStatus {
@@ -236,6 +234,7 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 	ctx context.Context, eventDataType types.CloudEventsDataType, evt cloudevents.Event,
 ) error {
+	originalSource := evt.Source()
 	options := types.ListOptions{ClusterName: c.clusterName, Source: evt.Source(), CloudEventsDataType: eventDataType}
 	objs, err := c.lister.List(options)
 	if err != nil {
@@ -259,6 +258,7 @@ func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 			if err := c.Publish(ctx, eventType, obj); err != nil {
 				return err
 			}
+			increaseCloudEventsSentCounter(originalSource, c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 		}
 
 		return nil
@@ -285,6 +285,7 @@ func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 		if err := c.Publish(ctx, eventType, obj); err != nil {
 			return err
 		}
+		increaseCloudEventsSentCounter(originalSource, c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 	}
 
 	return nil
