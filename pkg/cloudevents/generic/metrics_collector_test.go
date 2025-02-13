@@ -287,7 +287,7 @@ func TestResyncMetrics(t *testing.T) {
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
 
-				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
+				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(testAgentName, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
 				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 
