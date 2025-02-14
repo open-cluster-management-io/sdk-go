@@ -117,7 +117,7 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 			return err
 		}
 
-		increaseCloudEventsSentCounter(evt.Source(), c.clusterName, eventDataType.String(), string(eventType.SubResource), string(eventType.Action))
+		increaseCloudEventsSentCounter(evt.Source(), source, c.clusterName, eventDataType.String(), string(eventType.SubResource), string(eventType.Action))
 	}
 
 	return nil
@@ -143,7 +143,8 @@ func (c *CloudEventAgentClient[T]) Publish(ctx context.Context, eventType types.
 		return err
 	}
 
-	increaseCloudEventsSentCounter(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
+	originalSource, _ := cloudeventstypes.ToString(evt.Context.GetExtensions()[types.ExtensionOriginalSource])
+	increaseCloudEventsSentCounter(evt.Source(), originalSource, c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 
 	return nil
 }
