@@ -114,8 +114,8 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 
 	latency := time.Since(now)
 	if latency > longThrottleLatency {
-		klog.Warningf(fmt.Sprintf("Waited for %v due to client-side throttling, not priority and fairness, request: %s",
-			latency, evt))
+		klog.Warningf("Waited for %v due to client-side throttling, not priority and fairness, request: %s",
+			latency, evt.Context)
 	}
 
 	sendingCtx, err := c.cloudEventsOptions.WithContext(ctx, evt.Context)
@@ -127,7 +127,8 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 		return fmt.Errorf("the cloudevents client is not ready")
 	}
 
-	klog.V(4).Infof("Sending event: %v\n%s", sendingCtx, evt)
+	klog.V(4).Infof("Sending event: %v\n%s", sendingCtx, evt.Context)
+	klog.V(5).Infof("Sending event: evt=%s", evt)
 	if result := c.cloudEventsClient.Send(sendingCtx, evt); cloudevents.IsUndelivered(result) {
 		return fmt.Errorf("failed to send event %s, %v", evt.Context, result)
 	}
@@ -156,7 +157,9 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 			if startReceiving {
 				go func() {
 					if err := c.cloudEventsClient.StartReceiver(receiverCtx, func(evt cloudevents.Event) {
-						klog.V(4).Infof("Received event: %s", evt)
+						klog.V(4).Infof("Received event: %s", evt.Context)
+						klog.V(5).Infof("Received event: evt=%s", evt)
+
 						receive(receiverCtx, evt)
 					}); err != nil {
 						runtime.HandleError(fmt.Errorf("failed to receive cloudevents, %v", err))
