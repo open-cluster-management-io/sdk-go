@@ -99,7 +99,7 @@ func TestCloudEventsMetrics(t *testing.T) {
 			time.Sleep(time.Second)
 
 			// ensure metrics are updated
-			sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
+			sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(receivedTotal)))
@@ -248,7 +248,7 @@ func TestResyncMetrics(t *testing.T) {
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
 
-				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncResponseAction))
+				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncResponseAction))
 				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 
@@ -287,7 +287,7 @@ func TestResyncMetrics(t *testing.T) {
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
 
-				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
+				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(testAgentName, noneOriginalSource, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
 				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 

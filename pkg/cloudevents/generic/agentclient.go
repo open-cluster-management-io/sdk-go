@@ -117,7 +117,7 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 			return err
 		}
 
-		increaseCloudEventsSentCounter(source, c.clusterName, eventDataType.String(), string(eventType.SubResource), string(eventType.Action))
+		increaseCloudEventsSentCounter(evt.Source(), source, c.clusterName, eventDataType.String(), string(eventType.SubResource), string(eventType.Action))
 	}
 
 	return nil
@@ -142,6 +142,9 @@ func (c *CloudEventAgentClient[T]) Publish(ctx context.Context, eventType types.
 	if err := c.publish(ctx, *evt); err != nil {
 		return err
 	}
+
+	originalSource, _ := cloudeventstypes.ToString(evt.Context.GetExtensions()[types.ExtensionOriginalSource])
+	increaseCloudEventsSentCounter(evt.Source(), originalSource, c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 
 	return nil
 }
@@ -234,7 +237,6 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 	ctx context.Context, eventDataType types.CloudEventsDataType, evt cloudevents.Event,
 ) error {
-	originalSource := evt.Source()
 	options := types.ListOptions{ClusterName: c.clusterName, Source: evt.Source(), CloudEventsDataType: eventDataType}
 	objs, err := c.lister.List(options)
 	if err != nil {
@@ -258,7 +260,6 @@ func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 			if err := c.Publish(ctx, eventType, obj); err != nil {
 				return err
 			}
-			increaseCloudEventsSentCounter(originalSource, c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 		}
 
 		return nil
@@ -285,7 +286,6 @@ func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 		if err := c.Publish(ctx, eventType, obj); err != nil {
 			return err
 		}
-		increaseCloudEventsSentCounter(originalSource, c.clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 	}
 
 	return nil
