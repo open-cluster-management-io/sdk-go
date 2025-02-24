@@ -43,23 +43,26 @@ type GRPCBroker struct {
 	pbv1.UnimplementedCloudEventServiceServer
 	grpcServer *grpc.Server
 	// TODO should this be a map/list of services?
-	service     server.Service
+	services    map[types.CloudEventsDataType]server.Service
 	bindAddress string
 	subscribers map[string]*subscriber // registered subscribers
 	mu          sync.RWMutex
 }
 
 // NewGRPCBroker creates a new gRPC broker with the given configuration.
-func NewGRPCBroker(srv *grpc.Server, service server.Service, addr string) server.AgentEventServer {
+func NewGRPCBroker(srv *grpc.Server, addr string) server.AgentEventServer {
 	klog.Infof("Serving gRPC broker without TLS at %s", addr)
 	broker := &GRPCBroker{
 		grpcServer:  srv,
-		service:     service,
 		bindAddress: addr,
 		subscribers: make(map[string]*subscriber),
 	}
-	service.RegisterHandler(broker)
 	return broker
+}
+
+func (bkr *GRPCBroker) RegisterService(t types.CloudEventsDataType, service server.Service) {
+	bkr.services[t] = service
+	service.RegisterHandler(bkr)
 }
 
 // Start starts the gRPC broker
@@ -108,8 +111,13 @@ func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 		return &emptypb.Empty{}, nil
 	}
 
+	service, ok := bkr.services[eventType.CloudEventsDataType]
+	if !ok {
+		return nil, fmt.Errorf("failed to find service for event type %s", eventType.CloudEventsDataType)
+	}
+
 	// handle the resource status update according status update type
-	if err := bkr.service.HandleStatusUpdate(ctx, evt); err != nil {
+	if err := service.HandleStatusUpdate(ctx, evt); err != nil {
 		return nil, fmt.Errorf("failed to handle resource status update %s: %s", resourceID, err.Error())
 	}
 
@@ -215,7 +223,12 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 	}
 	clusterName := fmt.Sprintf("%s", clusterNameValue)
 
-	objs, err := bkr.service.List(types.ListOptions{ClusterName: clusterName, CloudEventsDataType: eventDataType})
+	service, ok := bkr.services[eventDataType]
+	if !ok {
+		return fmt.Errorf("failed to find service for event type %s", eventDataType)
+	}
+
+	objs, err := service.List(types.ListOptions{ClusterName: clusterName, CloudEventsDataType: eventDataType})
 	if err != nil {
 		return err
 	}
@@ -308,8 +321,13 @@ func (bkr *GRPCBroker) handleRes(evt *cloudevents.Event, clusterName string) err
 }
 
 // OnCreate is called by the controller when a resource is created on the maestro server.
-func (bkr *GRPCBroker) OnCreate(ctx context.Context, id string) error {
-	resource, err := bkr.service.Get(ctx, id)
+func (bkr *GRPCBroker) OnCreate(ctx context.Context, t types.CloudEventsDataType, id string) error {
+	service, ok := bkr.services[t]
+	if !ok {
+		return fmt.Errorf("failed to find service for event type %s", t)
+	}
+
+	resource, err := service.Get(ctx, id)
 	// if the resource is not found, it indicates the resource has been processed.
 	if errors.IsNotFound(err) {
 		return nil
@@ -336,8 +354,13 @@ func (bkr *GRPCBroker) OnCreate(ctx context.Context, id string) error {
 }
 
 // OnUpdate is called by the controller when a resource is updated on the maestro server.
-func (bkr *GRPCBroker) OnUpdate(ctx context.Context, id string) error {
-	resource, err := bkr.service.Get(ctx, id)
+func (bkr *GRPCBroker) OnUpdate(ctx context.Context, t types.CloudEventsDataType, id string) error {
+	service, ok := bkr.services[t]
+	if !ok {
+		return fmt.Errorf("failed to find service for event type %s", t)
+	}
+
+	resource, err := service.Get(ctx, id)
 	// if the resource is not found, it indicates the resource has been processed.
 	if errors.IsNotFound(err) {
 		return nil
@@ -364,8 +387,13 @@ func (bkr *GRPCBroker) OnUpdate(ctx context.Context, id string) error {
 }
 
 // OnDelete is called by the controller when a resource is deleted from the maestro server.
-func (bkr *GRPCBroker) OnDelete(ctx context.Context, id string) error {
-	resource, err := bkr.service.Get(ctx, id)
+func (bkr *GRPCBroker) OnDelete(ctx context.Context, t types.CloudEventsDataType, id string) error {
+	service, ok := bkr.services[t]
+	if !ok {
+		return fmt.Errorf("failed to find service for event type %s", t)
+	}
+
+	resource, err := service.Get(ctx, id)
 	// if the resource is not found, it indicates the resource has been processed.
 	if errors.IsNotFound(err) {
 		return nil
