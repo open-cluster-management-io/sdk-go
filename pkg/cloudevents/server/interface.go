@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 // AgentEventServer handles resource-related events between grpc server and agents:
@@ -16,13 +17,13 @@ type AgentEventServer interface {
 
 type EventHandler interface {
 	// OnCreate is the callback when resource is created in the service.
-	OnCreate(ctx context.Context, resourceID string) error
+	OnCreate(ctx context.Context, t types.CloudEventsDataType, resourceID string) error
 
 	// OnUpdate is the callback when resource is updated in the service.
-	OnUpdate(ctx context.Context, resourceID string) error
+	OnUpdate(ctx context.Context, t types.CloudEventsDataType, resourceID string) error
 
 	// OnDelete is the callback when resource is deleted from the service.
-	OnDelete(ctx context.Context, resourceID string) error
+	OnDelete(ctx context.Context, t types.CloudEventsDataType, resourceID string) error
 }
 
 // TODO SourceEventServer to handle the grpc conversation between consumers and grpcserver.
