@@ -41,8 +41,7 @@ var _ server.AgentEventServer = &GRPCBroker{}
 // It broadcasts resource spec to Maestro agents and listens for resource status updates from them.
 type GRPCBroker struct {
 	pbv1.UnimplementedCloudEventServiceServer
-	grpcServer *grpc.Server
-	// TODO should this be a map/list of services?
+	grpcServer  *grpc.Server
 	services    map[types.CloudEventsDataType]server.Service
 	bindAddress string
 	subscribers map[string]*subscriber // registered subscribers
@@ -56,6 +55,7 @@ func NewGRPCBroker(srv *grpc.Server, addr string) server.AgentEventServer {
 		grpcServer:  srv,
 		bindAddress: addr,
 		subscribers: make(map[string]*subscriber),
+		services:    make(map[types.CloudEventsDataType]server.Service),
 	}
 	return broker
 }
@@ -245,7 +245,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 		}
 		// respond with the deleting resource regardless of the resource version
 		if _, ok := obj.Extensions()[types.ExtensionDeletionTimestamp]; ok {
-			err = bkr.handleRes(obj, clusterName)
+			err = bkr.handleRes(ctx, obj)
 			if err != nil {
 				log.Error(err, "failed to handle resync spec request")
 			}
@@ -263,7 +263,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 		// the version of the work is not maintained on source or the source's work is newer than agent, send
 		// the newer work to agent
 		if currentResourceVersion == 0 || currentResourceVersion > lastResourceVersion {
-			err := bkr.handleRes(obj, clusterName)
+			err := bkr.handleRes(ctx, obj)
 			if err != nil {
 				log.Error(err, "failed to handle resync spec request")
 			}
@@ -289,7 +289,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 			NewEvent()
 
 		// send a delete event for the current resource
-		err := bkr.handleRes(&obj, clusterName)
+		err := bkr.handleRes(ctx, &obj)
 		if err != nil {
 			log.Error(err, "failed to handle delete request")
 		}
@@ -299,9 +299,26 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 }
 
 // handleRes publish the resource to the correct subscriber.
-func (bkr *GRPCBroker) handleRes(evt *cloudevents.Event, clusterName string) error {
+func (bkr *GRPCBroker) handleRes(ctx context.Context, evt *cloudevents.Event) error {
+	log := klog.FromContext(ctx)
+
 	bkr.mu.RLock()
 	defer bkr.mu.RUnlock()
+
+	clusterNameValue, err := evt.Context.GetExtension(types.ExtensionClusterName)
+	if err != nil {
+		return err
+	}
+	clusterName := fmt.Sprintf("%s", clusterNameValue)
+
+	// checks if the event should be processed by the current instance
+	// by verifying the resource consumer name is in the subscriber list, ensuring the
+	// event will be only processed when the consumer is subscribed to the current broker.
+	if !bkr.IsConsumerSubscribed(clusterName) {
+		log.V(4).Info("skip the event since the agent is not subscribed.")
+		return nil
+	}
+
 	for _, subscriber := range bkr.subscribers {
 		if subscriber.clusterName == clusterName {
 			if err := subscriber.handler(evt); err != nil {
@@ -336,21 +353,7 @@ func (bkr *GRPCBroker) OnCreate(ctx context.Context, t types.CloudEventsDataType
 		return err
 	}
 
-	shouldProcess, err := bkr.predicateEvent(resource)
-	if err != nil {
-		return err
-	}
-	if !shouldProcess {
-		return nil
-	}
-
-	clusterNameValue, err := resource.Context.GetExtension(types.ExtensionClusterName)
-	if err != nil {
-		return err
-	}
-	clusterName := fmt.Sprintf("%s", clusterNameValue)
-
-	return bkr.handleRes(resource, clusterName)
+	return bkr.handleRes(ctx, resource)
 }
 
 // OnUpdate is called by the controller when a resource is updated on the maestro server.
@@ -369,21 +372,7 @@ func (bkr *GRPCBroker) OnUpdate(ctx context.Context, t types.CloudEventsDataType
 		return err
 	}
 
-	shouldProcess, err := bkr.predicateEvent(resource)
-	if err != nil {
-		return err
-	}
-	if !shouldProcess {
-		return nil
-	}
-
-	clusterNameValue, err := resource.Context.GetExtension(types.ExtensionClusterName)
-	if err != nil {
-		return err
-	}
-	clusterName := fmt.Sprintf("%s", clusterNameValue)
-
-	return bkr.handleRes(resource, clusterName)
+	return bkr.handleRes(ctx, resource)
 }
 
 // OnDelete is called by the controller when a resource is deleted from the maestro server.
@@ -402,34 +391,7 @@ func (bkr *GRPCBroker) OnDelete(ctx context.Context, t types.CloudEventsDataType
 		return err
 	}
 
-	shouldProcess, err := bkr.predicateEvent(resource)
-	if err != nil {
-		return err
-	}
-	if !shouldProcess {
-		return nil
-	}
-
-	clusterNameValue, err := resource.Context.GetExtension(types.ExtensionClusterName)
-	if err != nil {
-		return err
-	}
-	clusterName := fmt.Sprintf("%s", clusterNameValue)
-
-	return bkr.handleRes(resource, clusterName)
-}
-
-// predicateEvent checks if the event should be processed by the current instance
-// by verifying the resource consumer name is in the subscriber list, ensuring the
-// event will be only processed when the consumer is subscribed to the current broker.
-func (bkr *GRPCBroker) predicateEvent(evt *cloudevents.Event) (bool, error) {
-	clusterNameValue, err := evt.Context.GetExtension(types.ExtensionClusterName)
-	if err != nil {
-		return false, err
-	}
-	clusterName := fmt.Sprintf("%s", clusterNameValue)
-	// check if the consumer is subscribed to the broker
-	return bkr.IsConsumerSubscribed(clusterName), nil
+	return bkr.handleRes(ctx, resource)
 }
 
 // IsConsumerSubscribed returns true if the consumer is subscribed to the broker for resource spec.
