@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -12,7 +13,11 @@ import (
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"k8s.io/klog/v2"
@@ -96,7 +101,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 	return nil
 }
 
-func (bkr *GRPCBroker) Start(addr string) error {
+func (bkr *GRPCBroker) Start(addr string, tlsConfig *tls.Config) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("failed to listen: %v", err)
@@ -110,7 +115,16 @@ func (bkr *GRPCBroker) Start(addr string) error {
 		Time:    5 * time.Second,
 		Timeout: 1 * time.Second,
 	}
-	grpcBroker := grpc.NewServer(grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
+	grpcOpts := []grpc.ServerOption{
+		grpc.KeepaliveEnforcementPolicy(kaep),
+		grpc.KeepaliveParams(kasp),
+	}
+	if tlsConfig != nil {
+		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))
+		// add the interceptor to ensure the client certificate is valid and not expired
+		grpcOpts = append(grpcOpts, grpc.UnaryInterceptor(ensureValidCertificateUnary), grpc.StreamInterceptor(ensureValidCertificateStream))
+	}
+	grpcBroker := grpc.NewServer(grpcOpts...)
 	pbv1.RegisterCloudEventServiceServer(grpcBroker, bkr)
 	return grpcBroker.Serve(lis)
 }
@@ -204,4 +218,47 @@ func (bkr *GRPCBroker) decode(evt *cloudevents.Event) (*store.Resource, error) {
 		Namespace:       clusterName,
 		Status:          store.ResourceStatus{Conditions: status.Conditions},
 	}, nil
+}
+
+func ensureValidCertificateUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	if err := validateClientCertificate(ctx); err != nil {
+		return nil, err
+	}
+
+	return handler(ctx, req)
+}
+
+func ensureValidCertificateStream(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	if err := validateClientCertificate(stream.Context()); err != nil {
+		return err
+	}
+
+	return handler(srv, stream)
+}
+
+func validateClientCertificate(ctx context.Context) error {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "no peer found")
+	}
+
+	tlsAuth, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "unexpected peer transport credentials")
+	}
+
+	if len(tlsAuth.State.VerifiedChains) == 0 || len(tlsAuth.State.VerifiedChains[0]) == 0 {
+		return status.Error(codes.Unauthenticated, "could not verify peer certificate")
+	}
+
+	if tlsAuth.State.VerifiedChains[0][0] == nil {
+		return status.Error(codes.Unauthenticated, "could not verify peer certificate")
+	}
+
+	verifiedChain := tlsAuth.State.VerifiedChains[0][0]
+	if time.Now().After(verifiedChain.NotAfter) {
+		return status.Error(codes.Unauthenticated, "client certificate has expired")
+	}
+
+	return nil
 }

@@ -2,10 +2,10 @@ package grpc
 
 import (
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
@@ -40,12 +40,14 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			name:   "customized options",
 			config: "{\"url\":\"test\"}",
 			expectedOptions: &GRPCOptions{
-				URL: "test",
-				KeepAliveOptions: KeepAliveOptions{
-					Enable:              false,
-					Time:                30 * time.Second,
-					Timeout:             10 * time.Second,
-					PermitWithoutStream: false,
+				&GRPCDialer{
+					URL: "test",
+					KeepAliveOptions: KeepAliveOptions{
+						Enable:              false,
+						Time:                30 * time.Second,
+						Timeout:             10 * time.Second,
+						PermitWithoutStream: false,
+					},
 				},
 			},
 		},
@@ -53,12 +55,14 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			name:   "customized options with yaml format",
 			config: "url: test",
 			expectedOptions: &GRPCOptions{
-				URL: "test",
-				KeepAliveOptions: KeepAliveOptions{
-					Enable:              false,
-					Time:                30 * time.Second,
-					Timeout:             10 * time.Second,
-					PermitWithoutStream: false,
+				&GRPCDialer{
+					URL: "test",
+					KeepAliveOptions: KeepAliveOptions{
+						Enable:              false,
+						Time:                30 * time.Second,
+						Timeout:             10 * time.Second,
+						PermitWithoutStream: false,
+					},
 				},
 			},
 		},
@@ -66,57 +70,14 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			name:   "customized options with keepalive",
 			config: "{\"url\":\"test\",\"keepAliveConfig\":{\"enable\":true,\"time\":10s,\"timeout\":5s,\"permitWithoutStream\":true}}",
 			expectedOptions: &GRPCOptions{
-				URL: "test",
-				KeepAliveOptions: KeepAliveOptions{
-					Enable:              true,
-					Time:                10 * time.Second,
-					Timeout:             5 * time.Second,
-					PermitWithoutStream: true,
-				},
-			},
-		},
-		{
-			name:   "customized options with ca",
-			config: "{\"url\":\"test\",\"caFile\":\"test\"}",
-			expectedOptions: &GRPCOptions{
-				URL:    "test",
-				CAFile: "test",
-				KeepAliveOptions: KeepAliveOptions{
-					Enable:              false,
-					Time:                30 * time.Second,
-					Timeout:             10 * time.Second,
-					PermitWithoutStream: false,
-				},
-			},
-		},
-		{
-			name:   "customized options with client cert key pair and ca",
-			config: "{\"url\":\"test\",\"caFile\":\"test\",\"clientCertFile\":\"test\",\"clientKeyFile\":\"test\"}",
-			expectedOptions: &GRPCOptions{
-				URL:            "test",
-				CAFile:         "test",
-				ClientCertFile: "test",
-				ClientKeyFile:  "test",
-				KeepAliveOptions: KeepAliveOptions{
-					Enable:              false,
-					Time:                30 * time.Second,
-					Timeout:             10 * time.Second,
-					PermitWithoutStream: false,
-				},
-			},
-		},
-		{
-			name:   "customized options with token and ca",
-			config: "{\"url\":\"test\",\"caFile\":\"test\",\"tokenFile\":\"test\"}",
-			expectedOptions: &GRPCOptions{
-				URL:       "test",
-				CAFile:    "test",
-				TokenFile: "test",
-				KeepAliveOptions: KeepAliveOptions{
-					Enable:              false,
-					Time:                30 * time.Second,
-					Timeout:             10 * time.Second,
-					PermitWithoutStream: false,
+				&GRPCDialer{
+					URL: "test",
+					KeepAliveOptions: KeepAliveOptions{
+						Enable:              true,
+						Time:                10 * time.Second,
+						Timeout:             5 * time.Second,
+						PermitWithoutStream: true,
+					},
 				},
 			},
 		},
@@ -137,7 +98,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 				}
 			}
 
-			if !reflect.DeepEqual(options, c.expectedOptions) {
+			if !equality.Semantic.DeepEqual(options, c.expectedOptions) {
 				t.Errorf("unexpected options %v", options)
 			}
 		})

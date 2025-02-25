@@ -16,19 +16,23 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/keepalive"
 	"gopkg.in/yaml.v2"
+	"k8s.io/klog/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 )
 
-// GRPCOptions holds the options that are used to build gRPC client.
-type GRPCOptions struct {
+var _ cert.Connection = &GRPCDialer{}
+
+// GRPCDialer is a gRPC dialer that connects to a gRPC server
+// with the given URL, TLS configuration and keepalive options.
+type GRPCDialer struct {
 	URL              string
-	CAFile           string
-	ClientCertFile   string
-	ClientKeyFile    string
-	TokenFile        string
 	KeepAliveOptions KeepAliveOptions
+	TLSConfig        *tls.Config
+	TokenFile        string
+	conn             *grpc.ClientConn
 }
 
 // KeepAliveOptions holds the keepalive options for the gRPC client.
@@ -37,6 +41,70 @@ type KeepAliveOptions struct {
 	Time                time.Duration
 	Timeout             time.Duration
 	PermitWithoutStream bool
+}
+
+// Dial connects to the gRPC server and returns a gRPC client connection.
+func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
+	// Prepare gRPC dial options.
+	dialOpts := []grpc.DialOption{}
+	if d.KeepAliveOptions.Enable {
+		dialOpts = append(dialOpts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                d.KeepAliveOptions.Time,
+			Timeout:             d.KeepAliveOptions.Timeout,
+			PermitWithoutStream: d.KeepAliveOptions.PermitWithoutStream,
+		}))
+	}
+	if d.TLSConfig != nil {
+		// Enable TLS
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(d.TLSConfig)))
+		if len(d.TokenFile) != 0 {
+			// Use token-based authentication if token file is provided.
+			token, err := os.ReadFile(d.TokenFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read token file %s, %v", d.TokenFile, err)
+			}
+			perRPCCred := oauth.TokenSource{
+				TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
+					AccessToken: string(token),
+				})}
+			// Add per-RPC credentials to the dial options.
+			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(perRPCCred))
+		}
+
+		// Establish a TLS connection to the gRPC server.
+		conn, err := grpc.Dial(d.URL, dialOpts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to grpc server %s, %v", d.URL, err)
+		}
+
+		// Cache the connection for future use.
+		d.conn = conn
+		return d.conn, nil
+	}
+
+	// Insecure connection option; should not be used in production.
+	dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(d.URL, dialOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to grpc server %s, %v", d.URL, err)
+	}
+
+	// Cache the connection for future use.
+	d.conn = conn
+	return d.conn, nil
+}
+
+// Close closes the gRPC client connection.
+func (d *GRPCDialer) Close() error {
+	if d.conn != nil {
+		return d.conn.Close()
+	}
+	return nil
+}
+
+// GRPCOptions holds the options that are used to build gRPC client.
+type GRPCOptions struct {
+	Dialer *GRPCDialer
 }
 
 // GRPCConfig holds the information needed to build connect to gRPC server as a given user.
@@ -101,30 +169,52 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 	}
 
 	options := &GRPCOptions{
-		URL:            config.URL,
-		CAFile:         config.CAFile,
-		ClientCertFile: config.ClientCertFile,
-		ClientKeyFile:  config.ClientKeyFile,
-		TokenFile:      config.TokenFile,
-		KeepAliveOptions: KeepAliveOptions{
-			Enable:              false,
-			Time:                30 * time.Second,
-			Timeout:             10 * time.Second,
-			PermitWithoutStream: false,
+		Dialer: &GRPCDialer{
+			URL:       config.URL,
+			TokenFile: config.TokenFile,
 		},
 	}
 
-	options.KeepAliveOptions.Enable = config.KeepAliveConfig.Enable
-
+	// Default keepalive options
+	keepAliveOptions := KeepAliveOptions{
+		Enable:              false,
+		Time:                30 * time.Second,
+		Timeout:             10 * time.Second,
+		PermitWithoutStream: false,
+	}
+	keepAliveOptions.Enable = config.KeepAliveConfig.Enable
 	if config.KeepAliveConfig.Time != nil {
-		options.KeepAliveOptions.Time = *config.KeepAliveConfig.Time
+		keepAliveOptions.Time = *config.KeepAliveConfig.Time
 	}
-
 	if config.KeepAliveConfig.Timeout != nil {
-		options.KeepAliveOptions.Timeout = *config.KeepAliveConfig.Timeout
+		keepAliveOptions.Timeout = *config.KeepAliveConfig.Timeout
 	}
+	keepAliveOptions.PermitWithoutStream = config.KeepAliveConfig.PermitWithoutStream
 
-	options.KeepAliveOptions.PermitWithoutStream = config.KeepAliveConfig.PermitWithoutStream
+	// Set the keepalive options
+	options.Dialer.KeepAliveOptions = keepAliveOptions
+
+	// Prepare tls config
+	if config.CAFile != "" {
+		certPool, err := rootCAs(config.CAFile)
+		if err != nil {
+			return nil, err
+		}
+		// Set the tls config
+		options.Dialer.TLSConfig = &tls.Config{
+			RootCAs:    certPool,
+			MinVersion: tls.VersionTLS13,
+			MaxVersion: tls.VersionTLS13,
+		}
+		if config.ClientCertFile != "" && config.ClientKeyFile != "" {
+			// Set client certificate and key getter for tls config
+			options.Dialer.TLSConfig.GetClientCertificate = func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				return cert.CachingCertificateLoader(config.ClientCertFile, config.ClientKeyFile)()
+			}
+			// Start a goroutine to periodically refresh client certificates for this connection
+			cert.StartClientCertRotating(options.Dialer.TLSConfig.GetClientCertificate, options.Dialer)
+		}
+	}
 
 	return options, nil
 }
@@ -133,90 +223,8 @@ func NewGRPCOptions() *GRPCOptions {
 	return &GRPCOptions{}
 }
 
-func (o *GRPCOptions) GetGRPCClientConn() (*grpc.ClientConn, error) {
-	var kacp = keepalive.ClientParameters{
-		Time:                o.KeepAliveOptions.Time,
-		Timeout:             o.KeepAliveOptions.Timeout,
-		PermitWithoutStream: o.KeepAliveOptions.PermitWithoutStream,
-	}
-
-	// Prepare gRPC dial options.
-	dialOpts := []grpc.DialOption{}
-	if o.KeepAliveOptions.Enable {
-		dialOpts = append(dialOpts, grpc.WithKeepaliveParams(kacp))
-	}
-
-	if len(o.CAFile) != 0 {
-		certPool, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, err
-		}
-
-		caPEM, err := os.ReadFile(o.CAFile)
-		if err != nil {
-			return nil, err
-		}
-
-		if ok := certPool.AppendCertsFromPEM(caPEM); !ok {
-			return nil, fmt.Errorf("invalid CA %s", o.CAFile)
-		}
-
-		// Create a TLS configuration with CA pool and TLS 1.3.
-		tlsConfig := &tls.Config{
-			RootCAs:    certPool,
-			MinVersion: tls.VersionTLS13,
-			MaxVersion: tls.VersionTLS13,
-		}
-
-		// Check if client certificate and key files are provided for mutual TLS.
-		if len(o.ClientCertFile) != 0 && len(o.ClientKeyFile) != 0 {
-			// Load client certificate and key pair.
-			clientCerts, err := tls.LoadX509KeyPair(o.ClientCertFile, o.ClientKeyFile)
-			if err != nil {
-				return nil, err
-			}
-			// Add client certificates to the TLS configuration.
-			tlsConfig.Certificates = []tls.Certificate{clientCerts}
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
-		} else {
-			// token based authentication requires the configuration of transport credentials.
-			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
-			if len(o.TokenFile) != 0 {
-				// Use token-based authentication if token file is provided.
-				token, err := os.ReadFile(o.TokenFile)
-				if err != nil {
-					return nil, err
-				}
-				perRPCCred := oauth.TokenSource{
-					TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
-						AccessToken: string(token),
-					})}
-				// Add per-RPC credentials to the dial options.
-				dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(perRPCCred))
-			}
-		}
-
-		// Establish a connection to the gRPC server.
-		conn, err := grpc.Dial(o.URL, dialOpts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to grpc server %s, %v", o.URL, err)
-		}
-
-		return conn, nil
-	}
-
-	// Insecure connection option; should not be used in production.
-	dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial(o.URL, dialOpts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to grpc server %s, %v", o.URL, err)
-	}
-
-	return conn, nil
-}
-
 func (o *GRPCOptions) GetCloudEventsProtocol(ctx context.Context, errorHandler func(error), clientOpts ...protocol.Option) (options.CloudEventsProtocol, error) {
-	conn, err := o.GetGRPCClientConn()
+	conn, err := o.Dialer.Dial()
 	if err != nil {
 		return nil, err
 	}
@@ -236,10 +244,15 @@ func (o *GRPCOptions) GetCloudEventsProtocol(ctx context.Context, errorHandler f
 				// TransientFailure.
 				// For a connected grpc client, if the connections is down, the grpc client connection state will be
 				// changed from Ready to Idle.
-				if connState == connectivity.TransientFailure || connState == connectivity.Idle {
+				// When client certificate is expired, client will proactively close the connection, which will result
+				// in connection state changed from Ready to Shutdown.
+				if connState == connectivity.TransientFailure || connState == connectivity.Idle || connState == connectivity.Shutdown {
 					errorHandler(fmt.Errorf("grpc connection is disconnected (state=%s)", connState))
 					ticker.Stop()
-					conn.Close()
+					if connState != connectivity.Shutdown {
+						// don't close the connection if it's already shutdown
+						conn.Close()
+					}
 					return // exit the goroutine as the error handler function will handle the reconnection.
 				}
 			}
@@ -249,4 +262,30 @@ func (o *GRPCOptions) GetCloudEventsProtocol(ctx context.Context, errorHandler f
 	opts := []protocol.Option{}
 	opts = append(opts, clientOpts...)
 	return protocol.NewProtocol(conn, opts...)
+}
+
+// rootCAs returns a cert pool to verify the TLS connection.
+// If the caFile is not provided, the default system certificate pool will be returned
+// If the caFile is provided, the provided CA will be appended to the system certificate pool
+func rootCAs(caFile string) (*x509.CertPool, error) {
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(caFile) == 0 {
+		klog.Warningf("CA file is not provided, TLS connection will be verified with the system cert pool")
+		return certPool, nil
+	}
+
+	caPEM, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+
+	if ok := certPool.AppendCertsFromPEM(caPEM); !ok {
+		return nil, fmt.Errorf("invalid CA %s", caFile)
+	}
+
+	return certPool, nil
 }
