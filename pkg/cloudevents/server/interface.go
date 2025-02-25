@@ -11,7 +11,10 @@ import (
 type AgentEventServer interface {
 	EventHandler
 
-	// Start initiates the EventServer.
+	// RegisterService registers a backend service with a certain data type.
+	RegisterService(t types.CloudEventsDataType, service Service)
+
+	// Start initiates the EventServer to listen to agents.
 	Start(ctx context.Context)
 }
 
