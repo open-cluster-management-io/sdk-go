@@ -2,8 +2,6 @@ package cloudevents
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"os"
 	"time"
@@ -15,8 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/testing"
@@ -26,8 +22,8 @@ import (
 
 const certDuration = 5 * time.Second
 
-var _ = ginkgo.Describe("Auto rotating client certs", func() {
-	ginkgo.Context("Auto rotating mqtt client certs", func() {
+func runCloudeventsCertRotationTest(getAgentOptionsFn GetAgentOptionsFn) func() {
+	return func() {
 		var ctx context.Context
 		var cancel context.CancelFunc
 
@@ -45,7 +41,7 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 			clientCertPairs, err := util.SignClientCert(serverCertPairs.CA, serverCertPairs.CAKey, certDuration)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			clientCertFile, err = testing.WriteToTempFile("mqtt-client-cert-*.pem", clientCertPairs.ClientCert)
+			clientCertFile, err = testing.WriteToTempFile("client-cert-*.pem", clientCertPairs.ClientCert)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			clientKeyFile, err = testing.WriteToTempFile("client-key-*.pem", clientCertPairs.ClientKey)
@@ -66,8 +62,7 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 
 		ginkgo.It("Should be able to send events after the client cert renewed", func() {
 			ginkgo.By("Create an agent client with short time cert")
-			mqttOptions := newTLSMQTTOptions(certPool, mqttTLSBrokerHost, clientCertFile.Name(), clientKeyFile.Name())
-			agentOptions := mqtt.NewAgentOptions(mqttOptions, clusterName, agentID)
+			agentOptions := getAgentOptionsFn(ctx, agentID, clusterName, clientCertFile.Name(), clientKeyFile.Name())
 			agentClient, err := generic.NewCloudEventAgentClient[*store.Resource](
 				ctx,
 				agentOptions,
@@ -84,7 +79,7 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 			}
 
 			ginkgo.By("Publishes an event")
-			err = agentClient.Publish(ctx, evtType, &store.Resource{})
+			err = agentClient.Publish(ctx, evtType, &store.Resource{ResourceID: "test-resource", Namespace: clusterName, ResourceVersion: 1})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			ginkgo.By("Renew the client cert")
@@ -101,36 +96,10 @@ var _ = ginkgo.Describe("Auto rotating client certs", func() {
 			<-time.After(certDuration * 2)
 
 			ginkgo.By("Publishes an event again")
-			err = agentClient.Publish(ctx, evtType, &store.Resource{})
+			err = agentClient.Publish(ctx, evtType, &store.Resource{ResourceID: "test-resource", Namespace: clusterName, ResourceVersion: 1})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		})
-	})
-})
-
-func newTLSMQTTOptions(certPool *x509.CertPool, brokerHost, clientCertFile, clientKeyFile string) *mqtt.MQTTOptions {
-	o := &mqtt.MQTTOptions{
-		KeepAlive: 60,
-		PubQoS:    1,
-		SubQoS:    1,
-		Topics: types.Topics{
-			SourceEvents: "sources/certrotationtest/clusters/+/sourceevents",
-			AgentEvents:  "sources/certrotationtest/clusters/+/agentevents",
-		},
-		Dialer: &mqtt.MQTTDialer{
-			BrokerHost: brokerHost,
-			Timeout:    5 * time.Second,
-			TLSConfig: &tls.Config{
-				RootCAs: certPool,
-				GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return cert.CachingCertificateLoader(clientCertFile, clientKeyFile)()
-				},
-			},
-		},
 	}
-
-	cert.StartClientCertRotating(o.Dialer.TLSConfig.GetClientCertificate, o.Dialer)
-
-	return o
 }
 
 type resourceCodec struct{}
@@ -141,6 +110,9 @@ func (c *resourceCodec) EventDataType() types.CloudEventsDataType {
 
 func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, resource *store.Resource) (*cloudevents.Event, error) {
 	evt := types.NewEventBuilder(source, eventType).NewEvent()
+	evt.SetExtension(types.ExtensionClusterName, resource.Namespace)
+	evt.SetExtension(types.ExtensionResourceID, resource.ResourceID)
+	evt.SetExtension(types.ExtensionResourceVersion, resource.ResourceVersion)
 	if err := evt.SetData(cloudevents.ApplicationJSON, &payload.Manifest{Manifest: resource.Spec}); err != nil {
 		return nil, fmt.Errorf("failed to encode manifests to cloud event: %v", err)
 	}

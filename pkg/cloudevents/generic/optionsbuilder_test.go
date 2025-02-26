@@ -60,12 +60,17 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 			name:       "grpc config",
 			configType: "grpc",
 			configFile: configFile(t, "grpc-config-test-", []byte(grpcConfig)),
-			expectedOptions: &grpc.GRPCOptions{URL: "grpc", KeepAliveOptions: grpc.KeepAliveOptions{
-				Enable:              false,
-				Time:                30 * time.Second,
-				Timeout:             10 * time.Second,
-				PermitWithoutStream: false,
-			}},
+			expectedOptions: &grpc.GRPCOptions{
+				Dialer: &grpc.GRPCDialer{
+					URL: "grpc",
+					KeepAliveOptions: grpc.KeepAliveOptions{
+						Enable:              false,
+						Time:                30 * time.Second,
+						Timeout:             10 * time.Second,
+						PermitWithoutStream: false,
+					},
+				},
+			},
 		},
 	}
 

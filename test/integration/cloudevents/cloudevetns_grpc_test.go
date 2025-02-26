@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/onsi/ginkgo"
 
@@ -16,6 +15,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/constants"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	grpcoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
 var _ = ginkgo.Describe("CloudEvents Clients Test - GRPC", runCloudeventsClientPubSubTest(GetGRPCSourceOptions))
@@ -46,18 +46,7 @@ func GetGRPCSourceOptions(ctx context.Context, sourceID string) (*options.CloudE
 		}
 	}()
 
-	grpcOptions := grpcoptions.NewGRPCOptions()
-	grpcOptions.URL = grpcServerHost
-	grpcOptions.CAFile = serverCAFile
-	grpcOptions.TokenFile = tokenFile
-	grpcOptions.KeepAliveOptions = grpcoptions.KeepAliveOptions{
-		Enable:              true,
-		Time:                10 * time.Second,
-		Timeout:             5 * time.Second,
-		PermitWithoutStream: true,
-	}
-
-	return grpcoptions.NewSourceOptions(grpcOptions, sourceID), constants.ConfigTypeGRPC
+	return grpcoptions.NewSourceOptions(util.NewGRPCSourceOptions(certPool, grpcServerHost, tokenFile), sourceID), constants.ConfigTypeGRPC
 }
 
 // ensureValidTokenUnary ensures a valid token exists within a request's metadata. If the token is missing or invalid, the interceptor blocks execution of the
