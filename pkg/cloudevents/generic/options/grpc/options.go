@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"os"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/keepalive"
 	"gopkg.in/yaml.v2"
-	"k8s.io/klog/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
@@ -194,26 +192,10 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 	// Set the keepalive options
 	options.Dialer.KeepAliveOptions = keepAliveOptions
 
-	// Prepare tls config
-	if config.CAFile != "" {
-		certPool, err := rootCAs(config.CAFile)
-		if err != nil {
-			return nil, err
-		}
-		// Set the tls config
-		options.Dialer.TLSConfig = &tls.Config{
-			RootCAs:    certPool,
-			MinVersion: tls.VersionTLS13,
-			MaxVersion: tls.VersionTLS13,
-		}
-		if config.ClientCertFile != "" && config.ClientKeyFile != "" {
-			// Set client certificate and key getter for tls config
-			options.Dialer.TLSConfig.GetClientCertificate = func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-				return cert.CachingCertificateLoader(config.ClientCertFile, config.ClientKeyFile)()
-			}
-			// Start a goroutine to periodically refresh client certificates for this connection
-			cert.StartClientCertRotating(options.Dialer.TLSConfig.GetClientCertificate, options.Dialer)
-		}
+	// Set up TLS configuration for the gRPC connection, the certificates will be reloaded periodically.
+	options.Dialer.TLSConfig, err = cert.AutoLoadTLSConfig(config.CAFile, config.ClientCertFile, config.ClientKeyFile, options.Dialer)
+	if err != nil {
+		return nil, err
 	}
 
 	return options, nil
@@ -262,30 +244,4 @@ func (o *GRPCOptions) GetCloudEventsProtocol(ctx context.Context, errorHandler f
 	opts := []protocol.Option{}
 	opts = append(opts, clientOpts...)
 	return protocol.NewProtocol(conn, opts...)
-}
-
-// rootCAs returns a cert pool to verify the TLS connection.
-// If the caFile is not provided, the default system certificate pool will be returned
-// If the caFile is provided, the provided CA will be appended to the system certificate pool
-func rootCAs(caFile string) (*x509.CertPool, error) {
-	certPool, err := x509.SystemCertPool()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(caFile) == 0 {
-		klog.Warningf("CA file is not provided, TLS connection will be verified with the system cert pool")
-		return certPool, nil
-	}
-
-	caPEM, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, err
-	}
-
-	if ok := certPool.AppendCertsFromPEM(caPEM); !ok {
-		return nil, fmt.Errorf("invalid CA %s", caFile)
-	}
-
-	return certPool, nil
 }
