@@ -105,7 +105,7 @@ func (c *baseClient) connect(ctx context.Context) error {
 	return nil
 }
 
-func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
+func (c *baseClient) PublishEvent(ctx context.Context, evt cloudevents.Event) error {
 	now := time.Now()
 
 	if err := c.cloudEventsRateLimiter.Wait(ctx); err != nil {
@@ -136,7 +136,7 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 	return nil
 }
 
-func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
+func (c *baseClient) SubscribeEvent(ctx context.Context, receive receiveFn) {
 	c.Lock()
 	defer c.Unlock()
 

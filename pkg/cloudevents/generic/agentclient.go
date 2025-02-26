@@ -113,7 +113,7 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 			return fmt.Errorf("failed to set data to cloud event: %v", err)
 		}
 
-		if err := c.publish(ctx, evt); err != nil {
+		if err := c.PublishEvent(ctx, evt); err != nil {
 			return err
 		}
 
@@ -139,7 +139,7 @@ func (c *CloudEventAgentClient[T]) Publish(ctx context.Context, eventType types.
 		return err
 	}
 
-	if err := c.publish(ctx, *evt); err != nil {
+	if err := c.PublishEvent(ctx, *evt); err != nil {
 		return err
 	}
 
@@ -153,7 +153,7 @@ func (c *CloudEventAgentClient[T]) Publish(ctx context.Context, eventType types.
 // For status resync request, agent publish the current resources status back as response.
 // For resource spec request, agent receives resource spec and handles the spec with resource handlers.
 func (c *CloudEventAgentClient[T]) Subscribe(ctx context.Context, handlers ...ResourceHandler[T]) {
-	c.subscribe(ctx, func(ctx context.Context, evt cloudevents.Event) {
+	c.SubscribeEvent(ctx, func(ctx context.Context, evt cloudevents.Event) {
 		c.receive(ctx, evt, handlers...)
 	})
 }
