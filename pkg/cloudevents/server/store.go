@@ -6,7 +6,7 @@ import (
 	cetypes "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
-// Service is the interface that the GRPC broker uses to get cloudevent from the backend storage
+// Service is the interface that the Agent Event Server uses to get cloudevent from the backend storage
 // sends to the related agent, and handle the statusUpdate event sent from the agent.
 
 // TODO need a method to check if an event has been processed already.

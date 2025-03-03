@@ -38,7 +38,7 @@ type subscriber struct {
 var _ server.AgentEventServer = &GRPCBroker{}
 
 // GRPCBroker is a gRPC broker that implements the CloudEventServiceServer interface.
-// It broadcasts resource spec to Maestro agents and listens for resource status updates from them.
+// It broadcasts resource spec to agents and listens for resource status updates from them.
 type GRPCBroker struct {
 	pbv1.UnimplementedCloudEventServiceServer
 	grpcServer  *grpc.Server
@@ -153,7 +153,7 @@ func (bkr *GRPCBroker) unregister(id string) {
 }
 
 // Subscribe in stub implementation for maestro agent subscribe resource spec from maestro server.
-// Note: It's unnecessary to send a status resync request to Maestro agent subscribers.
+// Note: It's unnecessary to send a status resync request to agent subscribers.
 // The work agent will continuously attempt to send status updates to the gRPC broker.
 // If the broker is down or disconnected, the agent will resend the status once the broker is back up or reconnected.
 func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv1.CloudEventService_SubscribeServer) error {
@@ -245,7 +245,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 		}
 		// respond with the deleting resource regardless of the resource version
 		if _, ok := obj.Extensions()[types.ExtensionDeletionTimestamp]; ok {
-			err = bkr.handleRes(ctx, obj)
+			err = bkr.handleRes(ctx, obj, eventDataType, "delete_request")
 			if err != nil {
 				log.Error(err, "failed to handle resync spec request")
 			}
@@ -263,7 +263,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 		// the version of the work is not maintained on source or the source's work is newer than agent, send
 		// the newer work to agent
 		if currentResourceVersion == 0 || currentResourceVersion > lastResourceVersion {
-			err := bkr.handleRes(ctx, obj)
+			err := bkr.handleRes(ctx, obj, eventDataType, "update_request")
 			if err != nil {
 				log.Error(err, "failed to handle resync spec request")
 			}
@@ -289,7 +289,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 			NewEvent()
 
 		// send a delete event for the current resource
-		err := bkr.handleRes(ctx, &obj)
+		err := bkr.handleRes(ctx, &obj, eventDataType, "delete_request")
 		if err != nil {
 			log.Error(err, "failed to handle delete request")
 		}
@@ -299,11 +299,22 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 }
 
 // handleRes publish the resource to the correct subscriber.
-func (bkr *GRPCBroker) handleRes(ctx context.Context, evt *cloudevents.Event) error {
+func (bkr *GRPCBroker) handleRes(
+	ctx context.Context,
+	evt *cloudevents.Event,
+	t types.CloudEventsDataType,
+	action types.EventAction) error {
 	log := klog.FromContext(ctx)
 
 	bkr.mu.RLock()
 	defer bkr.mu.RUnlock()
+
+	eventType := types.CloudEventsType{
+		CloudEventsDataType: t,
+		SubResource:         types.SubResourceSpec,
+		Action:              action,
+	}
+	evt.SetType(eventType.String())
 
 	clusterNameValue, err := evt.Context.GetExtension(types.ExtensionClusterName)
 	if err != nil {
@@ -353,7 +364,7 @@ func (bkr *GRPCBroker) OnCreate(ctx context.Context, t types.CloudEventsDataType
 		return err
 	}
 
-	return bkr.handleRes(ctx, resource)
+	return bkr.handleRes(ctx, resource, t, "create_request")
 }
 
 // OnUpdate is called by the controller when a resource is updated on the maestro server.
@@ -372,7 +383,7 @@ func (bkr *GRPCBroker) OnUpdate(ctx context.Context, t types.CloudEventsDataType
 		return err
 	}
 
-	return bkr.handleRes(ctx, resource)
+	return bkr.handleRes(ctx, resource, t, "update_request")
 }
 
 // OnDelete is called by the controller when a resource is deleted from the maestro server.
@@ -391,7 +402,7 @@ func (bkr *GRPCBroker) OnDelete(ctx context.Context, t types.CloudEventsDataType
 		return err
 	}
 
-	return bkr.handleRes(ctx, resource)
+	return bkr.handleRes(ctx, resource, t, "delete_request")
 }
 
 // IsConsumerSubscribed returns true if the consumer is subscribed to the broker for resource spec.

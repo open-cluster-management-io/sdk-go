@@ -82,7 +82,7 @@ func (s *MessageQueueEventServer) OnCreate(ctx context.Context, t types.CloudEve
 		return err
 	}
 
-	return s.sourceClient.PublishEvent(ctx, *evt)
+	return s.publishEventWithType(ctx, evt, t, "create_request")
 }
 
 // OnUpdate will be called on each new resource update event.
@@ -100,7 +100,7 @@ func (s *MessageQueueEventServer) OnUpdate(ctx context.Context, t types.CloudEve
 	if err != nil {
 		return err
 	}
-	return s.sourceClient.PublishEvent(ctx, *evt)
+	return s.publishEventWithType(ctx, evt, t, "update_request")
 }
 
 // OnDelete will be called on each new resource deletion event.
@@ -118,5 +118,19 @@ func (s *MessageQueueEventServer) OnDelete(ctx context.Context, t types.CloudEve
 	if err != nil {
 		return err
 	}
+	return s.publishEventWithType(ctx, evt, t, "delete_request")
+}
+
+func (s *MessageQueueEventServer) publishEventWithType(
+	ctx context.Context,
+	evt *cloudevents.Event,
+	t types.CloudEventsDataType,
+	action types.EventAction) error {
+	eventType := types.CloudEventsType{
+		CloudEventsDataType: t,
+		SubResource:         types.SubResourceSpec,
+		Action:              action,
+	}
+	evt.SetType(eventType.String())
 	return s.sourceClient.PublishEvent(ctx, *evt)
 }
