@@ -43,20 +43,23 @@ func NewCloudEventAgentClient[T ResourceObject](
 	statusHashGetter StatusHashGetter[T],
 	codecs ...Codec[T],
 ) (*CloudEventAgentClient[T], error) {
+	dataTypes := make([]types.CloudEventsDataType, len(codecs))
+	evtCodes := make(map[types.CloudEventsDataType]Codec[T])
+	for i, codec := range codecs {
+		dataType := codec.EventDataType()
+		dataTypes[i] = dataType
+		evtCodes[dataType] = codec
+	}
 	baseClient := &baseClient{
 		clientID:               agentOptions.AgentID,
 		cloudEventsOptions:     agentOptions.CloudEventsOptions,
 		cloudEventsRateLimiter: NewRateLimiter(agentOptions.EventRateLimit),
 		reconnectedChan:        make(chan struct{}),
+		dataTypes:              dataTypes,
 	}
 
 	if err := baseClient.connect(ctx); err != nil {
 		return nil, err
-	}
-
-	evtCodes := make(map[types.CloudEventsDataType]Codec[T])
-	for _, codec := range codecs {
-		evtCodes[codec.EventDataType()] = codec
 	}
 
 	return &CloudEventAgentClient[T]{

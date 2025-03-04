@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/clock"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 const (
@@ -43,6 +44,7 @@ type baseClient struct {
 	receiverChan           chan int
 	reconnectedChan        chan struct{}
 	clientReady            bool
+	dataTypes              []types.CloudEventsDataType
 }
 
 func (c *baseClient) connect(ctx context.Context) error {
@@ -225,7 +227,7 @@ func (c *baseClient) setClientReady(ready bool) {
 
 func (c *baseClient) newCloudEventsClient(ctx context.Context) (cloudevents.Client, error) {
 	var err error
-	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx)
+	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx, c.dataTypes...)
 	if err != nil {
 		return nil, err
 	}

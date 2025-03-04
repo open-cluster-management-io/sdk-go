@@ -11,6 +11,7 @@ type Option func(*Protocol) error
 type SubscribeOption struct {
 	Source      string
 	ClusterName string
+	DataTypes   []string // data type list for the client, eg. ["io.open-cluster-management.works.v1alpha1.manifests"]
 }
 
 // WithSubscribeOption sets the Subscribe configuration for the client.

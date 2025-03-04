@@ -102,29 +102,38 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 	defer p.openerMutex.Unlock()
 
 	logger := cecontext.LoggerFrom(ctx)
-	subClient, err := p.client.Subscribe(ctx, &pbv1.SubscriptionRequest{
-		Source:      p.subscribeOption.Source,
-		ClusterName: p.subscribeOption.ClusterName,
-	})
-	if err != nil {
-		return err
+	subClients := make(map[string]pbv1.CloudEventService_SubscribeClient)
+	var err error
+	for _, dataType := range p.subscribeOption.DataTypes {
+		subClients[dataType], err = p.client.Subscribe(ctx, &pbv1.SubscriptionRequest{
+			Source:      p.subscribeOption.Source,
+			ClusterName: p.subscribeOption.ClusterName,
+			DataType:    dataType,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if p.subscribeOption.Source != "" {
-		logger.Infof("subscribing events for: %v", p.subscribeOption.Source)
+		logger.Infof("subscribing to events for source: %v with data types: %v", p.subscribeOption.Source, p.subscribeOption.DataTypes)
 	} else {
-		logger.Infof("subscribing events for cluster: %v", p.subscribeOption.ClusterName)
+		logger.Infof("subscribing to events for cluster: %v with data types: %v", p.subscribeOption.ClusterName, p.subscribeOption.DataTypes)
 	}
 
-	go func() {
-		for {
-			msg, err := subClient.Recv()
-			if err != nil {
-				return
+	// Start a go routine for each subclient to receive messages
+	for _, subClient := range subClients {
+		go func(client pbv1.CloudEventService_SubscribeClient) {
+			for {
+				msg, err := client.Recv()
+				if err != nil {
+					return
+				}
+				// TODO: enhance the message consumer to ensure no message loss
+				p.incoming <- msg
 			}
-			p.incoming <- msg
-		}
-	}()
+		}(subClient)
+	}
 
 	// Wait until external or internal context done
 	select {

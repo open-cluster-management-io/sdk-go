@@ -33,7 +33,11 @@ func (o *grpcAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.E
 	return ctx, nil
 }
 
-func (o *grpcAgentOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
+func (o *grpcAgentOptions) Protocol(ctx context.Context, ceDataTypes ...types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
+	dataTypes := make([]string, len(ceDataTypes))
+	for i, dataType := range ceDataTypes {
+		dataTypes[i] = dataType.String()
+	}
 	receiver, err := o.GetCloudEventsProtocol(
 		ctx,
 		func(err error) {
@@ -45,6 +49,7 @@ func (o *grpcAgentOptions) Protocol(ctx context.Context) (options.CloudEventsPro
 			// as a placeholder with all the sources.
 			Source:      types.SourceAll,
 			ClusterName: o.clusterName,
+			DataTypes:   dataTypes,
 		}),
 	)
 	if err != nil {

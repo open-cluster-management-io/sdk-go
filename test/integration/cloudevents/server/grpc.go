@@ -29,7 +29,7 @@ type GRPCServer struct {
 	pbv1.UnimplementedCloudEventServiceServer
 	serverStore  *store.MemoryStore
 	resourceChan chan *store.Resource
-	handlers     map[string]resourceHandler
+	handlers     map[string]map[string]resourceHandler
 }
 
 // func NewGRPCServer(eventBroadcaster *store.EventBroadcaster) *GRPCServer {
@@ -37,7 +37,7 @@ func NewGRPCServer() *GRPCServer {
 	return &GRPCServer{
 		serverStore:  store.NewMemoryStore(),
 		resourceChan: make(chan *store.Resource),
-		handlers:     make(map[string]resourceHandler),
+		handlers:     make(map[string]map[string]resourceHandler), // source -> dataType -> handler
 	}
 }
 
@@ -59,7 +59,10 @@ func (svr *GRPCServer) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 }
 
 func (svr *GRPCServer) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv1.CloudEventService_SubscribeServer) error {
-	svr.handlers[subReq.Source] = func(res *store.Resource) error {
+	if _, ok := svr.handlers[subReq.Source]; !ok {
+		svr.handlers[subReq.Source] = make(map[string]resourceHandler)
+	}
+	svr.handlers[subReq.Source][subReq.DataType] = func(res *store.Resource) error {
 		evt, err := encode(res)
 		if err != nil {
 			return fmt.Errorf("failed to encode resource %s to cloudevent: %v", res.ResourceID, err)
@@ -101,7 +104,7 @@ func (svr *GRPCServer) GetStore() *store.MemoryStore {
 }
 
 func (svr *GRPCServer) UpdateResourceStatus(resource *store.Resource) error {
-	handleFn, ok := svr.handlers[resource.Source]
+	handleFn, ok := svr.handlers[resource.Source][payload.ManifestEventDataType.String()]
 	if !ok {
 		return fmt.Errorf("failed to find handler for resource %s (%s)", resource.ResourceID, resource.Source)
 	}
