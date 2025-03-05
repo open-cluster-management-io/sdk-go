@@ -18,14 +18,14 @@ import (
 func StartWorkAgent(ctx context.Context,
 	clusterName string,
 	config any,
-	codecs ...generic.Codec[*workv1.ManifestWork],
+	codec generic.Codec[*workv1.ManifestWork],
 ) (*work.ClientHolder, workv1informers.ManifestWorkInformer, error) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
 	clientHolder, err := work.NewClientHolderBuilder(config).
 		WithClientID(clusterName + "-" + rand.String(5)).
 		WithClusterName(clusterName).
-		WithCodecs(codecs...).
+		WithCodec(codec).
 		WithWorkClientWatcherStore(watcherStore).
 		NewAgentClientHolder(ctx)
 	if err != nil {

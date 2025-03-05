@@ -20,9 +20,8 @@ type CloudEventsOptions interface {
 	// the MQTT topic, for Kafka, the context should contain the message key, etc.
 	WithContext(ctx context.Context, evtContext cloudevents.EventContext) (context.Context, error)
 
-	// Protocol returns a specific protocol to initialize the cloudevents client,
-	// it accepts a optional data type list for the client.
-	Protocol(ctx context.Context, dataTypes ...types.CloudEventsDataType) (CloudEventsProtocol, error)
+	// Protocol returns a specific protocol to initialize the cloudevents client.
+	Protocol(ctx context.Context, dataType types.CloudEventsDataType) (CloudEventsProtocol, error)
 
 	// ErrorChan returns a chan which will receive the cloudevents connection error. The source/agent client will try to
 	// reconnect the when this error occurs.

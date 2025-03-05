@@ -33,7 +33,7 @@ func (o *CloudEventsFakeOptions) WithContext(ctx context.Context, evtCtx cloudev
 	return ctx, nil
 }
 
-func (o *CloudEventsFakeOptions) Protocol(ctx context.Context, dataTypes ...types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
+func (o *CloudEventsFakeOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
 	return o.protocol, nil
 }
 

@@ -43,7 +43,7 @@ func (o *kafkaSourceOptions) WithContext(ctx context.Context,
 	return ctx, nil
 }
 
-func (o *kafkaSourceOptions) Protocol(ctx context.Context, dataTypes ...types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
+func (o *kafkaSourceOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
 	protocol, err := confluent.New(confluent.WithConfigMap(&o.KafkaOptions.ConfigMap),
 		confluent.WithReceiverTopics([]string{agentEventsTopic}),
 		confluent.WithSenderTopic(sourceEventsTopic),

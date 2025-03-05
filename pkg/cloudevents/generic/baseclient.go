@@ -44,7 +44,7 @@ type baseClient struct {
 	receiverChan           chan int
 	reconnectedChan        chan struct{}
 	clientReady            bool
-	dataTypes              []types.CloudEventsDataType
+	dataType               types.CloudEventsDataType
 }
 
 func (c *baseClient) connect(ctx context.Context) error {
@@ -227,7 +227,7 @@ func (c *baseClient) setClientReady(ready bool) {
 
 func (c *baseClient) newCloudEventsClient(ctx context.Context) (cloudevents.Client, error) {
 	var err error
-	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx, c.dataTypes...)
+	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx, c.dataType)
 	if err != nil {
 		return nil, err
 	}

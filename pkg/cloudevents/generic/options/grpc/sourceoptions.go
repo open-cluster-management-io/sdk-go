@@ -32,19 +32,15 @@ func (o *gRPCSourceOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 	return ctx, nil
 }
 
-func (o *gRPCSourceOptions) Protocol(ctx context.Context, ceDataTypes ...types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
-	dataTypes := make([]string, len(ceDataTypes))
-	for i, dataType := range ceDataTypes {
-		dataTypes[i] = dataType.String()
-	}
+func (o *gRPCSourceOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
 	receiver, err := o.GetCloudEventsProtocol(
 		ctx,
 		func(err error) {
 			o.errorChan <- err
 		},
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
-			Source:    o.sourceID,
-			DataTypes: dataTypes,
+			Source:   o.sourceID,
+			DataType: dataType.String(),
 		}),
 	)
 	if err != nil {

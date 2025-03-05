@@ -44,7 +44,7 @@ func (h *ClientHolder) ManifestWorks(namespace string) workv1client.ManifestWork
 type ClientHolderBuilder struct {
 	config       any
 	watcherStore store.WorkClientWatcherStore
-	codecs       []generic.Codec[*workv1.ManifestWork]
+	codec        generic.Codec[*workv1.ManifestWork]
 	sourceID     string
 	clusterName  string
 	clientID     string
@@ -84,9 +84,9 @@ func (b *ClientHolderBuilder) WithClusterName(clusterName string) *ClientHolderB
 	return b
 }
 
-// WithCodecs add codecs when building a manifestwork client based on cloudevents.
-func (b *ClientHolderBuilder) WithCodecs(codecs ...generic.Codec[*workv1.ManifestWork]) *ClientHolderBuilder {
-	b.codecs = codecs
+// WithCodec add codec when building a manifestwork client based on cloudevents.
+func (b *ClientHolderBuilder) WithCodec(codec generic.Codec[*workv1.ManifestWork]) *ClientHolderBuilder {
+	b.codec = codec
 	return b
 }
 
@@ -129,7 +129,7 @@ func (b *ClientHolderBuilder) NewSourceClientHolder(ctx context.Context) (*Clien
 		options,
 		sourcelister.NewWatcherStoreLister(b.watcherStore),
 		statushash.ManifestWorkStatusHash,
-		b.codecs...,
+		b.codec,
 	)
 	if err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func (b *ClientHolderBuilder) NewAgentClientHolder(ctx context.Context) (*Client
 		options,
 		agentlister.NewWatcherStoreLister(b.watcherStore),
 		statushash.ManifestWorkStatusHash,
-		b.codecs...,
+		b.codec,
 	)
 	if err != nil {
 		return nil, err
