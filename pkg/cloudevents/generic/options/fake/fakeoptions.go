@@ -6,6 +6,7 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 type CloudEventsFakeOptions struct {
@@ -32,7 +33,7 @@ func (o *CloudEventsFakeOptions) WithContext(ctx context.Context, evtCtx cloudev
 	return ctx, nil
 }
 
-func (o *CloudEventsFakeOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
+func (o *CloudEventsFakeOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
 	return o.protocol, nil
 }
 

@@ -205,7 +205,7 @@ if err != nil {
 clientHolder, err := work.NewClientHolderBuilder(config).
     WithClientID(fmt.Sprintf("%s-client", sourceID)).
     WithSourceID(sourceID).
-    WithCodecs(codec.NewManifestBundleCodec()).
+    WithCodec(codec.NewManifestBundleCodec()).
     WithWorkClientWatcherStore(watcherStore).
     NewSourceClientHolder(ctx)
 if err != nil {
@@ -230,7 +230,7 @@ watcherStore := workstore.NewSourceInformerWatcherStore(ctx)
 clientHolder, err := work.NewClientHolderBuilder(config).
 		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 		WithSourceID(sourceID).
-		WithCodecs(codec.NewManifestBundleCodec()).
+		WithCodec(codec.NewManifestBundleCodec()).
 		WithWorkClientWatcherStore(watcherStore).
 		NewSourceClientHolder(ctx)
 	if err != nil {
@@ -263,8 +263,7 @@ watcherStore := store.NewAgentInformerWatcherStore()
 clientHolder, err := work.NewClientHolderBuilder(config).
     WithClientID(fmt.Sprintf("%s-work-agent", clusterName)).
     WithClusterName(clusterName).
-    // Supports two event data types for ManifestWork
-    WithCodecs(codec.NewManifestBundleCodec(), codec.NewManifestCodec(restMapper)).
+    WithCodec(codec.NewManifestBundleCodec()).
     WithWorkClientWatcherStore(watcherStore).
     NewAgentClientHolder(ctx)
 if err != nil {

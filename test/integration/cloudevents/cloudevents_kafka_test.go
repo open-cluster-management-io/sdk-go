@@ -72,7 +72,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 		agentClientHolder, err := work.NewClientHolderBuilder(kafkaOptions).
 			WithClientID(agentID).
 			WithClusterName(clusterName).
-			WithCodecs(codec.NewManifestCodec(nil)).
+			WithCodec(codec.NewManifestCodec(nil)).
 			WithWorkClientWatcherStore(watcherStore).
 			NewAgentClientHolder(agentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -196,7 +196,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 		newAgentHolder, err := work.NewClientHolderBuilder(kafkaOptions).
 			WithClientID(agentID).
 			WithClusterName(clusterName).
-			WithCodecs(codec.NewManifestCodec(nil)).
+			WithCodec(codec.NewManifestCodec(nil)).
 			WithWorkClientWatcherStore(watcherStore).
 			NewAgentClientHolder(newAgentCtx)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())

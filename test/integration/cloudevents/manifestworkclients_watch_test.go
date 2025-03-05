@@ -63,7 +63,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 				WithSourceID(sourceID).
-				WithCodecs(sourcecodec.NewManifestBundleCodec()).
+				WithCodec(sourcecodec.NewManifestBundleCodec()).
 				WithWorkClientWatcherStore(watcherStore).
 				NewSourceClientHolder(ctx)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -116,7 +116,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 				WithSourceID(sourceID).
-				WithCodecs(sourcecodec.NewManifestBundleCodec()).
+				WithCodec(sourcecodec.NewManifestBundleCodec()).
 				WithWorkClientWatcherStore(watcherStore).
 				NewSourceClientHolder(ctx)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -262,7 +262,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			_, err = work.NewClientHolderBuilder(sourceOptions).
 				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 				WithSourceID(sourceID).
-				WithCodecs(sourcecodec.NewManifestBundleCodec()).
+				WithCodec(sourcecodec.NewManifestBundleCodec()).
 				WithWorkClientWatcherStore(watcherStore).
 				NewSourceClientHolder(ctx)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -324,7 +324,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 					WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 					WithSourceID(sourceID).
-					WithCodecs(sourcecodec.NewManifestBundleCodec()).
+					WithCodec(sourcecodec.NewManifestBundleCodec()).
 					WithWorkClientWatcherStore(watcherStore).
 					NewSourceClientHolder(ctx)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
@@ -367,7 +367,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
 					WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 					WithSourceID(sourceID).
-					WithCodecs(sourcecodec.NewManifestBundleCodec()).
+					WithCodec(sourcecodec.NewManifestBundleCodec()).
 					WithWorkClientWatcherStore(watcherStore).
 					NewSourceClientHolder(ctx)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())

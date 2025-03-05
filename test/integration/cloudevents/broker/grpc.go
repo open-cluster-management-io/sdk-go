@@ -34,14 +34,14 @@ type resourceHandler func(res *store.Resource) error
 type GRPCBroker struct {
 	pbv1.UnimplementedCloudEventServiceServer
 	resourceStatusChan chan *store.Resource
-	handlers           map[string]resourceHandler
+	handlers           map[string]map[string]resourceHandler // clusterName -> dataType -> handler
 	sourcerID          string
 }
 
 func NewGRPCBroker() *GRPCBroker {
 	return &GRPCBroker{
 		resourceStatusChan: make(chan *store.Resource),
-		handlers:           make(map[string]resourceHandler),
+		handlers:           make(map[string]map[string]resourceHandler),
 	}
 }
 
@@ -75,7 +75,10 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 	if len(subReq.ClusterName) == 0 {
 		return fmt.Errorf("invalid subscription request: missing cluster name")
 	}
-	bkr.handlers[subReq.ClusterName] = func(res *store.Resource) error {
+	if _, ok := bkr.handlers[subReq.ClusterName]; !ok {
+		bkr.handlers[subReq.ClusterName] = make(map[string]resourceHandler)
+	}
+	bkr.handlers[subReq.ClusterName][subReq.DataType] = func(res *store.Resource) error {
 		evt, err := bkr.encode(res)
 		if err != nil {
 			return fmt.Errorf("failed to encode resource %s to cloudevent: %v", res.ResourceID, err)
@@ -130,7 +133,7 @@ func (bkr *GRPCBroker) Start(addr string, tlsConfig *tls.Config) error {
 }
 
 func (bkr *GRPCBroker) UpdateResourceSpec(resource *store.Resource) error {
-	handleFn, ok := bkr.handlers[resource.Namespace]
+	handleFn, ok := bkr.handlers[resource.Namespace][payload.ManifestEventDataType.String()]
 	if !ok {
 		return fmt.Errorf("failed to find handler for resource %s (%s)", resource.ResourceID, resource.Namespace)
 	}

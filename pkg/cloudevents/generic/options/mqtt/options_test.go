@@ -342,7 +342,7 @@ func TestConnectionTimeout(t *testing.T) {
 		MQTTOptions: *options,
 		clusterName: "cluster1",
 	}
-	_, err = agentOptions.Protocol(context.TODO())
+	_, err = agentOptions.Protocol(context.TODO(), types.CloudEventsDataType{})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("%T, %v", err, err)
 	}

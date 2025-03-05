@@ -52,7 +52,7 @@ func StartManifestWorkSourceClient(
 	clientHolder, err := work.NewClientHolderBuilder(config).
 		WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
 		WithSourceID(sourceID).
-		WithCodecs(codec.NewManifestBundleCodec()).
+		WithCodec(codec.NewManifestBundleCodec()).
 		WithWorkClientWatcherStore(watcherStore).
 		NewSourceClientHolder(ctx)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 
 	confluent "github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 type kafkaAgentOptions struct {
@@ -44,7 +45,7 @@ func (o *kafkaAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 	return ctx, nil
 }
 
-func (o *kafkaAgentOptions) Protocol(ctx context.Context) (options.CloudEventsProtocol, error) {
+func (o *kafkaAgentOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
 	protocol, err := confluent.New(confluent.WithConfigMap(&o.KafkaOptions.ConfigMap),
 		confluent.WithReceiverTopics([]string{sourceEventsTopic}),
 		confluent.WithSenderTopic(agentEventsTopic),
