@@ -20,7 +20,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+	workv1 "open-cluster-management.io/api/work/v1"
 
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	grpcprotocol "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
@@ -133,7 +135,7 @@ func (bkr *GRPCBroker) Start(addr string, tlsConfig *tls.Config) error {
 }
 
 func (bkr *GRPCBroker) UpdateResourceSpec(resource *store.Resource) error {
-	handleFn, ok := bkr.handlers[resource.Namespace][payload.ManifestEventDataType.String()]
+	handleFn, ok := bkr.handlers[resource.Namespace][payload.ManifestBundleEventDataType.String()]
 	if !ok {
 		return fmt.Errorf("failed to find handler for resource %s (%s)", resource.ResourceID, resource.Namespace)
 	}
@@ -159,7 +161,7 @@ func (bkr *GRPCBroker) encode(resource *store.Resource) (*cloudevents.Event, err
 		source = bkr.sourcerID
 	}
 	eventType := types.CloudEventsType{
-		CloudEventsDataType: payload.ManifestEventDataType,
+		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceSpec,
 		Action:              "test_create_update_request",
 	}
@@ -174,8 +176,16 @@ func (bkr *GRPCBroker) encode(resource *store.Resource) (*cloudevents.Event, err
 	}
 
 	evt := eventBuilder.NewEvent()
-
-	if err := evt.SetData(cloudevents.ApplicationJSON, &payload.Manifest{Manifest: resource.Spec}); err != nil {
+	manifestBundle := &payload.ManifestBundle{
+		Manifests: []workv1.Manifest{
+			{
+				RawExtension: runtime.RawExtension{
+					Object: &resource.Spec,
+				},
+			},
+		},
+	}
+	if err := evt.SetData(cloudevents.ApplicationJSON, manifestBundle); err != nil {
 		return nil, fmt.Errorf("failed to encode manifest spec to cloud event: %v", err)
 	}
 
@@ -188,7 +198,7 @@ func (bkr *GRPCBroker) decode(evt *cloudevents.Event) (*store.Resource, error) {
 		return nil, fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
 	}
 
-	if eventType.CloudEventsDataType != payload.ManifestEventDataType {
+	if eventType.CloudEventsDataType != payload.ManifestBundleEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
 
@@ -209,7 +219,7 @@ func (bkr *GRPCBroker) decode(evt *cloudevents.Event) (*store.Resource, error) {
 		return nil, fmt.Errorf("failed to get clustername extension: %v", err)
 	}
 
-	status := &payload.ManifestStatus{}
+	status := &payload.ManifestBundleStatus{}
 	if err := evt.DataAs(status); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
 	}

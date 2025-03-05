@@ -30,11 +30,7 @@ and a RESTful service can list its resources from a database.
 3. A resource status hash getter method (`generic.StatusHashGetter`), this method will be used to calculate the resource
 status hash when resyncing the resource status between sources and agents.
 
-4. Codecs (`generic.Codec`), they are used to encode a resource object into a cloudevent and decode a cloudevent into a
-resource object with a given cloudevent data type. We have provided two data types (`io.open-cluster-management.works.v1alpha1.manifests`
-that contains a single resource object in the cloudevent payload and `io.open-cluster-management.works.v1alpha1.manifestbundles`
-that contains a list of resource objects in the cloudevent payload) for `ManifestWork`, they can be found in the `work/payload`
-package. Refer to [this doc](https://github.com/open-cluster-management-io/enhancements/tree/main/enhancements/sig-architecture/224-event-based-manifestwork) to find the events schema and examples
+4. Codec (`generic.Codec`) is used to encode a resource object into a cloudevent and decode a cloudevent into a resource object based on the given cloudevent data type. We provide a codec with the cloudevent data type `io.open-cluster-management.works.v1alpha1.manifestbundles`, which contains a list of resource object(s) in the CloudEvent payload for `ManifestWork`. This codec is available in the `work/payload` package. For event schemas and examples, refer to [this doc](https://github.com/open-cluster-management-io/enhancements/tree/main/enhancements/sig-architecture/224-event-based-manifestwork).
 
 5. Resource handler methods (`generic.ResourceHandler`), they are used to handle the resources status after the client
 received the resources status from agents.
@@ -83,11 +79,7 @@ resources between sources and agents, for example, a work agent can list its wor
 3. A resource status hash getter method (`generic.StatusHashGetter`), this method will be used to calculate the resource
 status hash when resyncing the resource status between sources and agents.
 
-4. Codecs (`generic.Codec`), they are used to encode a resource object into a cloudevent and decode a cloudevent into a
-resource object with a given cloudevent data type. We have provided two data types (`io.open-cluster-management.works.v1alpha1.manifests`
-that contains a single resource object in the cloudevent payload and `io.open-cluster-management.works.v1alpha1.manifestbundles`
-that contains a list of resource objects in the cloudevent payload) for `ManifestWork`, they can be found in the `work/payload`
-package. Refer to [this doc](https://github.com/open-cluster-management-io/enhancements/tree/main/enhancements/sig-architecture/224-event-based-manifestwork) to find the events schema and examples
+4. Codec (`generic.Codec`) is used to encode a resource object into a cloudevent and decode a cloudevent into a resource object based on the given cloudevent data type. We provide a codec with the cloudevent data type `io.open-cluster-management.works.v1alpha1.manifestbundles`, which contains a list of resource object(s) in the CloudEvent payload for `ManifestWork`. This codec is available in the `work/payload` package. For event schemas and examples, refer to [this doc](https://github.com/open-cluster-management-io/enhancements/tree/main/enhancements/sig-architecture/224-event-based-manifestwork).
 
 5. Resource handler methods (`generic.ResourceHandler`), they are used to handle the resources after the client received
 the resources from sources.

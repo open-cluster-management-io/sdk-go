@@ -6,6 +6,9 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	workv1 "open-cluster-management.io/api/work/v1"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
@@ -17,7 +20,7 @@ type ResourceCodec struct{}
 var _ generic.Codec[*store.Resource] = &ResourceCodec{}
 
 func (c *ResourceCodec) EventDataType() types.CloudEventsDataType {
-	return payload.ManifestEventDataType
+	return payload.ManifestBundleEventDataType
 }
 
 func (c *ResourceCodec) Encode(source string, eventType types.CloudEventsType, resource *store.Resource) (*cloudevents.Event, error) {
@@ -25,7 +28,7 @@ func (c *ResourceCodec) Encode(source string, eventType types.CloudEventsType, r
 		source = resource.Source
 	}
 
-	if eventType.CloudEventsDataType != payload.ManifestEventDataType {
+	if eventType.CloudEventsDataType != payload.ManifestBundleEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
 
@@ -40,8 +43,16 @@ func (c *ResourceCodec) Encode(source string, eventType types.CloudEventsType, r
 	}
 
 	evt := eventBuilder.NewEvent()
-
-	if err := evt.SetData(cloudevents.ApplicationJSON, &payload.Manifest{Manifest: resource.Spec}); err != nil {
+	manifestBundle := &payload.ManifestBundle{
+		Manifests: []workv1.Manifest{
+			{
+				RawExtension: runtime.RawExtension{
+					Object: &resource.Spec,
+				},
+			},
+		},
+	}
+	if err := evt.SetData(cloudevents.ApplicationJSON, manifestBundle); err != nil {
 		return nil, fmt.Errorf("failed to encode manifests to cloud event: %v", err)
 	}
 
@@ -54,7 +65,7 @@ func (c *ResourceCodec) Decode(evt *cloudevents.Event) (*store.Resource, error) 
 		return nil, fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
 	}
 
-	if eventType.CloudEventsDataType != payload.ManifestEventDataType {
+	if eventType.CloudEventsDataType != payload.ManifestBundleEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
 
@@ -80,8 +91,8 @@ func (c *ResourceCodec) Decode(evt *cloudevents.Event) (*store.Resource, error) 
 		return nil, fmt.Errorf("failed to get originalsource extension: %v", err)
 	}
 
-	manifestStatus := &payload.ManifestStatus{}
-	if err := evt.DataAs(manifestStatus); err != nil {
+	manifestBundleStatus := &payload.ManifestBundleStatus{}
+	if err := evt.DataAs(manifestBundleStatus); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
 	}
 
@@ -91,7 +102,7 @@ func (c *ResourceCodec) Decode(evt *cloudevents.Event) (*store.Resource, error) 
 		ResourceVersion: int64(resourceVersion),
 		Namespace:       clusterName,
 		Status: store.ResourceStatus{
-			Conditions: manifestStatus.Conditions,
+			Conditions: manifestBundleStatus.Conditions,
 		},
 	}
 
