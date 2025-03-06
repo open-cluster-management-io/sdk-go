@@ -1,10 +1,12 @@
 package codec
 
 import (
+	"encoding/json"
 	"testing"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -242,4 +244,20 @@ func TestManifestBundleDecode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func toConfigMap(t *testing.T) []byte {
+	data, err := json.Marshal(&corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return data
 }

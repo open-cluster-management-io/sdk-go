@@ -924,9 +924,7 @@ open-cluster-management.io/api/cluster/v1
 open-cluster-management.io/api/cluster/v1alpha1
 open-cluster-management.io/api/cluster/v1beta1
 open-cluster-management.io/api/cluster/v1beta2
-open-cluster-management.io/api/utils/work/v1/utils
 open-cluster-management.io/api/utils/work/v1/workapplier
-open-cluster-management.io/api/utils/work/v1/workvalidator
 open-cluster-management.io/api/work/v1
 open-cluster-management.io/api/work/v1alpha1
 # sigs.k8s.io/controller-runtime v0.18.4

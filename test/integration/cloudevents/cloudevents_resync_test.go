@@ -78,7 +78,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - RESYNC", func() {
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			ginkgo.By("start a work agent to resync the resources from agent")
-			clientHolder, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestCodec(nil))
+			clientHolder, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			lister := informer.Lister().ManifestWorks(clusterName)
 			agentWorkClient := clientHolder.ManifestWorks(clusterName)

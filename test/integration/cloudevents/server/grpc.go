@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
@@ -104,7 +106,7 @@ func (svr *GRPCServer) GetStore() *store.MemoryStore {
 }
 
 func (svr *GRPCServer) UpdateResourceStatus(resource *store.Resource) error {
-	handleFn, ok := svr.handlers[resource.Source][payload.ManifestEventDataType.String()]
+	handleFn, ok := svr.handlers[resource.Source][payload.ManifestBundleEventDataType.String()]
 	if !ok {
 		return fmt.Errorf("failed to find handler for resource %s (%s)", resource.ResourceID, resource.Source)
 	}
@@ -123,7 +125,7 @@ func (svr *GRPCServer) ResourceChan() <-chan *store.Resource {
 func encode(resource *store.Resource) (*cloudevents.Event, error) {
 	source := "test-source"
 	eventType := types.CloudEventsType{
-		CloudEventsDataType: payload.ManifestEventDataType,
+		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceStatus,
 		Action:              "status_update",
 	}
@@ -135,7 +137,7 @@ func encode(resource *store.Resource) (*cloudevents.Event, error) {
 
 	evt := eventBuilder.NewEvent()
 
-	if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestStatus{Conditions: resource.Status.Conditions}); err != nil {
+	if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{Conditions: resource.Status.Conditions}); err != nil {
 		return nil, fmt.Errorf("failed to encode manifest status to cloud event: %v", err)
 	}
 
@@ -148,7 +150,7 @@ func decode(evt *cloudevents.Event) (*store.Resource, error) {
 		return nil, fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
 	}
 
-	if eventType.CloudEventsDataType != payload.ManifestEventDataType {
+	if eventType.CloudEventsDataType != payload.ManifestBundleEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
 
@@ -169,8 +171,8 @@ func decode(evt *cloudevents.Event) (*store.Resource, error) {
 		return nil, fmt.Errorf("failed to get clustername extension: %v", err)
 	}
 
-	manifest := &payload.Manifest{}
-	if err := evt.DataAs(manifest); err != nil {
+	manifestBundle := &payload.ManifestBundle{}
+	if err := evt.DataAs(manifestBundle); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
 	}
 
@@ -179,7 +181,6 @@ func decode(evt *cloudevents.Event) (*store.Resource, error) {
 		ResourceID:      resourceID,
 		ResourceVersion: int64(resourceVersion),
 		Namespace:       clusterName,
-		Spec:            manifest.Manifest,
 	}
 
 	if deletionTimestampValue, exists := evtExtensions[types.ExtensionDeletionTimestamp]; exists {
@@ -188,6 +189,12 @@ func decode(evt *cloudevents.Event) (*store.Resource, error) {
 			return nil, fmt.Errorf("failed to convert deletion timestamp %v to time.Time: %v", deletionTimestampValue, err)
 		}
 		resource.DeletionTimestamp = &metav1.Time{Time: deletionTimestamp}
+	} else {
+		var objMap map[string]interface{}
+		if err := json.Unmarshal(manifestBundle.Manifests[0].RawExtension.Raw, &objMap); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal raw extension to object: %v", err)
+		}
+		resource.Spec = unstructured.Unstructured{Object: objMap}
 	}
 
 	return resource, nil

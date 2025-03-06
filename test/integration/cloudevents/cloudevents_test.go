@@ -27,17 +27,17 @@ import (
 
 var (
 	createRequest = types.CloudEventsType{
-		CloudEventsDataType: payload.ManifestEventDataType,
+		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceSpec,
 		Action:              "test_create_request",
 	}
 	updateRequest = types.CloudEventsType{
-		CloudEventsDataType: payload.ManifestEventDataType,
+		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceSpec,
 		Action:              "test_update_request",
 	}
 	deleteRequest = types.CloudEventsType{
-		CloudEventsDataType: payload.ManifestEventDataType,
+		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceSpec,
 		Action:              "test_delete_request",
 	}
@@ -132,7 +132,7 @@ func crudResource(
 	withVersion bool,
 ) {
 	ginkgo.By("start a work agent")
-	clientHolder, _, err := agent.StartWorkAgent(ctx, clusterName, config, codec.NewManifestCodec(nil))
+	clientHolder, _, err := agent.StartWorkAgent(ctx, clusterName, config, codec.NewManifestBundleCodec())
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	agentWorkClient := clientHolder.ManifestWorks(clusterName)

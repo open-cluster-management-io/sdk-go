@@ -10,8 +10,10 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
@@ -73,7 +75,7 @@ func runCloudeventsCertRotationTest(getAgentOptionsFn GetAgentOptionsFn) func() 
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			evtType := types.CloudEventsType{
-				CloudEventsDataType: payload.ManifestEventDataType,
+				CloudEventsDataType: payload.ManifestBundleEventDataType,
 				SubResource:         types.SubResourceStatus,
 				Action:              types.EventAction("test_cert_rotation"),
 			}
@@ -105,7 +107,7 @@ func runCloudeventsCertRotationTest(getAgentOptionsFn GetAgentOptionsFn) func() 
 type resourceCodec struct{}
 
 func (c *resourceCodec) EventDataType() types.CloudEventsDataType {
-	return payload.ManifestEventDataType
+	return payload.ManifestBundleEventDataType
 }
 
 func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, resource *store.Resource) (*cloudevents.Event, error) {
@@ -113,7 +115,16 @@ func (c *resourceCodec) Encode(source string, eventType types.CloudEventsType, r
 	evt.SetExtension(types.ExtensionClusterName, resource.Namespace)
 	evt.SetExtension(types.ExtensionResourceID, resource.ResourceID)
 	evt.SetExtension(types.ExtensionResourceVersion, resource.ResourceVersion)
-	if err := evt.SetData(cloudevents.ApplicationJSON, &payload.Manifest{Manifest: resource.Spec}); err != nil {
+	manifestBundle := &payload.ManifestBundle{
+		Manifests: []workv1.Manifest{
+			{
+				RawExtension: runtime.RawExtension{
+					Object: &resource.Spec,
+				},
+			},
+		},
+	}
+	if err := evt.SetData(cloudevents.ApplicationJSON, manifestBundle); err != nil {
 		return nil, fmt.Errorf("failed to encode manifests to cloud event: %v", err)
 	}
 
