@@ -43,6 +43,10 @@ type KeepAliveOptions struct {
 
 // Dial connects to the gRPC server and returns a gRPC client connection.
 func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
+	// Return the cached connection if it exists.
+	if d.conn != nil {
+		return d.conn, nil
+	}
 	// Prepare gRPC dial options.
 	dialOpts := []grpc.DialOption{}
 	if d.KeepAliveOptions.Enable {

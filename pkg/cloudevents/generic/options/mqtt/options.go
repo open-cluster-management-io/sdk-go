@@ -37,6 +37,10 @@ type MQTTDialer struct {
 }
 
 func (d *MQTTDialer) Dial() (net.Conn, error) {
+	// return the existing connection if it is already established
+	if d.conn != nil {
+		return d.conn, nil
+	}
 	if d.TLSConfig != nil {
 		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: d.Timeout}, "tcp", d.BrokerHost, d.TLSConfig)
 		if err != nil {
