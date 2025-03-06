@@ -31,6 +31,7 @@ type resourceHandler func(res *cloudevents.Event) error
 // subscriber defines a subscriber that can receive and handle resource spec.
 type subscriber struct {
 	clusterName string
+	dataType    types.CloudEventsDataType
 	handler     resourceHandler
 	errChan     chan<- error
 }
@@ -125,7 +126,8 @@ func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 }
 
 // register registers a subscriber and return client id and error channel.
-func (bkr *GRPCBroker) register(clusterName string, handler resourceHandler) (string, <-chan error) {
+func (bkr *GRPCBroker) register(
+	clusterName string, dataType types.CloudEventsDataType, handler resourceHandler) (string, <-chan error) {
 	bkr.mu.Lock()
 	defer bkr.mu.Unlock()
 
@@ -133,6 +135,7 @@ func (bkr *GRPCBroker) register(clusterName string, handler resourceHandler) (st
 	errChan := make(chan error)
 	bkr.subscribers[id] = &subscriber{
 		clusterName: clusterName,
+		dataType:    dataType,
 		handler:     handler,
 		errChan:     errChan,
 	}
@@ -161,7 +164,11 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		return fmt.Errorf("invalid subscription request: missing cluster name")
 	}
 	// register the cluster for subscription to the resource spec
-	subscriberID, errChan := bkr.register(subReq.ClusterName, func(evt *cloudevents.Event) error {
+	dataType, err := types.ParseCloudEventsDataType(subReq.DataType)
+	if err != nil {
+		return fmt.Errorf("invalid subscription request: invalid data type %v", err)
+	}
+	subscriberID, errChan := bkr.register(subReq.ClusterName, *dataType, func(evt *cloudevents.Event) error {
 		// WARNING: don't use "pbEvt, err := pb.ToProto(evt)" to convert cloudevent to protobuf
 		pbEvt := &pbv1.CloudEvent{}
 		if err := grpcprotocol.WritePBMessage(context.TODO(), binding.ToMessage(evt), pbEvt); err != nil {
@@ -331,7 +338,7 @@ func (bkr *GRPCBroker) handleRes(
 	}
 
 	for _, subscriber := range bkr.subscribers {
-		if subscriber.clusterName == clusterName {
+		if subscriber.clusterName == clusterName && subscriber.dataType == t {
 			if err := subscriber.handler(evt); err != nil {
 				// check if the error is recoverable. For unrecoverable errors,
 				// such as a connection closed by an intermediate proxy, push
