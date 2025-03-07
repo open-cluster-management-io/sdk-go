@@ -43,8 +43,10 @@ type KeepAliveOptions struct {
 
 // Dial connects to the gRPC server and returns a gRPC client connection.
 func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
-	// Return the cached connection if it exists.
-	if d.conn != nil {
+	// Return the cached connection if it exists and is ready.
+	// Should not return a nil or unready connection, otherwise the caller (cloudevents client)
+	// will not use the connection for sending and receiving events in reconnect scenarios.
+	if d.conn != nil && d.conn.GetState() == connectivity.Ready {
 		return d.conn, nil
 	}
 	// Prepare gRPC dial options.
