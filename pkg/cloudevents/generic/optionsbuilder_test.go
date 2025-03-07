@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/equality"
-
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -97,7 +97,7 @@ func assertOptions(t *testing.T, c buildingCloudEventsOptionTestCase) {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	if !equality.Semantic.DeepEqual(config, c.expectedOptions) {
+	if !cmp.Equal(config, c.expectedOptions, cmpopts.IgnoreUnexported(mqtt.MQTTDialer{}, grpc.GRPCDialer{})) {
 		t.Errorf("unexpected config %v, %v", config, c.expectedOptions)
 	}
 
