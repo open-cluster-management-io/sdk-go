@@ -5,7 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/equality"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
@@ -98,7 +99,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 				}
 			}
 
-			if !equality.Semantic.DeepEqual(options, c.expectedOptions) {
+			if !cmp.Equal(options, c.expectedOptions, cmpopts.IgnoreUnexported(GRPCDialer{})) {
 				t.Errorf("unexpected options %v", options)
 			}
 		})
