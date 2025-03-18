@@ -6,6 +6,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
@@ -14,7 +15,8 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 )
 
 // ListLocalWorksFunc loads the works from the local environment.
@@ -25,14 +27,14 @@ type watchEvent struct {
 	Type watch.EventType
 }
 
-var _ WorkClientWatcherStore = &SourceLocalWatcherStore{}
+var _ store.ClientWatcherStore[*workv1.ManifestWork] = &SourceLocalWatcherStore{}
 
 // SourceLocalWatcherStore caches the works in this local store and provide the watch ability by watch event channel.
 //
 // It is used for building ManifestWork source client.
 type SourceLocalWatcherStore struct {
 	baseSourceStore
-	watcher    *workWatcher
+	watcher    *store.Watcher
 	eventQueue cache.Queue
 }
 
@@ -43,23 +45,23 @@ func NewSourceLocalWatcherStore(ctx context.Context, listFunc ListLocalWorksFunc
 		return nil, err
 	}
 
-	// A local store to cache the works
-	store := cache.NewStore(cache.MetaNamespaceKeyFunc)
+	// A local localStore to cache the works
+	localStore := cache.NewStore(cache.MetaNamespaceKeyFunc)
 	for _, work := range works {
-		if errs := utils.Validate(work); len(errs) != 0 {
+		if errs := utils.ValidateWork(work); len(errs) != 0 {
 			return nil, fmt.Errorf("%s", errs.ToAggregate().Error())
 		}
 
-		if err := store.Add(work.DeepCopy()); err != nil {
+		if err := localStore.Add(work.DeepCopy()); err != nil {
 			return nil, err
 		}
 	}
 
 	s := &SourceLocalWatcherStore{
 		baseSourceStore: baseSourceStore{
-			baseStore: baseStore{
-				store:     store,
-				initiated: true,
+			BaseClientWatchStore: store.BaseClientWatchStore[*workv1.ManifestWork]{
+				Store:     localStore,
+				Initiated: true,
 			},
 
 			// A queue to save the received work events, it helps us retry events
@@ -67,7 +69,7 @@ func NewSourceLocalWatcherStore(ctx context.Context, listFunc ListLocalWorksFunc
 			receivedWorks: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "local-watcher-store"),
 		},
 
-		watcher: newWorkWatcher(),
+		watcher: store.NewWatcher(),
 
 		// A queue to save the work client send events, if run a client without a watcher,
 		// it will block the client, this queue helps to resolve this blocking.
@@ -92,43 +94,58 @@ func NewSourceLocalWatcherStore(ctx context.Context, listFunc ListLocalWorksFunc
 }
 
 // Add a work to the cache and send an event to the event queue
-func (s *SourceLocalWatcherStore) Add(work *workv1.ManifestWork) error {
+func (s *SourceLocalWatcherStore) Add(work runtime.Object) error {
 	s.Lock()
 	defer s.Unlock()
 
-	if err := s.store.Add(work); err != nil {
+	if err := s.Store.Add(work); err != nil {
 		return err
 	}
 
-	return s.eventQueue.Add(&watchEvent{Key: key(work), Type: watch.Added})
+	key, err := key(work)
+	if err != nil {
+		return err
+	}
+
+	return s.eventQueue.Add(&watchEvent{Key: key, Type: watch.Added})
 }
 
 // Update a work in the cache and send an event to the event queue
-func (s *SourceLocalWatcherStore) Update(work *workv1.ManifestWork) error {
+func (s *SourceLocalWatcherStore) Update(work runtime.Object) error {
 	s.Lock()
 	defer s.Unlock()
 
-	if err := s.store.Update(work); err != nil {
+	if err := s.Store.Update(work); err != nil {
 		return err
 	}
 
-	return s.eventQueue.Update(&watchEvent{Key: key(work), Type: watch.Modified})
+	key, err := key(work)
+	if err != nil {
+		return err
+	}
+
+	return s.eventQueue.Update(&watchEvent{Key: key, Type: watch.Modified})
 }
 
 // Delete a work from the cache and send an event to the event queue
-func (s *SourceLocalWatcherStore) Delete(work *workv1.ManifestWork) error {
+func (s *SourceLocalWatcherStore) Delete(work runtime.Object) error {
 	s.Lock()
 	defer s.Unlock()
 
-	if err := s.store.Delete(work); err != nil {
+	if err := s.Store.Delete(work); err != nil {
 		return err
 	}
 
-	return s.eventQueue.Update(&watchEvent{Key: key(work), Type: watch.Deleted})
+	key, err := key(work)
+	if err != nil {
+		return err
+	}
+
+	return s.eventQueue.Update(&watchEvent{Key: key, Type: watch.Deleted})
 }
 
 func (s *SourceLocalWatcherStore) HasInitiated() bool {
-	return s.initiated
+	return s.Initiated
 }
 
 func (s *SourceLocalWatcherStore) GetWatcher(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
@@ -167,7 +184,7 @@ func (s *SourceLocalWatcherStore) processLoop() {
 			return
 		}
 
-		obj, exists, err := s.store.GetByKey(evt.Key)
+		obj, exists, err := s.Store.GetByKey(evt.Key)
 		if err != nil {
 			klog.Errorf("failed to get the work %s, %v", evt.Key, err)
 			return
@@ -210,6 +227,10 @@ func (s *SourceLocalWatcherStore) processLoop() {
 	}
 }
 
-func key(work *workv1.ManifestWork) string {
-	return work.Namespace + "/" + work.Name
+func key(obj runtime.Object) (string, error) {
+	work, ok := obj.(*workv1.ManifestWork)
+	if !ok {
+		return "", fmt.Errorf("obj %T is not a work", obj)
+	}
+	return work.Namespace + "/" + work.Name, nil
 }

@@ -15,19 +15,19 @@ import (
 	workv1client "open-cluster-management.io/api/client/work/clientset/versioned/typed/work/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
+	cloudeventserrors "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	workerrors "open-cluster-management.io/sdk-go/pkg/cloudevents/work/errors"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 )
 
 // ManifestWorkSourceClient implements the ManifestWorkInterface.
 type ManifestWorkSourceClient struct {
 	cloudEventsClient *generic.CloudEventSourceClient[*workv1.ManifestWork]
-	watcherStore      store.WorkClientWatcherStore
+	watcherStore      store.ClientWatcherStore[*workv1.ManifestWork]
 	namespace         string
 	sourceID          string
 }
@@ -36,8 +36,8 @@ var _ workv1client.ManifestWorkInterface = &ManifestWorkSourceClient{}
 
 func NewManifestWorkSourceClient(
 	sourceID string,
+	watcherStore store.ClientWatcherStore[*workv1.ManifestWork],
 	cloudEventsClient *generic.CloudEventSourceClient[*workv1.ManifestWork],
-	watcherStore store.WorkClientWatcherStore,
 ) *ManifestWorkSourceClient {
 	return &ManifestWorkSourceClient{
 		cloudEventsClient: cloudEventsClient,
@@ -84,24 +84,24 @@ func (c *ManifestWorkSourceClient) Create(ctx context.Context, manifestWork *wor
 	}
 
 	newWork := manifestWork.DeepCopy()
-	newWork.UID = kubetypes.UID(utils.UID(c.sourceID, c.namespace, newWork.Name))
+	newWork.UID = kubetypes.UID(utils.UID(c.sourceID, common.ManifestWorkGR.String(), c.namespace, newWork.Name))
 	newWork.Namespace = c.namespace
 	newWork.ResourceVersion = getWorkResourceVersion(manifestWork)
 
-	if err := utils.Encode(newWork); err != nil {
+	if err := utils.EncodeManifests(newWork); err != nil {
 		returnErr := errors.NewInternalError(err)
 		generic.IncreaseWorkProcessedCounter("create", string(returnErr.ErrStatus.Reason))
 		return nil, returnErr
 	}
 
-	if errs := utils.Validate(newWork); len(errs) != 0 {
+	if errs := utils.ValidateWork(newWork); len(errs) != 0 {
 		returnErr := errors.NewInvalid(common.ManifestWorkGK, manifestWork.Name, errs)
 		generic.IncreaseWorkProcessedCounter("create", string(returnErr.ErrStatus.Reason))
 		return nil, returnErr
 	}
 
 	if err := c.cloudEventsClient.Publish(ctx, eventType, newWork); err != nil {
-		returnErr := workerrors.NewPublishError(common.ManifestWorkGR, manifestWork.Name, err)
+		returnErr := cloudeventserrors.NewPublishError(common.ManifestWorkGR, manifestWork.Name, err)
 		generic.IncreaseWorkProcessedCounter("create", string(returnErr.ErrStatus.Reason))
 		return nil, returnErr
 	}
@@ -149,7 +149,7 @@ func (c *ManifestWorkSourceClient) Delete(ctx context.Context, name string, opts
 	deletingWork.DeletionTimestamp = &now
 
 	if err := c.cloudEventsClient.Publish(ctx, eventType, deletingWork); err != nil {
-		returnErr := workerrors.NewPublishError(common.ManifestWorkGR, name, err)
+		returnErr := cloudeventserrors.NewPublishError(common.ManifestWorkGR, name, err)
 		generic.IncreaseWorkProcessedCounter("delete", string(returnErr.ErrStatus.Reason))
 		return returnErr
 	}
@@ -211,7 +211,12 @@ func (c *ManifestWorkSourceClient) List(ctx context.Context, opts metav1.ListOpt
 	}
 
 	generic.IncreaseWorkProcessedCounter("list", metav1.StatusSuccess)
-	return works, nil
+	items := []workv1.ManifestWork{}
+	for _, work := range works {
+		items = append(items, *work)
+	}
+
+	return &workv1.ManifestWorkList{Items: items}, nil
 }
 
 func (c *ManifestWorkSourceClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
@@ -266,14 +271,14 @@ func (c *ManifestWorkSourceClient) Patch(ctx context.Context, name string, pt ku
 	newWork := patchedWork.DeepCopy()
 	newWork.ResourceVersion = getWorkResourceVersion(patchedWork)
 
-	if errs := utils.Validate(newWork); len(errs) != 0 {
+	if errs := utils.ValidateWork(newWork); len(errs) != 0 {
 		returnErr := errors.NewInvalid(common.ManifestWorkGK, name, errs)
 		generic.IncreaseWorkProcessedCounter("patch", string(returnErr.ErrStatus.Reason))
 		return nil, returnErr
 	}
 
 	if err := c.cloudEventsClient.Publish(ctx, eventType, newWork); err != nil {
-		returnErr := workerrors.NewPublishError(common.ManifestWorkGR, name, err)
+		returnErr := cloudeventserrors.NewPublishError(common.ManifestWorkGR, name, err)
 		generic.IncreaseWorkProcessedCounter("patch", string(returnErr.ErrStatus.Reason))
 		return nil, returnErr
 	}

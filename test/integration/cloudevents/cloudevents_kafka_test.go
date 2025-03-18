@@ -23,14 +23,15 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/codec"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
+	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	kafkaoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
-	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 )
@@ -69,12 +70,11 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 		agentCtx, agentCancel := context.WithCancel(context.Background())
 		agentID := clusterName + "-" + rand.String(5)
 		watcherStore := workstore.NewAgentInformerWatcherStore()
-		agentClientHolder, err := work.NewClientHolderBuilder(kafkaOptions).
-			WithClientID(agentID).
-			WithClusterName(clusterName).
-			WithCodec(codec.NewManifestBundleCodec()).
-			WithWorkClientWatcherStore(watcherStore).
-			NewAgentClientHolder(agentCtx)
+
+		opt := options.NewGenericClientOptions(kafkaOptions, codec.NewManifestBundleCodec(), agentID).
+			WithClientWatcherStore(watcherStore).
+			WithClusterName(clusterName)
+		agentClientHolder, err := work.NewAgentClientHolder(agentCtx, opt)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 		factory := workinformers.NewSharedInformerFactoryWithOptions(
@@ -193,12 +193,10 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 		agentID = clusterName + "-" + rand.String(5)
 		_ = kafkaOptions.ConfigMap.SetKey("group.id", agentID)
 		watcherStore = workstore.NewAgentInformerWatcherStore()
-		newAgentHolder, err := work.NewClientHolderBuilder(kafkaOptions).
-			WithClientID(agentID).
-			WithClusterName(clusterName).
-			WithCodec(codec.NewManifestBundleCodec()).
-			WithWorkClientWatcherStore(watcherStore).
-			NewAgentClientHolder(newAgentCtx)
+		opt = options.NewGenericClientOptions(kafkaOptions, codec.NewManifestBundleCodec(), agentID).
+			WithClientWatcherStore(watcherStore).
+			WithClusterName(clusterName)
+		newAgentHolder, err := work.NewAgentClientHolder(newAgentCtx, opt)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 		factory = workinformers.NewSharedInformerFactoryWithOptions(

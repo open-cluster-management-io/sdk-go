@@ -10,9 +10,10 @@ import (
 	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
+	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
 )
 
 func StartWorkAgent(ctx context.Context,
@@ -20,14 +21,12 @@ func StartWorkAgent(ctx context.Context,
 	config any,
 	codec generic.Codec[*workv1.ManifestWork],
 ) (*work.ClientHolder, workv1informers.ManifestWorkInformer, error) {
-	watcherStore := store.NewAgentInformerWatcherStore()
-
-	clientHolder, err := work.NewClientHolderBuilder(config).
-		WithClientID(clusterName + "-" + rand.String(5)).
-		WithClusterName(clusterName).
-		WithCodec(codec).
-		WithWorkClientWatcherStore(watcherStore).
-		NewAgentClientHolder(ctx)
+	clientID := clusterName + "-" + rand.String(5)
+	watcherStore := workstore.NewAgentInformerWatcherStore()
+	opt := options.NewGenericClientOptions(config, codec, clientID).
+		WithClientWatcherStore(watcherStore).
+		WithClusterName(clusterName)
+	clientHolder, err := work.NewAgentClientHolder(ctx, opt)
 	if err != nil {
 		return nil, nil, err
 	}

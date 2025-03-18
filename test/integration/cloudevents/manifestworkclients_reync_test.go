@@ -13,10 +13,10 @@ import (
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/codec"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
@@ -46,7 +46,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 
 			// add two works in the agent cache
 			store := informer.Informer().GetStore()
-			work1UID := utils.UID(sourceID, clusterName, fmt.Sprintf("%s-1", workNamePrefix))
+			work1UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, fmt.Sprintf("%s-1", workNamePrefix))
 			work1 := util.NewManifestWorkWithStatus(clusterName, work1UID)
 			work1.UID = apitypes.UID(work1UID)
 			work1.ResourceVersion = "1"
@@ -54,7 +54,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work1.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
 			gomega.Expect(store.Add(work1)).ToNot(gomega.HaveOccurred())
 
-			work2UID := utils.UID(sourceID, clusterName, fmt.Sprintf("%s-2", workNamePrefix))
+			work2UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, fmt.Sprintf("%s-2", workNamePrefix))
 			work2 := util.NewManifestWorkWithStatus(clusterName, work2UID)
 			work2.UID = apitypes.UID(work2UID)
 			work2.ResourceVersion = "1"
