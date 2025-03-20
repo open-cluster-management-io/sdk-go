@@ -205,10 +205,12 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 	// Set the keepalive options
 	options.Dialer.KeepAliveOptions = keepAliveOptions
 
-	// Set up TLS configuration for the gRPC connection, the certificates will be reloaded periodically.
-	options.Dialer.TLSConfig, err = cert.AutoLoadTLSConfig(config.CAFile, config.ClientCertFile, config.ClientKeyFile, options.Dialer)
-	if err != nil {
-		return nil, err
+	if config.CAFile != "" {
+		// Set up TLS configuration for the gRPC connection, the certificates will be reloaded periodically.
+		options.Dialer.TLSConfig, err = cert.AutoLoadTLSConfig(config.CAFile, config.ClientCertFile, config.ClientKeyFile, options.Dialer)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return options, nil
