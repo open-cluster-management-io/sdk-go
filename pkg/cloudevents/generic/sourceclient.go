@@ -101,7 +101,7 @@ func (c *CloudEventSourceClient[T]) Resync(ctx context.Context, clusterName stri
 		return fmt.Errorf("failed to set data to cloud event: %v", err)
 	}
 
-	if err := c.publish(ctx, evt); err != nil {
+	if err := c.PublishEvent(ctx, evt); err != nil {
 		return err
 	}
 
@@ -125,7 +125,7 @@ func (c *CloudEventSourceClient[T]) Publish(ctx context.Context, eventType types
 		return err
 	}
 
-	if err := c.publish(ctx, *evt); err != nil {
+	if err := c.PublishEvent(ctx, *evt); err != nil {
 		return err
 	}
 
@@ -139,7 +139,7 @@ func (c *CloudEventSourceClient[T]) Publish(ctx context.Context, eventType types
 // For spec resync request, source publish the current resources spec back as response.
 // For resource status request, source receives resource status and handles the status with resource handlers.
 func (c *CloudEventSourceClient[T]) Subscribe(ctx context.Context, handlers ...ResourceHandler[T]) {
-	c.subscribe(ctx, func(ctx context.Context, evt cloudevents.Event) {
+	c.SubscribeEvent(ctx, func(ctx context.Context, evt cloudevents.Event) {
 		c.receive(ctx, evt, handlers...)
 	})
 }
@@ -287,7 +287,7 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 			WithClusterName(fmt.Sprintf("%s", clusterName)).
 			WithDeletionTimestamp(metav1.Now().Time).
 			NewEvent()
-		if err := c.publish(ctx, evt); err != nil {
+		if err := c.PublishEvent(ctx, evt); err != nil {
 			return err
 		}
 		increaseCloudEventsSentCounter(evt.Source(), "", fmt.Sprintf("%s", clusterName), evtDataType.String(), string(eventType.SubResource), string(eventType.Action))
