@@ -17,12 +17,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	workv1 "open-cluster-management.io/api/work/v1"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/options"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
+	agentcodec "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/codec"
+	sourcecodec "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/source/codec"
+	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work"
-	agentcodec "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/codec"
-	sourcecodec "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/codec"
-	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
@@ -60,12 +62,11 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
-				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
-				WithSourceID(sourceID).
-				WithCodec(sourcecodec.NewManifestBundleCodec()).
-				WithWorkClientWatcherStore(watcherStore).
-				NewSourceClientHolder(ctx)
+			clientID := fmt.Sprintf("%s-%s", sourceID, rand.String(5))
+			opt := options.NewGenericClientOptions(sourceOptions, sourcecodec.NewManifestBundleCodec(), clientID).
+				WithClientWatcherStore(watcherStore).
+				WithSourceID(sourceID)
+			sourceClient, err = work.NewSourceClientHolder(ctx, opt)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		})
 
@@ -113,12 +114,11 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
-				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
-				WithSourceID(sourceID).
-				WithCodec(sourcecodec.NewManifestBundleCodec()).
-				WithWorkClientWatcherStore(watcherStore).
-				NewSourceClientHolder(ctx)
+			clientID := fmt.Sprintf("%s-%s", sourceID, rand.String(5))
+			opt := options.NewGenericClientOptions(sourceOptions, sourcecodec.NewManifestBundleCodec(), clientID).
+				WithClientWatcherStore(watcherStore).
+				WithSourceID(sourceID)
+			sourceClient, err = work.NewSourceClientHolder(ctx, opt)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			agentOptions := util.NewMQTTAgentOptionsWithSourceBroadcast(mqttBrokerHost, sourceID, clusterName)
@@ -184,7 +184,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 
 				gomega.Eventually(func() error {
 					workClient := agentClient.ManifestWorks(clusterName)
-					workID := utils.UID(sourceID, clusterName, workName)
+					workID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName)
 
 					if err := util.AddWorkFinalizer(ctx, workClient, workID); err != nil {
 						return err
@@ -222,7 +222,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 
 				// agent delete the work and send deleted status to source
 				gomega.Eventually(func() error {
-					workID := utils.UID(sourceID, clusterName, workName)
+					workID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName)
 					workClient := agentClient.ManifestWorks(clusterName)
 					return util.RemoveWorkFinalizer(ctx, workClient, workID)
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
@@ -247,24 +247,23 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 		ginkgo.JustBeforeEach(func() {
 			watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, func(ctx context.Context) ([]*workv1.ManifestWork, error) {
 				work := util.NewManifestWork(clusterName, workName, false)
-				work.UID = apitypes.UID(utils.UID(sourceID, clusterName, workName))
+				work.UID = apitypes.UID(utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName))
 				work.ResourceVersion = "0"
 				work.Spec.Workload.Manifests = []workv1.Manifest{util.NewManifest("test1")}
 				work.Status.Conditions = []metav1.Condition{{Type: "Created", Status: metav1.ConditionTrue}}
 
-				if err := utils.Encode(work); err != nil {
+				if err := utils.EncodeManifests(work); err != nil {
 					return nil, err
 				}
 				return []*workv1.ManifestWork{work}, nil
 			})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-			_, err = work.NewClientHolderBuilder(sourceOptions).
-				WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
-				WithSourceID(sourceID).
-				WithCodec(sourcecodec.NewManifestBundleCodec()).
-				WithWorkClientWatcherStore(watcherStore).
-				NewSourceClientHolder(ctx)
+			clientID := fmt.Sprintf("%s-%s", sourceID, rand.String(5))
+			opt := options.NewGenericClientOptions(sourceOptions, sourcecodec.NewManifestBundleCodec(), clientID).
+				WithClientWatcherStore(watcherStore).
+				WithSourceID(sourceID)
+			_, err = work.NewSourceClientHolder(ctx, opt)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 		})
 
@@ -276,7 +275,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			ginkgo.By("get the work from agent", func() {
 				gomega.Eventually(func() error {
 					_, err := agentClient.ManifestWorks(clusterName).Get(
-						ctx, utils.UID(sourceID, clusterName, workName), metav1.GetOptions{})
+						ctx, utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName), metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
@@ -321,12 +320,11 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 				watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, serverListFn)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
-					WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
-					WithSourceID(sourceID).
-					WithCodec(sourcecodec.NewManifestBundleCodec()).
-					WithWorkClientWatcherStore(watcherStore).
-					NewSourceClientHolder(ctx)
+				clientID := fmt.Sprintf("%s-%s", sourceID, rand.String(5))
+				opt := options.NewGenericClientOptions(sourceOptions, sourcecodec.NewManifestBundleCodec(), clientID).
+					WithClientWatcherStore(watcherStore).
+					WithSourceID(sourceID)
+				sourceClient, err = work.NewSourceClientHolder(ctx, opt)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 
@@ -364,12 +362,11 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 				watcherStore, err := workstore.NewSourceLocalWatcherStore(ctx, serverListFn)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
-				sourceClient, err = work.NewClientHolderBuilder(sourceOptions).
-					WithClientID(fmt.Sprintf("%s-%s", sourceID, rand.String(5))).
-					WithSourceID(sourceID).
-					WithCodec(sourcecodec.NewManifestBundleCodec()).
-					WithWorkClientWatcherStore(watcherStore).
-					NewSourceClientHolder(ctx)
+				clientID := fmt.Sprintf("%s-%s", sourceID, rand.String(5))
+				opt := options.NewGenericClientOptions(sourceOptions, sourcecodec.NewManifestBundleCodec(), clientID).
+					WithClientWatcherStore(watcherStore).
+					WithSourceID(sourceID)
+				sourceClient, err = work.NewSourceClientHolder(ctx, opt)
 				gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			})
 

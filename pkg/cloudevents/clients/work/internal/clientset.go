@@ -8,8 +8,8 @@ import (
 	workv1client "open-cluster-management.io/api/client/work/clientset/versioned/typed/work/v1"
 	workv1alpha1client "open-cluster-management.io/api/client/work/clientset/versioned/typed/work/v1alpha1"
 
-	agentclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/agent/client"
-	sourceclient "open-cluster-management.io/sdk-go/pkg/cloudevents/work/source/client"
+	agentclient "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/client"
+	sourceclient "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/source/client"
 )
 
 // WorkClientSetWrapper wraps a work client that has a manifestwork client to a work clientset interface, this wrapper

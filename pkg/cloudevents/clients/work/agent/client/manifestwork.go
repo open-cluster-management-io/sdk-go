@@ -17,12 +17,12 @@ import (
 	workv1client "open-cluster-management.io/api/client/work/clientset/versioned/typed/work/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
+	cloudeventserrors "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	workerrors "open-cluster-management.io/sdk-go/pkg/cloudevents/work/errors"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/store"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 )
 
 // ManifestWorkAgentClient implements the ManifestWorkInterface. It sends the manifestworks status back to source by
@@ -31,7 +31,7 @@ type ManifestWorkAgentClient struct {
 	sync.RWMutex
 
 	cloudEventsClient *generic.CloudEventAgentClient[*workv1.ManifestWork]
-	watcherStore      store.WorkClientWatcherStore
+	watcherStore      store.ClientWatcherStore[*workv1.ManifestWork]
 
 	// this namespace should be same with the cluster name to which this client subscribes
 	namespace string
@@ -40,9 +40,9 @@ type ManifestWorkAgentClient struct {
 var _ workv1client.ManifestWorkInterface = &ManifestWorkAgentClient{}
 
 func NewManifestWorkAgentClient(
-	cloudEventsClient *generic.CloudEventAgentClient[*workv1.ManifestWork],
-	watcherStore store.WorkClientWatcherStore,
 	clusterName string,
+	watcherStore store.ClientWatcherStore[*workv1.ManifestWork],
+	cloudEventsClient *generic.CloudEventAgentClient[*workv1.ManifestWork],
 ) *ManifestWorkAgentClient {
 	return &ManifestWorkAgentClient{
 		cloudEventsClient: cloudEventsClient,
@@ -102,7 +102,12 @@ func (c *ManifestWorkAgentClient) List(ctx context.Context, opts metav1.ListOpti
 	}
 
 	generic.IncreaseWorkProcessedCounter("list", metav1.StatusSuccess)
-	return works, nil
+	items := []workv1.ManifestWork{}
+	for _, work := range works {
+		items = append(items, *work)
+	}
+
+	return &workv1.ManifestWorkList{Items: items}, nil
 }
 
 func (c *ManifestWorkAgentClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
@@ -169,7 +174,7 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 		// publish the status update event to source, source will check the resource version
 		// and reject the update if it's status update is outdated.
 		if err := c.cloudEventsClient.Publish(ctx, eventType, newWork); err != nil {
-			returnErr := workerrors.NewPublishError(common.ManifestWorkGR, name, err)
+			returnErr := cloudeventserrors.NewPublishError(common.ManifestWorkGR, name, err)
 			generic.IncreaseWorkProcessedCounter("patch", string(returnErr.ErrStatus.Reason))
 			return nil, returnErr
 		}
@@ -223,7 +228,7 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 	// it back to source
 	if !newWork.DeletionTimestamp.IsZero() && len(newWork.Finalizers) == 0 {
 		meta.SetStatusCondition(&newWork.Status.Conditions, metav1.Condition{
-			Type:    common.ManifestsDeleted,
+			Type:    common.ResourceDeleted,
 			Status:  metav1.ConditionTrue,
 			Reason:  "ManifestsDeleted",
 			Message: fmt.Sprintf("The manifests are deleted from the cluster %s", newWork.Namespace),
@@ -231,7 +236,7 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 
 		eventType.Action = common.DeleteRequestAction
 		if err := c.cloudEventsClient.Publish(ctx, eventType, newWork); err != nil {
-			returnErr := workerrors.NewPublishError(common.ManifestWorkGR, name, err)
+			returnErr := cloudeventserrors.NewPublishError(common.ManifestWorkGR, name, err)
 			generic.IncreaseWorkProcessedCounter("delete", string(returnErr.ErrStatus.Reason))
 			return nil, returnErr
 		}

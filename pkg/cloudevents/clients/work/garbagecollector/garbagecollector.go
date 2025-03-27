@@ -24,7 +24,8 @@ import (
 	workv1 "open-cluster-management.io/api/client/work/clientset/versioned/typed/work/v1"
 	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 	workapiv1 "open-cluster-management.io/api/work/v1"
-	cloudeventswork "open-cluster-management.io/sdk-go/pkg/cloudevents/work"
+
+	cloudeventswork "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
 )
 
 const (

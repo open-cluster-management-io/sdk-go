@@ -13,10 +13,10 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/apis/work/v1/validator"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/payload"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/statushash"
 )
 
 var sequenceGenerator *snowflake.Node
@@ -67,7 +67,7 @@ func (c *ManifestBundleCodec) Encode(source string, eventType types.CloudEventsT
 		WithOriginalSource(originalSource).
 		NewEvent()
 
-	statusHash, err := statushash.ManifestWorkStatusHash(work)
+	statusHash, err := statushash.StatusHash(work)
 	if err != nil {
 		return nil, err
 	}

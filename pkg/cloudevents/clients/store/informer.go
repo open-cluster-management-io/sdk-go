@@ -65,8 +65,6 @@ func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(action types.Resou
 			return err
 		}
 
-		fmt.Println(newObj)
-
 		lastObj, exists, err := s.Get(newObj.GetNamespace(), newObj.GetName())
 		if err != nil {
 			return err

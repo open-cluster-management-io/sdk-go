@@ -3,98 +3,31 @@ package store
 import (
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
 	workv1 "open-cluster-management.io/api/work/v1"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/work/utils"
 )
 
-const ManifestWorkFinalizer = "cloudevents.open-cluster-management.io/manifest-work-cleanup"
-
-type baseStore struct {
-	sync.RWMutex
-
-	store     cache.Store
-	initiated bool
-}
-
-// List the works from the store with the list options
-func (b *baseStore) List(namespace string, opts metav1.ListOptions) (*workv1.ManifestWorkList, error) {
-	b.RLock()
-	defer b.RUnlock()
-
-	works, err := utils.ListWorksWithOptions(b.store, namespace, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	items := []workv1.ManifestWork{}
-	for _, work := range works {
-		items = append(items, *work)
-	}
-
-	return &workv1.ManifestWorkList{Items: items}, nil
-}
-
-// Get a works from the store
-func (b *baseStore) Get(namespace, name string) (*workv1.ManifestWork, bool, error) {
-	b.RLock()
-	defer b.RUnlock()
-
-	obj, exists, err := b.store.GetByKey(fmt.Sprintf("%s/%s", namespace, name))
-	if err != nil {
-		return nil, false, err
-	}
-
-	if !exists {
-		return nil, false, nil
-	}
-
-	work, ok := obj.(*workv1.ManifestWork)
-	if !ok {
-		return nil, false, fmt.Errorf("unknown type %T", obj)
-	}
-
-	return work, true, nil
-}
-
-// List all of works from the store
-func (b *baseStore) ListAll() ([]*workv1.ManifestWork, error) {
-	b.RLock()
-	defer b.RUnlock()
-
-	works := []*workv1.ManifestWork{}
-	for _, obj := range b.store.List() {
-		if work, ok := obj.(*workv1.ManifestWork); ok {
-			works = append(works, work)
-		}
-	}
-
-	return works, nil
-}
-
 type baseSourceStore struct {
-	baseStore
+	store.BaseClientWatchStore[*workv1.ManifestWork]
 
 	// a queue to save the received work events
 	receivedWorks workqueue.RateLimitingInterface
 }
 
-func (bs *baseSourceStore) HandleReceivedWork(action types.ResourceAction, work *workv1.ManifestWork) error {
+func (bs *baseSourceStore) HandleReceivedResource(action types.ResourceAction, work *workv1.ManifestWork) error {
 	switch action {
 	case types.StatusModified:
 		bs.receivedWorks.Add(work)
@@ -107,10 +40,10 @@ func (bs *baseSourceStore) HandleReceivedWork(action types.ResourceAction, work 
 // workProcessor process the received works from given work queue with a specific store
 type workProcessor struct {
 	works workqueue.RateLimitingInterface
-	store WorkClientWatcherStore
+	store store.ClientWatcherStore[*workv1.ManifestWork]
 }
 
-func newWorkProcessor(works workqueue.RateLimitingInterface, store WorkClientWatcherStore) *workProcessor {
+func newWorkProcessor(works workqueue.RateLimitingInterface, store store.ClientWatcherStore[*workv1.ManifestWork]) *workProcessor {
 	return &workProcessor{
 		works: works,
 		store: store,
@@ -163,7 +96,7 @@ func (b *workProcessor) handleWork(work *workv1.ManifestWork) error {
 	if lastWork == nil {
 		// the work is not found from the local cache and it has been deleted by the agent,
 		// ignore this work.
-		if meta.IsStatusConditionTrue(work.Status.Conditions, common.ManifestsDeleted) {
+		if meta.IsStatusConditionTrue(work.Status.Conditions, common.ResourceDeleted) {
 			return nil
 		}
 
@@ -175,7 +108,7 @@ func (b *workProcessor) handleWork(work *workv1.ManifestWork) error {
 	}
 
 	updatedWork := lastWork.DeepCopy()
-	if meta.IsStatusConditionTrue(work.Status.Conditions, common.ManifestsDeleted) {
+	if meta.IsStatusConditionTrue(work.Status.Conditions, common.ResourceDeleted) {
 		updatedWork.Finalizers = []string{}
 		// delete the work from the local cache.
 		return b.store.Delete(updatedWork)
@@ -223,7 +156,7 @@ func (b *workProcessor) handleWork(work *workv1.ManifestWork) error {
 	}
 
 	// the work has been handled by agent, we ensure a finalizer on the work
-	updatedWork.Finalizers = ensureFinalizers(updatedWork.Finalizers)
+	updatedWork.Finalizers = utils.EnsureResourceFinalizer(updatedWork.Finalizers)
 	updatedWork.Annotations[common.CloudEventsSequenceIDAnnotationKey] = sequenceID
 	updatedWork.Status = work.Status
 	// update the work with status in the local cache.
@@ -244,87 +177,4 @@ func (b *workProcessor) getWork(uid kubetypes.UID) *workv1.ManifestWork {
 	}
 
 	return nil
-}
-
-// workWatcher implements the watch.Interface.
-type workWatcher struct {
-	sync.RWMutex
-
-	result  chan watch.Event
-	done    chan struct{}
-	stopped bool
-}
-
-var _ watch.Interface = &workWatcher{}
-
-func newWorkWatcher() *workWatcher {
-	return &workWatcher{
-		// It's easy for a consumer to add buffering via an extra
-		// goroutine/channel, but impossible for them to remove it,
-		// so nonbuffered is better.
-		result: make(chan watch.Event),
-		// If the watcher is externally stopped there is no receiver anymore
-		// and the send operations on the result channel, especially the
-		// error reporting might block forever.
-		// Therefore a dedicated stop channel is used to resolve this blocking.
-		done: make(chan struct{}),
-	}
-}
-
-// ResultChan implements Interface.
-func (w *workWatcher) ResultChan() <-chan watch.Event {
-	return w.result
-}
-
-// Stop implements Interface.
-func (w *workWatcher) Stop() {
-	// Call Close() exactly once by locking and setting a flag.
-	w.Lock()
-	defer w.Unlock()
-	// closing a closed channel always panics, therefore check before closing
-	select {
-	case <-w.done:
-		close(w.result)
-	default:
-		w.stopped = true
-		close(w.done)
-	}
-}
-
-// Receive a event from the work client and sends down the result channel.
-func (w *workWatcher) Receive(evt watch.Event) {
-	if w.isStopped() {
-		// this watcher is stopped, do nothing.
-		return
-	}
-
-	if klog.V(4).Enabled() {
-		obj, _ := meta.Accessor(evt.Object)
-		klog.V(4).Infof("Receive the event %v for %v", evt.Type, obj.GetName())
-	}
-
-	w.result <- evt
-}
-
-func (w *workWatcher) isStopped() bool {
-	w.RLock()
-	defer w.RUnlock()
-
-	return w.stopped
-}
-
-func ensureFinalizers(workFinalizers []string) []string {
-	has := false
-	for _, f := range workFinalizers {
-		if f == ManifestWorkFinalizer {
-			has = true
-			break
-		}
-	}
-
-	if !has {
-		workFinalizers = append(workFinalizers, ManifestWorkFinalizer)
-	}
-
-	return workFinalizers
 }
