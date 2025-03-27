@@ -95,7 +95,7 @@ func TestList(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(clusters) != 2 {
+	if len(clusters.Items) != 2 {
 		t.Error("expect 2, but failed")
 	}
 
