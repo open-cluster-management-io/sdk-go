@@ -139,7 +139,6 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - Kafka", func() {
 			sourceStoreLister.store.Add(newResource)
 			resourceName1 = resourceName
 
-			fmt.Println("agent get spec workName1", manifestWork.Name)
 			return nil
 		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 

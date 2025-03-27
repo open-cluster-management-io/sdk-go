@@ -71,8 +71,6 @@ func TestSourceResync(t *testing.T) {
 			require.NoError(t, receivedEvent.err)
 			require.NotNil(t, receivedEvent.event)
 
-			fmt.Println("received event", receivedEvent.event)
-
 			resourceList, err := payload.DecodeStatusResyncRequest(receivedEvent.event)
 			require.NoError(t, err)
 			require.Equal(t, c.expectedItems, len(resourceList.Hashes))
