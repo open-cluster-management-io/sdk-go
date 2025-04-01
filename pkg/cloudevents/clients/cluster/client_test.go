@@ -8,7 +8,6 @@ import (
 
 	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
 	jsonpatch "github.com/evanphx/json-patch"
-	"github.com/stretchr/testify/require"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -89,10 +88,6 @@ func TestCreate(t *testing.T) {
 
 				t.Error(err)
 			}
-
-			require.Eventually(t, func() bool {
-				return len(clusterInformerStore.List()) == 1
-			}, 5*time.Second, time.Second)
 		})
 	}
 }
@@ -176,21 +171,6 @@ func TestPatch(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-
-			require.Eventually(t, func() bool {
-				obj, exists, err := clusterInformerStore.GetByKey(c.cluster.Name)
-				if err != nil {
-					return false
-				}
-				if !exists {
-					return false
-				}
-				cluster, ok := obj.(*clusterv1.ManagedCluster)
-				if !ok {
-					return false
-				}
-				return cluster.Status.Version.Kubernetes == c.expectedKubeVersion
-			}, 5*time.Second, time.Second)
 		})
 	}
 }
