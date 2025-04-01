@@ -18,7 +18,7 @@ GO_TEST_FLAGS :=-race -tags=kafka
 GO_LD_FLAGS:=
 
 verify-gocilint:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.0
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6
 	${GOPATH}/bin/golangci-lint run --build-tags=kafka --timeout=3m ./...
 
 verify-govet:
