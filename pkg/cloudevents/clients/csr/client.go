@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	cloudeventserrors "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
