@@ -29,7 +29,6 @@ type GRPCDialer struct {
 	URL              string
 	KeepAliveOptions KeepAliveOptions
 	TLSConfig        *tls.Config
-	TokenFile        string
 	Token            string
 	mu               sync.Mutex       // Mutex to protect the connection.
 	conn             *grpc.ClientConn // Cached gRPC client connection.
@@ -66,22 +65,10 @@ func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
 	if d.TLSConfig != nil {
 		// Enable TLS
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(d.TLSConfig)))
-		var token string
-		if d.Token != "" {
-			token = d.Token
-		} else if d.TokenFile != "" {
-			// Use token-based authentication if token file is provided.
-			tokenBytes, err := os.ReadFile(d.TokenFile)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read token file %s, %v", d.TokenFile, err)
-			}
-			token = string(tokenBytes)
-		}
-
-		if len(token) != 0 {
+		if len(d.Token) != 0 {
 			perRPCCred := oauth.TokenSource{
 				TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
-					AccessToken: token,
+					AccessToken: d.Token,
 				})}
 			// Add per-RPC credentials to the dial options.
 			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(perRPCCred))
@@ -182,14 +169,22 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 	if config.ClientCertFile != "" && config.ClientKeyFile != "" && config.CAFile == "" {
 		return nil, fmt.Errorf("setting clientCertFile and clientKeyFile requires caFile")
 	}
-	if config.TokenFile != "" && config.CAFile == "" {
+	token := config.Token
+	if config.Token == "" && config.TokenFile != "" {
+		tokenBytes, err := os.ReadFile(config.TokenFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read token file %s, %v", config.TokenFile, err)
+		}
+		token = string(tokenBytes)
+	}
+	if token != "" && config.CAFile == "" {
 		return nil, fmt.Errorf("setting tokenFile requires caFile")
 	}
 
 	options := &GRPCOptions{
 		Dialer: &GRPCDialer{
-			URL:       config.URL,
-			TokenFile: config.TokenFile,
+			URL:   config.URL,
+			Token: token,
 		},
 	}
 
