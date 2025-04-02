@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/keepalive"
 	"gopkg.in/yaml.v2"
@@ -90,9 +89,7 @@ func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
 		d.conn = conn
 		return d.conn, nil
 	}
-
-	// Insecure connection option; should not be used in production.
-	dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	
 	conn, err := grpc.Dial(d.URL, dialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to grpc server %s, %v", d.URL, err)
