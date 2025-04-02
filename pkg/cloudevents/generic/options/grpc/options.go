@@ -30,6 +30,7 @@ type GRPCDialer struct {
 	KeepAliveOptions KeepAliveOptions
 	TLSConfig        *tls.Config
 	TokenFile        string
+	Token            string
 	mu               sync.Mutex       // Mutex to protect the connection.
 	conn             *grpc.ClientConn // Cached gRPC client connection.
 }
@@ -65,15 +66,22 @@ func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
 	if d.TLSConfig != nil {
 		// Enable TLS
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(d.TLSConfig)))
-		if len(d.TokenFile) != 0 {
+		var token string
+		if d.Token != "" {
+			token = d.Token
+		} else if d.TokenFile != "" {
 			// Use token-based authentication if token file is provided.
-			token, err := os.ReadFile(d.TokenFile)
+			tokenBytes, err := os.ReadFile(d.TokenFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read token file %s, %v", d.TokenFile, err)
 			}
+			token = string(tokenBytes)
+		}
+
+		if len(token) != 0 {
 			perRPCCred := oauth.TokenSource{
 				TokenSource: oauth2.StaticTokenSource(&oauth2.Token{
-					AccessToken: string(token),
+					AccessToken: token,
 				})}
 			// Add per-RPC credentials to the dial options.
 			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(perRPCCred))
@@ -89,7 +97,7 @@ func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
 		d.conn = conn
 		return d.conn, nil
 	}
-	
+
 	conn, err := grpc.Dial(d.URL, dialOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to grpc server %s, %v", d.URL, err)
@@ -127,6 +135,8 @@ type GRPCConfig struct {
 	ClientKeyFile string `json:"clientKeyFile,omitempty" yaml:"clientKeyFile,omitempty"`
 	// TokenFile is the file path to a token file for authentication.
 	TokenFile string `json:"tokenFile,omitempty" yaml:"tokenFile,omitempty"`
+	// Token is the token for authentication
+	Token string `json:"token" yaml:"token"`
 	// keepalive options
 	KeepAliveConfig KeepAliveConfig `json:"keepAliveConfig,omitempty" yaml:"keepAliveConfig,omitempty"`
 }
