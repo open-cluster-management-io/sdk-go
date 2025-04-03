@@ -245,10 +245,6 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 	}
 
 	for _, obj := range objs {
-		// only respond with the resource of the resync type
-		if obj.Type() != eventDataType.String() {
-			continue
-		}
 		// respond with the deleting resource regardless of the resource version
 		if _, ok := obj.Extensions()[types.ExtensionDeletionTimestamp]; ok {
 			err = bkr.handleRes(ctx, obj, eventDataType, "delete_request")
