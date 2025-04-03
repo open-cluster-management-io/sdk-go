@@ -6,7 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -255,8 +254,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 		}
 
 		lastResourceVersion := findResourceVersion(obj.ID(), resourceVersions.Versions)
-		rv := obj.Extensions()[types.ExtensionResourceVersion].(string)
-		currentResourceVersion, err := strconv.ParseInt(rv, 10, 64)
+		currentResourceVersion := obj.Extensions()[types.ExtensionResourceVersion].(int64)
 		if err != nil {
 			log.V(4).Info("ignore the obj %v since it has a invalid resourceVersion, %v", obj, err)
 			continue
