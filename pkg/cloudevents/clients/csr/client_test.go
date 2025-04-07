@@ -2,6 +2,7 @@ package csr
 
 import (
 	"context"
+	v1 "open-cluster-management.io/api/cluster/v1"
 	"testing"
 	"time"
 
@@ -32,6 +33,9 @@ func TestCreate(t *testing.T) {
 			csr: &certificatev1.CertificateSigningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster1",
+					Labels: map[string]string{
+						v1.ClusterNameLabelKey: "cluster1",
+					},
 				},
 			},
 			expectedErr: "",
@@ -42,6 +46,9 @@ func TestCreate(t *testing.T) {
 			csr: &certificatev1.CertificateSigningRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster1",
+					Labels: map[string]string{
+						v1.ClusterNameLabelKey: "cluster1",
+					},
 				},
 			},
 			expectedErr: "certificatesigningrequests.certificates.k8s.io \"cluster1\" already exists",

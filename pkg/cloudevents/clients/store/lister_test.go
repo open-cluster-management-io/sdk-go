@@ -32,7 +32,7 @@ func TestAgentLister(t *testing.T) {
 	}
 	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:   "test2",
-		Labels: map[string]string{common.CloudEventsOriginalSourceLabelKey: "source2"},
+		Labels: map[string]string{common.CloudEventsOriginalSourceLabelKey: "source1"},
 	}}); err != nil {
 		t.Error(err)
 	}
@@ -42,7 +42,7 @@ func TestAgentLister(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if len(clusters) != 1 {
+	if len(clusters) != 2 {
 		t.Error("unexpected clusters")
 	}
 }

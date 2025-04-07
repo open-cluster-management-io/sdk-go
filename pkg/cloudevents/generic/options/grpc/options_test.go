@@ -34,7 +34,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 		},
 		{
 			name:             "token config without caFile",
-			config:           "{\"url\":\"test\",\"tokenFile\":\"test\"}",
+			config:           "{\"url\":\"test\",\"token\":\"test\"}",
 			expectedErrorMsg: "setting tokenFile requires caFile",
 		},
 		{
