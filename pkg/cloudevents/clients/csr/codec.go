@@ -2,10 +2,9 @@ package csr
 
 import (
 	"fmt"
-	"strconv"
-
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "open-cluster-management.io/api/cluster/v1"
 
 	certificatev1 "k8s.io/api/certificates/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -35,17 +34,21 @@ func (c *CSRCodec) Encode(source string, eventType types.CloudEventsType, csr *c
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
 
+	if len(csr.Labels) == 0 {
+		return nil, fmt.Errorf("no cluster label found for CSR")
+	}
+	cluster, ok := csr.Labels[v1.ClusterNameLabelKey]
+	if !ok {
+		return nil, fmt.Errorf("no cluster name found for CSR")
+	}
+
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(csr.Name).
-		WithClusterName(csr.Name).
+		WithClusterName(cluster).
 		NewEvent()
 
 	if csr.ResourceVersion != "" {
-		resourceVersion, err := strconv.ParseInt(csr.ResourceVersion, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse the resourceversion for csr %s, %v", csr.Name, err)
-		}
-		evt.SetExtension(types.ExtensionResourceVersion, resourceVersion)
+		evt.SetExtension(types.ExtensionResourceVersion, csr.ResourceVersion)
 	}
 
 	newCSR := csr.DeepCopy()

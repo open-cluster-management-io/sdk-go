@@ -3,6 +3,7 @@ package util
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"os"
 	"time"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
@@ -36,7 +37,11 @@ func newGRPCOptions(certPool *x509.CertPool, brokerURL, tokenFile string) *grpc.
 	}
 
 	if tokenFile != "" {
-		grpcOptions.Dialer.TokenFile = tokenFile
+		token, err := os.ReadFile(tokenFile)
+		if err != nil {
+			panic(err)
+		}
+		grpcOptions.Dialer.Token = string(token)
 	}
 
 	return grpcOptions
