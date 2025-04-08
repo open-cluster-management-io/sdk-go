@@ -2,15 +2,16 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/errors"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"net"
 	"strconv"
 	"sync"
 	"time"
 
-	ce "github.com/cloudevents/sdk-go/v2"
+	"k8s.io/apimachinery/pkg/api/errors"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
 	"github.com/google/uuid"
@@ -92,12 +93,12 @@ func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 	// WARNING: don't use "evt, err := pb.FromProto(pubReq.Event)" to convert protobuf to cloudevent
 	evt, err := binding.ToEvent(ctx, grpcprotocol.NewMessage(pubReq.Event))
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert protobuf to cloudevent: %v", err)
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("failed to convert protobuf to cloudevent: %v", err))
 	}
 
 	eventType, err := types.ParseCloudEventsType(evt.Type())
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("failed to parse cloud event type %s, %v", evt.Type(), err))
 	}
 
 	logger.V(4).Info("receive the event with grpc broker", "event", evt)
@@ -106,19 +107,24 @@ func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 	if eventType.Action == types.ResyncRequestAction {
 		err := bkr.respondResyncSpecRequest(ctx, eventType.CloudEventsDataType, evt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to respond resync spec request: %v", err)
+			return nil, status.Error(codes.FailedPrecondition, fmt.Sprintf("failed to respond resync spec request: %v", err))
 		}
 		return &emptypb.Empty{}, nil
 	}
 
 	service, ok := bkr.services[eventType.CloudEventsDataType]
 	if !ok {
-		return nil, fmt.Errorf("failed to find service for event type %s", eventType.CloudEventsDataType)
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("failed to find service for event type %s", eventType.CloudEventsDataType))
 	}
 
 	// handle the resource status update according status update type
 	if err := service.HandleStatusUpdate(ctx, evt); err != nil {
-		return nil, err
+		errStr, marshalErr := json.Marshal(err)
+		if marshalErr != nil {
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		}
+
+		return nil, status.Error(codes.FailedPrecondition, string(errStr))
 	}
 
 	return &emptypb.Empty{}, nil
@@ -215,7 +221,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 //     resend the resource.
 //   - If the requested resource version is older than the source's current maintained resource version, the source
 //     sends the resource.
-func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataType types.CloudEventsDataType, evt *ce.Event) error {
+func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataType types.CloudEventsDataType, evt *cloudevents.Event) error {
 	log := klog.FromContext(ctx)
 
 	resourceVersions, err := payload.DecodeSpecResyncRequest(*evt)
