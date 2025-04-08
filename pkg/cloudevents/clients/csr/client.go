@@ -67,7 +67,7 @@ func (c *CSRClient) Create(ctx context.Context, csr *certificatev1.CertificateSi
 	// TODO: validate the csr
 
 	if err := c.cloudEventsClient.Publish(ctx, eventType, csr); err != nil {
-		return nil, cloudeventserrors.NewPublishError(common.CSRGR, csr.Name, err)
+		return nil, cloudeventserrors.ToStatusError(common.CSRGR, csr.Name, err)
 	}
 
 	// add the new csr to the local cache.

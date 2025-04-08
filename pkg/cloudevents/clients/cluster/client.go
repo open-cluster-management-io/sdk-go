@@ -65,7 +65,7 @@ func (c *ManagedClusterClient) Create(ctx context.Context, cluster *clusterv1.Ma
 	// TODO: validate the ManagedCluster
 
 	if err := c.cloudEventsClient.Publish(ctx, eventType, cluster); err != nil {
-		return nil, cloudeventserrors.NewPublishError(common.ManagedClusterGR, cluster.Name, err)
+		return nil, cloudeventserrors.ToStatusError(common.ManagedClusterGR, cluster.Name, err)
 	}
 
 	// add the new cluster to the local cache.
@@ -167,7 +167,7 @@ func (c *ManagedClusterClient) Patch(ctx context.Context, name string, pt kubety
 		// publish the status update event to source, source will check the resource version
 		// and reject the update if it's status update is outdated.
 		if err := c.cloudEventsClient.Publish(ctx, eventType, newCluster); err != nil {
-			return nil, cloudeventserrors.NewPublishError(common.ManagedClusterGR, name, err)
+			return nil, cloudeventserrors.ToStatusError(common.ManagedClusterGR, name, err)
 		}
 
 		// Fetch the latest cluster from the store and verify the resource version to avoid updating the store
