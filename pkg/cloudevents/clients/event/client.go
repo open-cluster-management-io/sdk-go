@@ -2,6 +2,7 @@ package event
 
 import (
 	"context"
+
 	eventv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,6 +11,7 @@ import (
 	applyconfigurationseventsv1 "k8s.io/client-go/applyconfigurations/events/v1"
 	eventv1client "k8s.io/client-go/kubernetes/typed/events/v1"
 	"k8s.io/klog/v2"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	cloudeventserrors "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
@@ -49,10 +51,8 @@ func (e EventClient) Create(ctx context.Context, event *eventv1.Event, opts meta
 		Action:              common.CreateRequestAction,
 	}
 
-	// TODO: validate the csr
-
 	if err := e.cloudEventsClient.Publish(ctx, eventType, event); err != nil {
-		return nil, cloudeventserrors.NewPublishError(common.CSRGR, event.Name, err)
+		return nil, cloudeventserrors.ToStatusError(common.CSRGR, event.Name, err)
 	}
 
 	// add the new csr to the local cache.
@@ -64,42 +64,34 @@ func (e EventClient) Create(ctx context.Context, event *eventv1.Event, opts meta
 }
 
 func (e EventClient) Update(ctx context.Context, event *eventv1.Event, opts metav1.UpdateOptions) (*eventv1.Event, error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(eventv1.Resource("events"), "update")
 }
 
 func (e EventClient) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	//TODO implement me
 	return errors.NewMethodNotSupported(eventv1.Resource("events"), "delete")
 }
 
 func (e EventClient) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	//TODO implement me
 	return errors.NewMethodNotSupported(eventv1.Resource("events"), "deletecollection")
 }
 
 func (e EventClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*eventv1.Event, error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(eventv1.Resource("events"), "get")
 }
 
 func (e EventClient) List(ctx context.Context, opts metav1.ListOptions) (*eventv1.EventList, error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(eventv1.Resource("events"), "list")
 }
 
 func (e EventClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(eventv1.Resource("events"), "watch")
 }
 
 func (e EventClient) Patch(ctx context.Context, name string, pt kubetypes.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *eventv1.Event, err error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(eventv1.Resource("events"), "patch")
 }
 
 func (e EventClient) Apply(ctx context.Context, event *applyconfigurationseventsv1.EventApplyConfiguration, opts metav1.ApplyOptions) (result *eventv1.Event, err error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(eventv1.Resource("events"), "apply")
 }
 

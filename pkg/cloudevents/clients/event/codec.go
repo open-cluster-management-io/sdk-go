@@ -2,6 +2,7 @@ package event
 
 import (
 	"fmt"
+
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,19 +15,19 @@ var EventEventDataType = types.CloudEventsDataType{
 	Resource: "events",
 }
 
-// ManagedClusterCodec is a codec to encode/decode a ManagedCluster/cloudevent for an agent.
+// EventCodec is a codec to encode/decode a event/cloudevent for an agent.
 type EventCodec struct{}
 
 func NewEventCodec() *EventCodec {
 	return &EventCodec{}
 }
 
-// EventDataType always returns the event data type `io.open-cluster-management.cluster.v1.managedclusters`.
+// EventDataType always returns the event data type `io.k8s.events.v1.events`.
 func (c *EventCodec) EventDataType() types.CloudEventsDataType {
 	return EventEventDataType
 }
 
-// Encode the ManagedCluster to a cloudevent
+// Encode the event to a cloudevent
 func (c *EventCodec) Encode(source string, eventType types.CloudEventsType, event *eventsv1.Event) (*cloudevents.Event, error) {
 	if eventType.CloudEventsDataType != EventEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
@@ -54,7 +55,7 @@ func (c *EventCodec) Encode(source string, eventType types.CloudEventsType, even
 	return &evt, nil
 }
 
-// Decode a cloudevent to a ManagedCluster
+// Decode a cloudevent to an event object
 func (c *EventCodec) Decode(evt *cloudevents.Event) (*eventsv1.Event, error) {
 	event := &eventsv1.Event{}
 	if err := evt.DataAs(event); err != nil {

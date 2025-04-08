@@ -3,6 +3,8 @@ package lease
 import (
 	"context"
 	"fmt"
+	"strconv"
+
 	coordinationv1 "k8s.io/api/coordination/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +19,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"strconv"
 )
 
 type LeaseClient struct {
@@ -27,7 +28,6 @@ type LeaseClient struct {
 }
 
 func (l LeaseClient) Create(ctx context.Context, lease *coordinationv1.Lease, opts metav1.CreateOptions) (*coordinationv1.Lease, error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(coordinationv1.Resource("leases"), "create")
 }
 
@@ -39,7 +39,7 @@ func (l LeaseClient) Update(ctx context.Context, lease *coordinationv1.Lease, op
 	eventType.Action = common.UpdateRequestAction
 
 	if err := l.cloudEventsClient.Publish(ctx, eventType, lease); err != nil {
-		return nil, cloudeventserrors.NewPublishError(coordinationv1.Resource("leases"), lease.Name, err)
+		return nil, cloudeventserrors.ToStatusError(coordinationv1.Resource("leases"), lease.Name, err)
 	}
 
 	// Fetch the latest cluster from the store and verify the resource version to avoid updating the store
@@ -75,12 +75,10 @@ func (l LeaseClient) Update(ctx context.Context, lease *coordinationv1.Lease, op
 }
 
 func (l LeaseClient) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	//TODO implement me
 	return errors.NewMethodNotSupported(coordinationv1.Resource("leases"), "delete")
 }
 
 func (l LeaseClient) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	//TODO implement me
 	return errors.NewMethodNotSupported(coordinationv1.Resource("leases"), "deletecollection")
 }
 
@@ -97,22 +95,18 @@ func (l LeaseClient) Get(ctx context.Context, name string, opts metav1.GetOption
 }
 
 func (l LeaseClient) List(ctx context.Context, opts metav1.ListOptions) (*coordinationv1.LeaseList, error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(coordinationv1.Resource("leases"), "list")
 }
 
 func (l LeaseClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(coordinationv1.Resource("leases"), "watch")
 }
 
 func (l LeaseClient) Patch(ctx context.Context, name string, pt kubetypes.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *coordinationv1.Lease, err error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(coordinationv1.Resource("leases"), "patch")
 }
 
 func (l LeaseClient) Apply(ctx context.Context, lease *v1.LeaseApplyConfiguration, opts metav1.ApplyOptions) (result *coordinationv1.Lease, err error) {
-	//TODO implement me
 	return nil, errors.NewMethodNotSupported(coordinationv1.Resource("leases"), "apply")
 }
 

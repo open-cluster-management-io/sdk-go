@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	"strconv"
 	"sync"
+
+	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +53,6 @@ func (c *ManagedClusterAddOnClient) Namespace(name string) *ManagedClusterAddOnC
 
 func (c *ManagedClusterAddOnClient) Create(
 	ctx context.Context, addon *addonapiv1alpha1.ManagedClusterAddOn, opts metav1.CreateOptions) (*addonapiv1alpha1.ManagedClusterAddOn, error) {
-
 	return nil, errors.NewMethodNotSupported(common.ManagedClusterGR, "update")
 
 }
@@ -148,7 +148,7 @@ func (c *ManagedClusterAddOnClient) Patch(
 		// publish the status update event to source, source will check the resource version
 		// and reject the update if it's status update is outdated.
 		if err := c.cloudEventsClient.Publish(ctx, eventType, newAddon); err != nil {
-			return nil, cloudeventserrors.NewPublishError(common.ManagedClusterGR, name, err)
+			return nil, cloudeventserrors.ToStatusError(common.ManagedClusterGR, name, err)
 		}
 
 		// Fetch the latest cluster from the store and verify the resource version to avoid updating the store
