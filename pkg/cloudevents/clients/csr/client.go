@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 
-	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	cloudeventserrors "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
@@ -68,7 +67,7 @@ func (c *CSRClient) Create(ctx context.Context, csr *certificatev1.CertificateSi
 	// TODO: validate the csr
 
 	if err := c.cloudEventsClient.Publish(ctx, eventType, csr); err != nil {
-		return nil, cloudeventserrors.NewPublishError(common.CSRGR, csr.Name, err)
+		return nil, cloudeventserrors.ToStatusError(common.CSRGR, csr.Name, err)
 	}
 
 	// add the new csr to the local cache.

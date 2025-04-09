@@ -2,9 +2,12 @@ package lease
 
 import (
 	"fmt"
+
 	cloudevents "github.com/cloudevents/sdk-go/v2"
+
 	coordinationv1 "k8s.io/api/coordination/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
@@ -14,19 +17,19 @@ var LeaseEventDataType = types.CloudEventsDataType{
 	Resource: "leases",
 }
 
-// ManagedClusterCodec is a codec to encode/decode a ManagedCluster/cloudevent for an agent.
+// LeaseCodec is a codec to encode/decode a lease/cloudevent for an agent.
 type LeaseCodec struct{}
 
 func NewManagedClusterAddOnCodec() *LeaseCodec {
 	return &LeaseCodec{}
 }
 
-// EventDataType always returns the event data type `io.open-cluster-management.cluster.v1.managedclusters`.
+// EventDataType always returns the event data type `io.k8s.coordination.k8s.v1.leases`.
 func (c *LeaseCodec) EventDataType() types.CloudEventsDataType {
 	return LeaseEventDataType
 }
 
-// Encode the ManagedCluster to a cloudevent
+// Encode the lease to a cloudevent
 func (c *LeaseCodec) Encode(source string, eventType types.CloudEventsType, lease *coordinationv1.Lease) (*cloudevents.Event, error) {
 	if eventType.CloudEventsDataType != LeaseEventDataType {
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
@@ -54,7 +57,7 @@ func (c *LeaseCodec) Encode(source string, eventType types.CloudEventsType, leas
 	return &evt, nil
 }
 
-// Decode a cloudevent to a ManagedCluster
+// Decode a cloudevent to a lease object
 func (c *LeaseCodec) Decode(evt *cloudevents.Event) (*coordinationv1.Lease, error) {
 	lease := &coordinationv1.Lease{}
 	if err := evt.DataAs(lease); err != nil {
