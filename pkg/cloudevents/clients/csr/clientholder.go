@@ -11,9 +11,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 )
 
-// ClientHolder holds a csr client that implements the CSRInterface based on different configuration
-//
-// ClientHolder also implements the CertificateSigningRequestsGetter interface.
+// ClientHolder holds a client that implements list/watch for CSR and a SharedIndexInformer for CSR
 type ClientHolder struct {
 	informer cache.SharedIndexInformer
 	client   *CSRClient

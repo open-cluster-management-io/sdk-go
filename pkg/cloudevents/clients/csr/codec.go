@@ -2,11 +2,14 @@ package csr
 
 import (
 	"fmt"
+
 	cloudevents "github.com/cloudevents/sdk-go/v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "open-cluster-management.io/api/cluster/v1"
 
 	certificatev1 "k8s.io/api/certificates/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	v1 "open-cluster-management.io/api/cluster/v1"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
