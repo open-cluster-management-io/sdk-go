@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
+	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -261,8 +261,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 		}
 
 		lastResourceVersion := findResourceVersion(obj.ID(), resourceVersions.Versions)
-		currentResourceVersion, err := strconv.ParseInt(
-			obj.Extensions()[types.ExtensionResourceVersion].(string), 10, 64)
+		currentResourceVersion, err := cloudeventstypes.ToInteger(obj.Extensions()[types.ExtensionResourceVersion])
 		if err != nil {
 			log.V(4).Info("ignore the obj %v since it has a invalid resourceVersion, %v", obj, err)
 			continue
@@ -270,7 +269,7 @@ func (bkr *GRPCBroker) respondResyncSpecRequest(ctx context.Context, eventDataTy
 
 		// the version of the work is not maintained on source or the source's work is newer than agent, send
 		// the newer work to agent
-		if currentResourceVersion == 0 || currentResourceVersion > lastResourceVersion {
+		if currentResourceVersion == 0 || int64(currentResourceVersion) > lastResourceVersion {
 			err := bkr.handleRes(ctx, obj, eventDataType, "update_request")
 			if err != nil {
 				log.Error(err, "failed to handle resync spec request")
