@@ -7,6 +7,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/tools/cache"
 
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -64,6 +65,47 @@ func TestPatch(t *testing.T) {
 					t.Errorf("unexpected work %v", work)
 				}
 				if work.Namespace != "test2" {
+					t.Errorf("unexpected work %v", work)
+				}
+			},
+		},
+		{
+			name:      "strategic merge patch",
+			patchType: types.StrategicMergePatchType,
+			work: &workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+			},
+			patch: func() []byte {
+				oldData, err := json.Marshal(&workv1.ManifestWork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				newData, err := json.Marshal(&workv1.ManifestWork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "test",
+					},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				data, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, workv1.ManifestWork{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return data
+			}(),
+			validate: func(t *testing.T, work *workv1.ManifestWork) {
+				if work.Name != "test" {
+					t.Errorf("unexpected work %v", work)
+				}
+				if work.Namespace != "test" {
 					t.Errorf("unexpected work %v", work)
 				}
 			},
