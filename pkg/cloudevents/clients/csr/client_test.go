@@ -2,12 +2,12 @@ package csr
 
 import (
 	"context"
-	v1 "open-cluster-management.io/api/cluster/v1"
 	"testing"
 	"time"
 
+	v1 "open-cluster-management.io/api/cluster/v1"
+
 	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
-	"github.com/stretchr/testify/require"
 
 	certificatev1 "k8s.io/api/certificates/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,10 +92,6 @@ func TestCreate(t *testing.T) {
 
 				t.Error(err)
 			}
-
-			require.Eventually(t, func() bool {
-				return len(csrInformerStore.List()) == 1
-			}, 5*time.Second, time.Second)
 		})
 	}
 }

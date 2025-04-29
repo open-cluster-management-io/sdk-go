@@ -41,6 +41,7 @@ func (c *CSRCodec) Encode(source string, eventType types.CloudEventsType, csr *c
 		return nil, fmt.Errorf("no cluster label found for CSR")
 	}
 	cluster, ok := csr.Labels[v1.ClusterNameLabelKey]
+
 	if !ok {
 		return nil, fmt.Errorf("no cluster name found for CSR")
 	}
