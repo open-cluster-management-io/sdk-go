@@ -3,12 +3,13 @@ package grpc
 import (
 	"context"
 	"errors"
+	"testing"
+
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"google.golang.org/grpc"
 	grpccli "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	cetypes "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
-	"testing"
 )
 
 var dataType = cetypes.CloudEventsDataType{
@@ -58,14 +59,14 @@ func (s *testService) create(evt *cloudevents.Event) error {
 func TestServer(t *testing.T) {
 	grpcServerOptions := []grpc.ServerOption{}
 	grpcServer := grpc.NewServer(grpcServerOptions...)
-	grpcEventServer := NewGRPCBroker(grpcServer, ":8888")
+	grpcEventServer := NewGRPCBroker(grpcServer)
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
 	grpcEventServer.RegisterService(dataType, svc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go grpcEventServer.Start(ctx)
+	go grpcEventServer.Start(ctx, ":8888")
 
 	grpcClientOptions := grpccli.NewGRPCOptions()
 	grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: "localhost:8888"}

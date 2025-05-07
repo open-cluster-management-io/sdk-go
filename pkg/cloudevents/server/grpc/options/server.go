@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"os"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -12,7 +14,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
 	grpcserver "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authn"
-	"os"
 )
 
 // PreStartHook is an interface to start hook before grpc server is started.
@@ -99,7 +100,7 @@ func (s *Server) Run(ctx context.Context) error {
 		grpc.ChainStreamInterceptor(newAuthStreamInterceptor(s.authenticators...)))
 
 	grpcServer := grpc.NewServer(grpcServerOptions...)
-	grpcEventServer := grpcserver.NewGRPCBroker(grpcServer, ":"+s.options.ServerBindPort)
+	grpcEventServer := grpcserver.NewGRPCBroker(grpcServer)
 
 	for t, service := range s.services {
 		grpcEventServer.RegisterService(t, service)
@@ -110,7 +111,7 @@ func (s *Server) Run(ctx context.Context) error {
 		hook.Run(ctx)
 	}
 
-	go grpcEventServer.Start(ctx)
+	go grpcEventServer.Start(ctx, ":"+s.options.ServerBindPort)
 	<-ctx.Done()
 	return nil
 }

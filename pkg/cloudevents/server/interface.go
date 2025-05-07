@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
@@ -15,7 +16,7 @@ type AgentEventServer interface {
 	RegisterService(t types.CloudEventsDataType, service Service)
 
 	// Start initiates the EventServer to listen to agents.
-	Start(ctx context.Context)
+	Start(ctx context.Context, addr string)
 }
 
 type EventHandler interface {
