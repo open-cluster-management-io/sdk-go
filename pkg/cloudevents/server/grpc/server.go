@@ -45,20 +45,18 @@ type GRPCBroker struct {
 	pbv1.UnimplementedCloudEventServiceServer
 	grpcServer  *grpc.Server
 	services    map[types.CloudEventsDataType]server.Service
-	bindAddress string
 	subscribers map[string]*subscriber // registered subscribers
 	mu          sync.RWMutex
 }
 
-// NewGRPCBroker creates a new gRPC broker with the given configuration.
-func NewGRPCBroker(srv *grpc.Server, addr string) server.AgentEventServer {
-	klog.Infof("Serving gRPC broker without TLS at %s", addr)
+// NewGRPCBroker creates a new gRPC broker with the given gRPC server.
+func NewGRPCBroker(srv *grpc.Server) server.AgentEventServer {
 	broker := &GRPCBroker{
 		grpcServer:  srv,
-		bindAddress: addr,
 		subscribers: make(map[string]*subscriber),
 		services:    make(map[types.CloudEventsDataType]server.Service),
 	}
+	pbv1.RegisterCloudEventServiceServer(broker.grpcServer, broker)
 	return broker
 }
 
@@ -67,15 +65,14 @@ func (bkr *GRPCBroker) RegisterService(t types.CloudEventsDataType, service serv
 	service.RegisterHandler(bkr)
 }
 
-// Start starts the gRPC broker
-func (bkr *GRPCBroker) Start(ctx context.Context) {
+// Start starts the gRPC broker at the given address
+func (bkr *GRPCBroker) Start(ctx context.Context, addr string) {
 	logger := klog.FromContext(ctx)
-	logger.Info("Starting gRPC broker")
-	lis, err := net.Listen("tcp", bkr.bindAddress)
+	logger.Info("Starting gRPC broker at %s", addr)
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		utilruntime.Must(fmt.Errorf("failed to listen: %v", err))
 	}
-	pbv1.RegisterCloudEventServiceServer(bkr.grpcServer, bkr)
 	go func() {
 		if err := bkr.grpcServer.Serve(lis); err != nil {
 			utilruntime.Must(fmt.Errorf("failed to serve gRPC broker: %v", err))
@@ -87,7 +84,7 @@ func (bkr *GRPCBroker) Start(ctx context.Context) {
 	klog.Infof("Shutting down gRPC broker")
 }
 
-// Publish in stub implementation for maestro agent publish resource status back to maestro server.
+// Publish in stub implementation for agent publish resource status.
 func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest) (*emptypb.Empty, error) {
 	logger := klog.FromContext(ctx)
 	// WARNING: don't use "evt, err := pb.FromProto(pubReq.Event)" to convert protobuf to cloudevent
@@ -101,7 +98,7 @@ func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("failed to parse cloud event type %s, %v", evt.Type(), err))
 	}
 
-	logger.V(4).Info("receive the event with grpc broker", "event", evt)
+	logger.Info("receive the event with grpc broker", "event", evt)
 
 	// handler resync request
 	if eventType.Action == types.ResyncRequestAction {
@@ -145,7 +142,7 @@ func (bkr *GRPCBroker) register(
 		errChan:     errChan,
 	}
 
-	klog.V(4).Infof("register a subscriber %s (cluster name = %s)", id, clusterName)
+	klog.Infof("register a subscriber %s (cluster name = %s)", id, clusterName)
 
 	return id, errChan
 }
@@ -160,9 +157,9 @@ func (bkr *GRPCBroker) unregister(id string) {
 	delete(bkr.subscribers, id)
 }
 
-// Subscribe in stub implementation for maestro agent subscribe resource spec from maestro server.
+// Subscribe in stub implementation for agent subscribe resource spec.
 // Note: It's unnecessary to send a status resync request to agent subscribers.
-// The work agent will continuously attempt to send status updates to the gRPC broker.
+// The agent will continuously attempt to send status updates to the gRPC broker.
 // If the broker is down or disconnected, the agent will resend the status once the broker is back up or reconnected.
 func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv1.CloudEventService_SubscribeServer) error {
 	if len(subReq.ClusterName) == 0 {
@@ -182,7 +179,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		}
 
 		// send the cloudevent to the subscriber
-		klog.V(4).Infof("sending the event to spec subscribers, %s", evt)
+		klog.Infof("sending the event to spec subscribers, %s", evt)
 		if err := subServer.Send(pbEvt); err != nil {
 			klog.Errorf("failed to send grpc event, %v", err)
 			// Return the error without wrapping, as it includes the gRPC error code and message for further handling.
