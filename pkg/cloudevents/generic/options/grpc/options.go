@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
 	"os"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/credentials/insecure"
 
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
@@ -48,7 +49,7 @@ func (d *GRPCDialer) Dial() (*grpc.ClientConn, error) {
 	// Return the cached connection if it exists and is ready.
 	// Should not return a nil or unready connection, otherwise the caller (cloudevents client)
 	// will not use the connection for sending and receiving events in reconnect scenarios.
-	// lock the connection to ensure the connnection is not created by multiple goroutines concurrently.
+	// lock the connection to ensure the connection is not created by multiple goroutines concurrently.
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.conn != nil && (d.conn.GetState() == connectivity.Connecting || d.conn.GetState() == connectivity.Ready) {
@@ -245,11 +246,10 @@ func (o *GRPCOptions) GetCloudEventsProtocol(ctx context.Context, errorHandler f
 				// If any failure in any of the steps needed to establish connection, or any failure encountered while
 				// expecting successful communication on established channel, the grpc client connection state will be
 				// TransientFailure.
-				// For a connected grpc client, if the connections is down, the grpc client connection state will be
-				// changed from Ready to Idle.
 				// When client certificate is expired, client will proactively close the connection, which will result
 				// in connection state changed from Ready to Shutdown.
-				if connState == connectivity.TransientFailure || connState == connectivity.Idle || connState == connectivity.Shutdown {
+				// More details: https://grpc.github.io/grpc/core/md_doc_connectivity-semantics-and-api.html
+				if connState == connectivity.TransientFailure || connState == connectivity.Shutdown {
 					errorHandler(fmt.Errorf("grpc connection is disconnected (state=%s)", connState))
 					ticker.Stop()
 					if connState != connectivity.Shutdown {
