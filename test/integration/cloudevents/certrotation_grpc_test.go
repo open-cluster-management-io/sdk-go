@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"os"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -19,6 +20,22 @@ func GetGRPCAgentOptions(ctx context.Context, agentID, clusterName, clientCertFi
 	return grpc.NewAgentOptions(grpcOptions, clusterName, agentID)
 }
 
+func ReloadCerts(clientCertFile, clientKeyFile string) cert.ReloadCerts {
+	return func() (*cert.CertConfig, error) {
+		certData, err := os.ReadFile(clientCertFile)
+		if err != nil {
+			return nil, err
+		}
+
+		keyData, err := os.ReadFile(clientKeyFile)
+		if err != nil {
+			return nil, err
+		}
+
+		return &cert.CertConfig{ClientCertData: certData, ClientKeyData: keyData}, nil
+	}
+}
+
 func newTLSGRPCOptions(ctx context.Context, certPool *x509.CertPool, brokerHost, clientCertFile, clientKeyFile string) *grpc.GRPCOptions {
 	o := &grpc.GRPCOptions{
 		Dialer: &grpc.GRPCDialer{
@@ -26,7 +43,7 @@ func newTLSGRPCOptions(ctx context.Context, certPool *x509.CertPool, brokerHost,
 			TLSConfig: &tls.Config{
 				RootCAs: certPool,
 				GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return cert.CachingCertificateLoader(clientCertFile, clientKeyFile)()
+					return cert.CachingCertificateLoader(ReloadCerts(clientCertFile, clientKeyFile))()
 				},
 			},
 			KeepAliveOptions: grpc.KeepAliveOptions{

@@ -117,18 +117,16 @@ type GRPCOptions struct {
 
 // GRPCConfig holds the information needed to build connect to gRPC server as a given user.
 type GRPCConfig struct {
+	cert.CertConfig `json:",inline" yaml:",inline"`
+
 	// URL is the address of the gRPC server (host:port).
 	URL string `json:"url" yaml:"url"`
-	// CAFile is the file path to a cert file for the gRPC server certificate authority.
-	CAFile string `json:"caFile,omitempty" yaml:"caFile,omitempty"`
-	// ClientCertFile is the file path to a client cert file for TLS.
-	ClientCertFile string `json:"clientCertFile,omitempty" yaml:"clientCertFile,omitempty"`
-	// ClientKeyFile is the file path to a client key file for TLS.
-	ClientKeyFile string `json:"clientKeyFile,omitempty" yaml:"clientKeyFile,omitempty"`
+
 	// TokenFile is the file path to a token file for authentication.
 	TokenFile string `json:"tokenFile,omitempty" yaml:"tokenFile,omitempty"`
 	// Token is the token for authentication
 	Token string `json:"token" yaml:"token"`
+
 	// keepalive options
 	KeepAliveConfig KeepAliveConfig `json:"keepAliveConfig,omitempty" yaml:"keepAliveConfig,omitempty"`
 }
@@ -151,8 +149,7 @@ type KeepAliveConfig struct {
 	PermitWithoutStream bool `json:"permitWithoutStream,omitempty" yaml:"permitWithoutStream,omitempty"`
 }
 
-// BuildGRPCOptionsFromFlags builds configs from a config filepath.
-func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
+func LoadConfig(configPath string) (*GRPCConfig, error) {
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -163,17 +160,28 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 		return nil, err
 	}
 
+	if err := config.CertConfig.EmbedCerts(); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+// BuildGRPCOptionsFromFlags builds configs from a config filepath.
+func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		return nil, err
+	}
+
 	if config.URL == "" {
 		return nil, fmt.Errorf("url is required")
 	}
 
-	if (config.ClientCertFile == "" && config.ClientKeyFile != "") ||
-		(config.ClientCertFile != "" && config.ClientKeyFile == "") {
-		return nil, fmt.Errorf("either both or none of clientCertFile and clientKeyFile must be set")
+	if err := config.CertConfig.Validate(); err != nil {
+		return nil, err
 	}
-	if config.ClientCertFile != "" && config.ClientKeyFile != "" && config.CAFile == "" {
-		return nil, fmt.Errorf("setting clientCertFile and clientKeyFile requires caFile")
-	}
+
 	token := config.Token
 	if config.Token == "" && config.TokenFile != "" {
 		tokenBytes, err := os.ReadFile(config.TokenFile)
@@ -182,8 +190,8 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 		}
 		token = string(tokenBytes)
 	}
-	if token != "" && config.CAFile == "" {
-		return nil, fmt.Errorf("setting tokenFile requires caFile")
+	if token != "" && len(config.CAData) == 0 {
+		return nil, fmt.Errorf("setting token requires authority certificates")
 	}
 
 	options := &GRPCOptions{
@@ -212,9 +220,19 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 	// Set the keepalive options
 	options.Dialer.KeepAliveOptions = keepAliveOptions
 
-	if config.CAFile != "" {
+	if token != "" || config.CertConfig.HasCerts() {
 		// Set up TLS configuration for the gRPC connection, the certificates will be reloaded periodically.
-		options.Dialer.TLSConfig, err = cert.AutoLoadTLSConfig(config.CAFile, config.ClientCertFile, config.ClientKeyFile, options.Dialer)
+		options.Dialer.TLSConfig, err = cert.AutoLoadTLSConfig(
+			config.CertConfig,
+			func() (*cert.CertConfig, error) {
+				config, err := LoadConfig(configPath)
+				if err != nil {
+					return nil, err
+				}
+				return &config.CertConfig, nil
+			},
+			options.Dialer,
+		)
 		if err != nil {
 			return nil, err
 		}
