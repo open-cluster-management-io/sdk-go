@@ -57,7 +57,7 @@ func TestBuildMQTTOptionsFromFlags(t *testing.T) {
 		},
 		{
 			name:             "tls config without clientCertFile",
-			config:           "{\"brokerHost\":\"test\",\"clientCertFile\":\"test\"}",
+			config:           "{\"brokerHost\":\"test\",\"clientCertData\":\"dGVzdAo=\"}",
 			expectedErrorMsg: "either both or none of clientCertFile and clientKeyFile must be set",
 		},
 		{

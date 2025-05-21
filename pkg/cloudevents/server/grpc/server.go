@@ -68,7 +68,7 @@ func (bkr *GRPCBroker) RegisterService(t types.CloudEventsDataType, service serv
 // Start starts the gRPC broker at the given address
 func (bkr *GRPCBroker) Start(ctx context.Context, addr string) {
 	logger := klog.FromContext(ctx)
-	logger.Info("Starting gRPC broker at %s", addr)
+	logger.Info("Starting gRPC broker at addr", "addr", addr)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		utilruntime.Must(fmt.Errorf("failed to listen: %v", err))

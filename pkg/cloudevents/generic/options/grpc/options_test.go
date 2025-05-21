@@ -24,18 +24,13 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 		},
 		{
 			name:             "tls config without clientCertFile",
-			config:           "{\"url\":\"test\",\"clientCertFile\":\"test\"}",
+			config:           "{\"url\":\"test\",\"clientCertData\":\"dGVzdAo=\"}",
 			expectedErrorMsg: "either both or none of clientCertFile and clientKeyFile must be set",
-		},
-		{
-			name:             "tls config without caFile",
-			config:           "{\"url\":\"test\",\"clientCertFile\":\"test\",\"clientKeyFile\":\"test\"}",
-			expectedErrorMsg: "setting clientCertFile and clientKeyFile requires caFile",
 		},
 		{
 			name:             "token config without caFile",
 			config:           "{\"url\":\"test\",\"token\":\"test\"}",
-			expectedErrorMsg: "setting tokenFile requires caFile",
+			expectedErrorMsg: "setting token requires authority certificates",
 		},
 		{
 			name:   "customized options",
@@ -100,7 +95,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			}
 
 			if !cmp.Equal(options, c.expectedOptions, cmpopts.IgnoreUnexported(GRPCDialer{})) {
-				t.Errorf("unexpected options %v", options)
+				t.Errorf("unexpected options %+v", options)
 			}
 		})
 	}

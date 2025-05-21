@@ -35,7 +35,7 @@ func newTLSMQTTOptions(certPool *x509.CertPool, brokerHost, clientCertFile, clie
 			TLSConfig: &tls.Config{
 				RootCAs: certPool,
 				GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return cert.CachingCertificateLoader(clientCertFile, clientKeyFile)()
+					return cert.CachingCertificateLoader(ReloadCerts(clientCertFile, clientKeyFile))()
 				},
 			},
 		},
