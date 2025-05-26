@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
@@ -17,6 +19,9 @@ type AgentEventServer interface {
 
 	// Start initiates the EventServer to listen to agents.
 	Start(ctx context.Context, addr string)
+
+	// Subscribers returns all current subscribers who subscribe to this server.
+	Subscribers() sets.Set[string]
 }
 
 type EventHandler interface {

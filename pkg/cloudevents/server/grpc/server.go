@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	grpcprotocol "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
@@ -63,6 +64,18 @@ func NewGRPCBroker(srv *grpc.Server) server.AgentEventServer {
 func (bkr *GRPCBroker) RegisterService(t types.CloudEventsDataType, service server.Service) {
 	bkr.services[t] = service
 	service.RegisterHandler(bkr)
+}
+
+func (bkr *GRPCBroker) Subscribers() sets.Set[string] {
+	bkr.mu.Lock()
+	defer bkr.mu.Unlock()
+
+	subscribers := sets.New[string]()
+	for _, sub := range bkr.subscribers {
+		subscribers.Insert(sub.clusterName)
+	}
+
+	return subscribers
 }
 
 // Start starts the gRPC broker at the given address
