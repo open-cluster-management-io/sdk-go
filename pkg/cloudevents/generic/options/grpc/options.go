@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials/insecure"
+	"k8s.io/klog/v2"
 
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
@@ -253,30 +254,35 @@ func (o *GRPCOptions) GetCloudEventsProtocol(ctx context.Context, errorHandler f
 
 	// Periodically (every 100ms) check the connection status and reconnect if necessary.
 	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
+		state := conn.GetState()
 		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				conn.Close()
-			case <-ticker.C:
-				connState := conn.GetState()
-				// If any failure in any of the steps needed to establish connection, or any failure encountered while
-				// expecting successful communication on established channel, the grpc client connection state will be
-				// TransientFailure.
-				// When client certificate is expired, client will proactively close the connection, which will result
-				// in connection state changed from Ready to Shutdown.
-				// More details: https://grpc.github.io/grpc/core/md_doc_connectivity-semantics-and-api.html
-				if connState == connectivity.TransientFailure || connState == connectivity.Shutdown {
-					errorHandler(fmt.Errorf("grpc connection is disconnected (state=%s)", connState))
-					ticker.Stop()
-					if connState != connectivity.Shutdown {
-						// don't close the connection if it's already shutdown
-						conn.Close()
-					}
-					return // exit the goroutine as the error handler function will handle the reconnection.
-				}
+			if !conn.WaitForStateChange(ctx, state) {
+				// the ctx is closed, stop this watch
+				klog.Infof("Stop watch grpc connection state")
+				return
 			}
+
+			newState := conn.GetState()
+			// If any failure in any of the steps needed to establish connection, or any failure
+			// encountered while expecting successful communication on established channel, the
+			// grpc client connection state will be TransientFailure.
+			// When client certificate is expired, client will proactively close the connection,
+			// which will result in connection state changed from Ready to Shutdown.
+			// When server is closed, client will NOT close or reestablish the connection proactively,
+			// it will only change the connection state from Ready to Idle.
+			if newState == connectivity.TransientFailure || newState == connectivity.Shutdown ||
+				newState == connectivity.Idle {
+				errorHandler(fmt.Errorf("grpc connection is disconnected (state=%s)", newState))
+				if newState != connectivity.Shutdown {
+					// don't close the connection if it's already shutdown
+					if err := conn.Close(); err != nil {
+						klog.Errorf("failed to close gRPC connection, %v", err)
+					}
+				}
+				return // exit the goroutine as the error handler function will handle the reconnection.
+			}
+
+			state = newState
 		}
 	}()
 
