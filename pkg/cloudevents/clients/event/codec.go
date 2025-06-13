@@ -23,7 +23,7 @@ func NewEventCodec() *EventCodec {
 	return &EventCodec{}
 }
 
-// EventDataType always returns the event data type `io.k8s.events.v1.events`.
+// EventDataType always returns the event data type `events.k8s.io.v1.events`.
 func (c *EventCodec) EventDataType() types.CloudEventsDataType {
 	return EventEventDataType
 }

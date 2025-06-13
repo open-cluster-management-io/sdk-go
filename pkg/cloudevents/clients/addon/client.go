@@ -134,7 +134,7 @@ func (c *ManagedClusterAddOnClient) Patch(
 
 	// publish the status update event to source, source will check the resource version
 	// and reject the update if it's status update is outdated.
-	eventType.Action = common.UpdateRequestAction
+	eventType.Action = types.UpdateRequestAction
 	if err := c.cloudEventsClient.Publish(ctx, eventType, newAddon); err != nil {
 		return nil, cloudeventserrors.ToStatusError(common.ManagedClusterAddOnGR, name, err)
 	}

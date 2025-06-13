@@ -26,7 +26,7 @@ func NewCSRCodec() *CSRCodec {
 	return &CSRCodec{}
 }
 
-// EventDataType always returns the event data type `io.k8s.certificates.v1.certificatesigningrequests`.
+// EventDataType always returns the event data type `certificates.k8s.io.v1.certificatesigningrequests`.
 func (c *CSRCodec) EventDataType() types.CloudEventsDataType {
 	return CSREventDataType
 }

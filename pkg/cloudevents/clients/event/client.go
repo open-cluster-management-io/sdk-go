@@ -54,7 +54,7 @@ func (e *EventClient) Create(ctx context.Context, event *eventv1.Event, opts met
 	eventType := types.CloudEventsType{
 		CloudEventsDataType: EventEventDataType,
 		SubResource:         types.SubResourceSpec,
-		Action:              common.CreateRequestAction,
+		Action:              types.CreateRequestAction,
 	}
 
 	if err := e.cloudEventsClient.Publish(ctx, eventType, event); err != nil {
@@ -108,7 +108,7 @@ func (e *EventClient) Patch(ctx context.Context, name string, pt kubetypes.Patch
 		types.CloudEventsType{
 			CloudEventsDataType: EventEventDataType,
 			SubResource:         types.SubResourceSpec,
-			Action:              common.UpdateRequestAction,
+			Action:              types.UpdateRequestAction,
 		},
 		newEvent,
 	); err != nil {

@@ -12,7 +12,6 @@ import (
 	leasev1client "k8s.io/client-go/kubernetes/typed/coordination/v1"
 	"k8s.io/klog/v2"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	cloudeventserrors "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/errors"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
@@ -34,8 +33,8 @@ func (l LeaseClient) Update(ctx context.Context, lease *coordinationv1.Lease, op
 	eventType := types.CloudEventsType{
 		CloudEventsDataType: LeaseEventDataType,
 		SubResource:         types.SubResourceSpec,
+		Action:              types.UpdateRequestAction,
 	}
-	eventType.Action = common.UpdateRequestAction
 
 	if err := l.cloudEventsClient.Publish(ctx, eventType, lease); err != nil {
 		return nil, cloudeventserrors.ToStatusError(coordinationv1.Resource("leases"), lease.Name, err)

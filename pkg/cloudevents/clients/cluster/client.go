@@ -54,7 +54,7 @@ func (c *ManagedClusterClient) Create(ctx context.Context, cluster *clusterv1.Ma
 	eventType := types.CloudEventsType{
 		CloudEventsDataType: ManagedClusterEventDataType,
 		SubResource:         types.SubResourceSpec,
-		Action:              common.CreateRequestAction,
+		Action:              types.CreateRequestAction,
 	}
 
 	// TODO: validate the ManagedCluster
@@ -150,7 +150,7 @@ func (c *ManagedClusterClient) Patch(ctx context.Context, name string, pt kubety
 
 	// publish the status update event to source, source will check the resource version
 	// and reject the update if it's status update is outdated.
-	eventType.Action = common.UpdateRequestAction
+	eventType.Action = types.UpdateRequestAction
 	if err := c.cloudEventsClient.Publish(ctx, eventType, newCluster); err != nil {
 		return nil, cloudeventserrors.ToStatusError(common.ManagedClusterGR, name, err)
 	}

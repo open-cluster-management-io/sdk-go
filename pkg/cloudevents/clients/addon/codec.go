@@ -23,7 +23,7 @@ func NewManagedClusterAddOnCodec() *ManagedClusterAddOnCodec {
 	return &ManagedClusterAddOnCodec{}
 }
 
-// EventDataType always returns the event data type `io.open-cluster-management.addon.v1alpha1.managedclusteraddons`.
+// EventDataType always returns the event data type `addon.open-cluster-management.io.v1alpha1.managedclusteraddons`.
 func (c *ManagedClusterAddOnCodec) EventDataType() types.CloudEventsDataType {
 	return ManagedClusterAddOnEventDataType
 }

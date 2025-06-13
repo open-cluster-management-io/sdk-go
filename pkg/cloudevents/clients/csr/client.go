@@ -58,7 +58,7 @@ func (c *CSRClient) Create(ctx context.Context, csr *certificatev1.CertificateSi
 	eventType := types.CloudEventsType{
 		CloudEventsDataType: CSREventDataType,
 		SubResource:         types.SubResourceSpec,
-		Action:              common.CreateRequestAction,
+		Action:              types.CreateRequestAction,
 	}
 
 	// TODO: validate the csr
