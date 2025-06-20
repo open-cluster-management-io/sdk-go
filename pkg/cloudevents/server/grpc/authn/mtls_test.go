@@ -5,9 +5,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"testing"
+
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
-	"testing"
 )
 
 func TestMtlsAuthenticator(t *testing.T) {

@@ -6,14 +6,20 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+
+	"k8s.io/klog/v2"
+
+	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
 	grpcserver "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authn"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authz"
 )
 
 // PreStartHook is an interface to start hook before grpc server is started.
@@ -25,6 +31,7 @@ type PreStartHook interface {
 type Server struct {
 	options        *GRPCServerOptions
 	authenticators []authn.Authenticator
+	authorizers    []authz.Authorizer
 	services       map[types.CloudEventsDataType]server.Service
 	hooks          []PreStartHook
 }
@@ -35,6 +42,11 @@ func NewServer(opt *GRPCServerOptions) *Server {
 
 func (s *Server) WithAuthenticator(authenticator authn.Authenticator) *Server {
 	s.authenticators = append(s.authenticators, authenticator)
+	return s
+}
+
+func (s *Server) WithAuthorizer(authorizer authz.Authorizer) *Server {
+	s.authorizers = append(s.authorizers, authorizer)
 	return s
 }
 
@@ -96,8 +108,12 @@ func (s *Server) Run(ctx context.Context) error {
 	grpcServerOptions = append(grpcServerOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
 
 	grpcServerOptions = append(grpcServerOptions,
-		grpc.ChainUnaryInterceptor(newAuthUnaryInterceptor(s.authenticators...)),
-		grpc.ChainStreamInterceptor(newAuthStreamInterceptor(s.authenticators...)))
+		grpc.ChainUnaryInterceptor(
+			newAuthnUnaryInterceptor(s.authenticators...),
+			newAuthzUnaryInterceptor(s.authorizers...)),
+		grpc.ChainStreamInterceptor(
+			newAuthnStreamInterceptor(s.authenticators...),
+			newAuthzStreamInterceptor(s.authorizers...)))
 
 	grpcServer := grpc.NewServer(grpcServerOptions...)
 	grpcEventServer := grpcserver.NewGRPCBroker(grpcServer)
@@ -116,7 +132,7 @@ func (s *Server) Run(ctx context.Context) error {
 	return nil
 }
 
-func newAuthUnaryInterceptor(authenticators ...authn.Authenticator) grpc.UnaryServerInterceptor {
+func newAuthnUnaryInterceptor(authenticators ...authn.Authenticator) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
@@ -133,6 +149,40 @@ func newAuthUnaryInterceptor(authenticators ...authn.Authenticator) grpc.UnarySe
 
 		if err != nil {
 			return nil, err
+		}
+
+		return handler(ctx, req)
+	}
+}
+
+func newAuthzUnaryInterceptor(authorizers ...authz.Authorizer) grpc.UnaryServerInterceptor {
+	return func(
+		ctx context.Context,
+		req interface{},
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		for _, authorizer := range authorizers {
+			pReq, ok := req.(*pbv1.PublishRequest)
+			if !ok {
+				return nil, fmt.Errorf("unsupported request type %T", req)
+			}
+
+			eventsType, err := types.ParseCloudEventsType(pReq.Event.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			// the event of grpc publish request is the original cloudevent data, we need a `ce-` prefix
+			// to get the event attribute
+			clusterAttr, ok := pReq.Event.Attributes[fmt.Sprintf("ce-%s", types.ExtensionClusterName)]
+			if !ok {
+				return nil, fmt.Errorf("missing ce-clustername in event attributes, %v", pReq.Event.Attributes)
+			}
+
+			if err := authorizer.Authorize(ctx, clusterAttr.GetCeString(), *eventsType); err != nil {
+				return nil, err
+			}
 		}
 
 		return handler(ctx, req)
@@ -157,12 +207,12 @@ func newWrappedAuthStream(ctx context.Context, s grpc.ServerStream) grpc.ServerS
 	return &wrappedAuthStream{s, ctx}
 }
 
-// newAuthStreamInterceptor creates a stream interceptor that retrieves the user and groups
+// newAuthnStreamInterceptor creates a stream interceptor that retrieves the user and groups
 // based on the specified authentication type. It supports retrieving from either the access
 // token or the client certificate depending on the provided authNType.
 // The interceptor then adds the retrieved identity information (user and groups) to the
 // context and invokes the provided handler.
-func newAuthStreamInterceptor(authenticators ...authn.Authenticator) grpc.StreamServerInterceptor {
+func newAuthnStreamInterceptor(authenticators ...authn.Authenticator) grpc.StreamServerInterceptor {
 	return func(
 		srv interface{},
 		ss grpc.ServerStream,
@@ -183,5 +233,71 @@ func newAuthStreamInterceptor(authenticators ...authn.Authenticator) grpc.Stream
 		}
 
 		return handler(srv, newWrappedAuthStream(ctx, ss))
+	}
+}
+
+// wrappedAuthorizedStream caches the subscription request that is already read.
+type wrappedAuthorizedStream struct {
+	sync.Mutex
+
+	grpc.ServerStream
+	authorizedReq *pbv1.SubscriptionRequest
+}
+
+// RecvMsg set the msg from the cache.
+func (c *wrappedAuthorizedStream) RecvMsg(m any) error {
+	c.Lock()
+	defer c.Unlock()
+
+	msg, ok := m.(*pbv1.SubscriptionRequest)
+	if !ok {
+		return fmt.Errorf("unsupported request type %T", m)
+	}
+
+	msg.ClusterName = c.authorizedReq.ClusterName
+	msg.Source = c.authorizedReq.Source
+	msg.DataType = c.authorizedReq.DataType
+	return nil
+}
+
+// newAuthzStreamInterceptor is a stream interceptor that authorizes the subscription request.
+func newAuthzStreamInterceptor(authorizers ...authz.Authorizer) grpc.StreamServerInterceptor {
+	return func(
+		srv interface{},
+		ss grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		if info.IsClientStream {
+			return handler(srv, ss)
+		}
+
+		var req pbv1.SubscriptionRequest
+		if err := ss.RecvMsg(&req); err != nil {
+			return err
+		}
+
+		eventDataType, err := types.ParseCloudEventsDataType(req.DataType)
+		if err != nil {
+			return err
+		}
+
+		eventsType := types.CloudEventsType{
+			CloudEventsDataType: *eventDataType,
+			SubResource:         types.SubResourceSpec,
+			Action:              types.WatchRequestAction,
+		}
+		for _, authorizer := range authorizers {
+			if err := authorizer.Authorize(ss.Context(), req.ClusterName, eventsType); err != nil {
+				return err
+			}
+		}
+
+		if err := handler(srv, &wrappedAuthorizedStream{ServerStream: ss, authorizedReq: &req}); err != nil {
+			klog.Error(err)
+			return err
+		}
+
+		return nil
 	}
 }

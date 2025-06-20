@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -23,7 +24,7 @@ func NewManagedClusterCodec() *ManagedClusterCodec {
 	return &ManagedClusterCodec{}
 }
 
-// EventDataType always returns the event data type `io.open-cluster-management.cluster.v1.managedclusters`.
+// EventDataType always returns the event data type `cluster.open-cluster-management.io.v1.managedclusters`.
 func (c *ManagedClusterCodec) EventDataType() types.CloudEventsDataType {
 	return ManagedClusterEventDataType
 }

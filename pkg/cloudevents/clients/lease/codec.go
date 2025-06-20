@@ -12,8 +12,8 @@ import (
 )
 
 var LeaseEventDataType = types.CloudEventsDataType{
-	Group:    coordinationv1.GroupName,
-	Version:  "v1",
+	Group:    coordinationv1.SchemeGroupVersion.Group,
+	Version:  coordinationv1.SchemeGroupVersion.Version,
 	Resource: "leases",
 }
 
@@ -24,7 +24,7 @@ func NewLeaseCodec() *LeaseCodec {
 	return &LeaseCodec{}
 }
 
-// EventDataType always returns the event data type `io.k8s.coordination.k8s.v1.leases`.
+// EventDataType always returns the event data type `coordination.k8s.io.v1.leases`.
 func (c *LeaseCodec) EventDataType() types.CloudEventsDataType {
 	return LeaseEventDataType
 }

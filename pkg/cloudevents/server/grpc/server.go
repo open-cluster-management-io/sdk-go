@@ -111,7 +111,7 @@ func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("failed to parse cloud event type %s, %v", evt.Type(), err))
 	}
 
-	logger.Info("receive the event with grpc broker", "event", evt)
+	logger.V(4).Info("receive the event with grpc broker", "event", evt.Context)
 
 	// handler resync request
 	if eventType.Action == types.ResyncRequestAction {
@@ -155,12 +155,12 @@ func (bkr *GRPCBroker) register(
 		errChan:     errChan,
 	}
 
-	klog.Infof("register a subscriber %s (cluster name = %s)", id, clusterName)
+	klog.V(4).Infof("register a subscriber %s (cluster name = %s)", id, clusterName)
 
 	return id, errChan
 }
 
-// unregister unregisters a subscriber by id
+// unregister a subscriber by id
 func (bkr *GRPCBroker) unregister(id string) {
 	bkr.mu.Lock()
 	defer bkr.mu.Unlock()
@@ -192,7 +192,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		}
 
 		// send the cloudevent to the subscriber
-		klog.Infof("sending the event to spec subscribers, %s", evt)
+		klog.V(4).Infof("sending the event to spec subscribers, %s", evt.Context)
 		if err := subServer.Send(pbEvt); err != nil {
 			klog.Errorf("failed to send grpc event, %v", err)
 			// Return the error without wrapping, as it includes the gRPC error code and message for further handling.
