@@ -65,7 +65,7 @@ func runCloudeventsCertRotationTest(getAgentOptionsFn GetAgentOptionsFn) func() 
 		ginkgo.It("Should be able to send events after the client cert renewed", func() {
 			ginkgo.By("Create an agent client with short time cert")
 			agentOptions := getAgentOptionsFn(ctx, agentID, clusterName, clientCertFile.Name(), clientKeyFile.Name())
-			agentClient, err := generic.NewCloudEventAgentClient[*store.Resource](
+			agentClient, err := generic.NewCloudEventAgentClient(
 				ctx,
 				agentOptions,
 				nil,
@@ -77,7 +77,7 @@ func runCloudeventsCertRotationTest(getAgentOptionsFn GetAgentOptionsFn) func() 
 			evtType := types.CloudEventsType{
 				CloudEventsDataType: payload.ManifestBundleEventDataType,
 				SubResource:         types.SubResourceStatus,
-				Action:              types.EventAction("test_cert_rotation"),
+				Action:              types.CreateRequestAction,
 			}
 
 			ginkgo.By("Publishes an event")
