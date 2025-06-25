@@ -11,6 +11,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
 var _ = ginkgo.Describe("CloudEvents Certificate Rotation Test - MQTT", runCloudeventsCertRotationTest(GetMQTTAgentOptions))
@@ -35,7 +36,7 @@ func newTLSMQTTOptions(certPool *x509.CertPool, brokerHost, clientCertFile, clie
 			TLSConfig: &tls.Config{
 				RootCAs: certPool,
 				GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return cert.CachingCertificateLoader(ReloadCerts(clientCertFile, clientKeyFile))()
+					return cert.CachingCertificateLoader(util.ReloadCerts(clientCertFile, clientKeyFile))()
 				},
 			},
 		},

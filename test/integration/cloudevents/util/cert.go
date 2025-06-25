@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"os"
 	"time"
 
 	certutil "k8s.io/client-go/util/cert"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/testing"
 )
 
@@ -22,8 +24,6 @@ type ServerCertPairs struct {
 	CA            *x509.Certificate
 	CAKey         *rsa.PrivateKey
 	ServerTLSCert tls.Certificate
-	// ServerCert []byte
-	// ServerKey  []byte
 }
 
 type ClientCertPairs struct {
@@ -178,4 +178,37 @@ func WriteTokenToTempFile(token string) (string, error) {
 	}
 
 	return tmpFile.Name(), nil
+}
+
+func WriteKeyToTempFile(key any) (string, error) {
+	rsaKey, ok := key.(*rsa.PrivateKey)
+	if !ok {
+		return "", fmt.Errorf("key is not an RSA private key")
+	}
+
+	tmpFile, err := testing.WriteToTempFile("key-", pem.EncodeToMemory(&pem.Block{
+		Type:  RSAPrivateKeyBlockType,
+		Bytes: x509.MarshalPKCS1PrivateKey(rsaKey),
+	}))
+	if err != nil {
+		return "", err
+	}
+
+	return tmpFile.Name(), nil
+}
+
+func ReloadCerts(clientCertFile, clientKeyFile string) cert.ReloadCerts {
+	return func() (*cert.CertConfig, error) {
+		certData, err := os.ReadFile(clientCertFile)
+		if err != nil {
+			return nil, err
+		}
+
+		keyData, err := os.ReadFile(clientKeyFile)
+		if err != nil {
+			return nil, err
+		}
+
+		return &cert.CertConfig{ClientCertData: certData, ClientKeyData: keyData}, nil
+	}
 }

@@ -22,6 +22,7 @@ import (
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	grpcprotocol "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker/services"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 )
 
@@ -29,17 +30,16 @@ type resourceHandler func(res *store.Resource) error
 
 type GRPCServer struct {
 	pbv1.UnimplementedCloudEventServiceServer
-	serverStore  *store.MemoryStore
-	resourceChan chan *store.Resource
-	handlers     map[string]map[string]resourceHandler
+	serverStore     *store.MemoryStore
+	resourceService *services.ResourceService
+	handlers        map[string]map[string]resourceHandler
 }
 
 // func NewGRPCServer(eventBroadcaster *store.EventBroadcaster) *GRPCServer {
-func NewGRPCServer() *GRPCServer {
+func NewGRPCServer(serverStore *store.MemoryStore) *GRPCServer {
 	return &GRPCServer{
-		serverStore:  store.NewMemoryStore(),
-		resourceChan: make(chan *store.Resource),
-		handlers:     make(map[string]map[string]resourceHandler), // source -> dataType -> handler
+		serverStore: serverStore,
+		handlers:    make(map[string]map[string]resourceHandler), // source -> dataType -> handler
 	}
 }
 
@@ -56,7 +56,11 @@ func (svr *GRPCServer) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 	}
 
 	svr.serverStore.UpSert(res)
-	svr.resourceChan <- res
+	if err := svr.resourceService.UpdateResourceSpec(res); err != nil {
+		klog.Errorf("failed to update resource spec: %v", err)
+		return nil, err
+	}
+
 	return &emptypb.Empty{}, nil
 }
 
@@ -105,10 +109,15 @@ func (svr *GRPCServer) GetStore() *store.MemoryStore {
 	return svr.serverStore
 }
 
+func (svr *GRPCServer) SetResourceService(svc *services.ResourceService) {
+	svr.resourceService = svc
+}
+
 func (svr *GRPCServer) UpdateResourceStatus(resource *store.Resource) error {
 	handleFn, ok := svr.handlers[resource.Source][payload.ManifestBundleEventDataType.String()]
 	if !ok {
-		return fmt.Errorf("failed to find handler for resource %s (%s)", resource.ResourceID, resource.Source)
+		// there is no handler registered, do nothing, for publish only case
+		return nil
 	}
 
 	if err := handleFn(resource); err != nil {
@@ -116,10 +125,6 @@ func (svr *GRPCServer) UpdateResourceStatus(resource *store.Resource) error {
 	}
 
 	return svr.serverStore.UpdateStatus(resource)
-}
-
-func (svr *GRPCServer) ResourceChan() <-chan *store.Resource {
-	return svr.resourceChan
 }
 
 func encode(resource *store.Resource) (*cloudevents.Event, error) {

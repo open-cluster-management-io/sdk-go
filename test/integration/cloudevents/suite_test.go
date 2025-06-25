@@ -11,39 +11,40 @@ import (
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/keepalive"
 	"k8s.io/klog/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
+	serveroptions "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/options"
 
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker/services"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
 const (
 	mqttBrokerHost    = "127.0.0.1:1883"
 	mqttTLSBrokerHost = "127.0.0.1:8883"
-	grpcBrokerHost    = "127.0.0.1:1882"
-	grpcTLSBrokerHost = "127.0.0.1:8882"
+	grpcBrokerHost    = "127.0.0.1:8090"
 	grpcServerHost    = "127.0.0.1:1881"
-	grpcStaticToken   = "test-static-token"
+	grpcStaticToken   = "test-client"
 )
 
 var (
-	mqttBroker    *mochimqtt.Server
-	grpcBroker    *broker.GRPCBroker
-	grpcTLSBroker *broker.GRPCBroker
-	grpcServer    *server.GRPCServer
+	mqttBroker     *mochimqtt.Server
+	resourceServer *server.GRPCServer
+	grpcBroker     *serveroptions.Server
 
 	serverCertPairs *util.ServerCertPairs
+	clientCertPairs *util.ClientCertPairs
 	certPool        *x509.CertPool
-	serverCAFile    string
+	caFile          string
+	serverCertFile  string
+	serverKeyFile   string
 	tokenFile       string
 )
 
@@ -85,6 +86,19 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	certPool, err = util.AppendCAToCertPool(serverCertPairs.CA)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
+	clientCertPairs, err = util.SignClientCert(serverCertPairs.CA, serverCertPairs.CAKey, 10*time.Second)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	// write the server CA and token to tmp files
+	caFile, err = util.WriteCertToTempFile(serverCertPairs.CA)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	serverCertFile, err = util.WriteCertToTempFile(serverCertPairs.ServerTLSCert.Leaf)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	serverKeyFile, err = util.WriteKeyToTempFile(serverCertPairs.ServerTLSCert.PrivateKey)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	tokenFile, err = util.WriteTokenToTempFile(grpcStaticToken)
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
 	err = mqttBroker.AddListener(listeners.NewTCP(
 		listeners.Config{
 			ID:      "mqtt-tls-test-broker",
@@ -102,49 +116,27 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
 
-	// start the grpc broker
-	grpcBroker = broker.NewGRPCBroker()
-	go func() {
-		err := grpcBroker.Start(grpcBrokerHost, nil)
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	}()
-
-	// start the grpc tls broker
-	grpcTLSBroker = broker.NewGRPCBroker()
-	go func() {
-		err := grpcTLSBroker.Start(grpcTLSBrokerHost, &tls.Config{
-			ClientCAs:    certPool,
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			Certificates: []tls.Certificate{serverCertPairs.ServerTLSCert},
-		})
-		gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	}()
-
+	serverStore := store.NewMemoryStore()
 	// start the resource grpc server
-	grpcServer = server.NewGRPCServer()
+	resourceServer = server.NewGRPCServer(serverStore)
 	go func() {
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{serverCertPairs.ServerTLSCert},
-			MinVersion:   tls.VersionTLS13,
-			MaxVersion:   tls.VersionTLS13,
-		}
-		kaep := keepalive.EnforcementPolicy{
-			MinTime:             5 * time.Second, // If a client pings more than once every 5 seconds, terminate the connection
-			PermitWithoutStream: true,            // Allow pings even when there are no active streams
-		}
-		kasp := keepalive.ServerParameters{
-			Time:    5 * time.Second,
-			Timeout: 1 * time.Second,
-		}
-		err := grpcServer.Start(grpcServerHost, []grpc.ServerOption{grpc.UnaryInterceptor(ensureValidTokenUnary), grpc.StreamInterceptor(ensureValidTokenStream), grpc.Creds(credentials.NewTLS(tlsConfig)), grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp)})
+		err := resourceServer.Start(grpcServerHost, nil)
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
 
-	// write the server CA and token to tmp files
-	serverCAFile, err = util.WriteCertToTempFile(serverCertPairs.CA)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
-	tokenFile, err = util.WriteTokenToTempFile(grpcStaticToken)
-	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	service := services.NewResourceService(resourceServer.UpdateResourceStatus, serverStore)
+	resourceServer.SetResourceService(service)
+
+	// start the grpc broker
+	opt := serveroptions.NewGRPCServerOptions()
+	opt.ClientCAFile = caFile
+	opt.TLSCertFile = serverCertFile
+	opt.TLSKeyFile = serverKeyFile
+	grpcBroker = broker.NewGRPCBrokerServer(opt, service)
+	go func() {
+		err := grpcBroker.Run(context.Background())
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	}()
 
 	close(done)
 }, 300)
@@ -156,7 +148,7 @@ var _ = ginkgo.AfterSuite(func() {
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 	// remove the temp files
-	err = clienttesting.RemoveTempFile(serverCAFile)
+	err = clienttesting.RemoveTempFile(caFile)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	err = clienttesting.RemoveTempFile(tokenFile)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())

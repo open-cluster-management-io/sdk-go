@@ -9,12 +9,12 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 )
 
-func NewGRPCAgentOptions(brokerURL string) *grpc.GRPCOptions {
-	return newGRPCOptions(nil, brokerURL, "")
+func NewGRPCAgentOptions(certPool *x509.CertPool, brokerURL, tokenFile string) *grpc.GRPCOptions {
+	return newGRPCOptions(certPool, brokerURL, tokenFile)
 }
 
-func NewGRPCSourceOptions(certPool *x509.CertPool, brokerURL, tokenFile string) *grpc.GRPCOptions {
-	return newGRPCOptions(certPool, brokerURL, tokenFile)
+func NewGRPCSourceOptions(brokerURL string) *grpc.GRPCOptions {
+	return newGRPCOptions(nil, brokerURL, "")
 }
 
 func newGRPCOptions(certPool *x509.CertPool, brokerURL, tokenFile string) *grpc.GRPCOptions {

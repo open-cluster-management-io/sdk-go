@@ -3,7 +3,6 @@ package cloudevents
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -38,30 +37,10 @@ var _ = ginkgo.Describe("CloudEvents Options Racing Test - GRPC", func() {
 			ctx, cancel = context.WithCancel(context.Background())
 			sourceID = fmt.Sprintf("cloudevents-test-%s", rand.String(5))
 			resourceName = fmt.Sprintf("resource-%s", rand.String(5))
-			agentOptions = util.NewGRPCAgentOptions(grpcBrokerHost)
+			agentOptions = util.NewGRPCAgentOptions(certPool, grpcBrokerHost, tokenFile)
 			sourceStore = store.NewMemoryStore()
 
-			// forward the resource to agent and listen for the status from grpc broker
-			go func() {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case res := <-grpcServer.ResourceChan():
-						if err := grpcBroker.UpdateResourceSpec(res); err != nil {
-							log.Printf("failed to update resource spec via gRPC broker %s, %v", res.ResourceID, err)
-						}
-					case res := <-grpcBroker.ResourceStatusChan():
-						// replace the source id with the original source id
-						res.Source = sourceID
-						if err := grpcServer.UpdateResourceStatus(res); err != nil {
-							log.Printf("failed to update resource status %s, %v", res.ResourceID, err)
-						}
-					}
-				}
-			}()
-
-			sourceOptions := grpc.NewSourceOptions(util.NewGRPCSourceOptions(certPool, grpcServerHost, tokenFile), sourceID)
+			sourceOptions := grpc.NewSourceOptions(util.NewGRPCSourceOptions(grpcServerHost), sourceID)
 			sourceCloudEventsClient, err = source.StartResourceSourceClient(
 				ctx,
 				sourceOptions,

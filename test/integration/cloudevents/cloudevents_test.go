@@ -29,17 +29,17 @@ var (
 	createRequest = types.CloudEventsType{
 		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceSpec,
-		Action:              "test_create_request",
+		Action:              types.CreateRequestAction,
 	}
 	updateRequest = types.CloudEventsType{
 		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceSpec,
-		Action:              "test_update_request",
+		Action:              types.UpdateRequestAction,
 	}
 	deleteRequest = types.CloudEventsType{
 		CloudEventsDataType: payload.ManifestBundleEventDataType,
 		SubResource:         types.SubResourceSpec,
-		Action:              "test_delete_request",
+		Action:              types.DeleteRequestAction,
 	}
 )
 
@@ -76,7 +76,7 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 			case constants.ConfigTypeMQTT:
 				agentOptions = util.NewMQTTAgentOptions(mqttBrokerHost, sourceID, clusterName)
 			case constants.ConfigTypeGRPC:
-				agentOptions = util.NewGRPCAgentOptions(grpcBrokerHost)
+				agentOptions = util.NewGRPCAgentOptions(certPool, grpcBrokerHost, tokenFile)
 			}
 
 			sourceCloudEventsClient, err = source.StartResourceSourceClient(

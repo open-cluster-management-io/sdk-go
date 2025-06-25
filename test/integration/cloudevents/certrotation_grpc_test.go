@@ -4,46 +4,30 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"os"
 	"time"
 
 	"github.com/onsi/ginkgo"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 
 var _ = ginkgo.Describe("CloudEvents Certificate Rotation Test - GRPC", runCloudeventsCertRotationTest(GetGRPCAgentOptions))
 
-func GetGRPCAgentOptions(ctx context.Context, agentID, clusterName, clientCertFile, clientKeyFile string) *options.CloudEventsAgentOptions {
-	grpcOptions := newTLSGRPCOptions(ctx, certPool, grpcTLSBrokerHost, clientCertFile, clientKeyFile)
+func GetGRPCAgentOptions(_ context.Context, agentID, clusterName, clientCertFile, clientKeyFile string) *options.CloudEventsAgentOptions {
+	grpcOptions := newTLSGRPCOptions(certPool, grpcBrokerHost, clientCertFile, clientKeyFile)
 	return grpc.NewAgentOptions(grpcOptions, clusterName, agentID)
 }
 
-func ReloadCerts(clientCertFile, clientKeyFile string) cert.ReloadCerts {
-	return func() (*cert.CertConfig, error) {
-		certData, err := os.ReadFile(clientCertFile)
-		if err != nil {
-			return nil, err
-		}
-
-		keyData, err := os.ReadFile(clientKeyFile)
-		if err != nil {
-			return nil, err
-		}
-
-		return &cert.CertConfig{ClientCertData: certData, ClientKeyData: keyData}, nil
-	}
-}
-
-func newTLSGRPCOptions(ctx context.Context, certPool *x509.CertPool, brokerHost, clientCertFile, clientKeyFile string) *grpc.GRPCOptions {
+func newTLSGRPCOptions(certPool *x509.CertPool, brokerHost, clientCertFile, clientKeyFile string) *grpc.GRPCOptions {
 	o := &grpc.GRPCOptions{
 		Dialer: &grpc.GRPCDialer{
 			URL: brokerHost,
 			TLSConfig: &tls.Config{
 				RootCAs: certPool,
 				GetClientCertificate: func(cri *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return cert.CachingCertificateLoader(ReloadCerts(clientCertFile, clientKeyFile))()
+					return cert.CachingCertificateLoader(util.ReloadCerts(clientCertFile, clientKeyFile))()
 				},
 			},
 			KeepAliveOptions: grpc.KeepAliveOptions{
@@ -56,17 +40,5 @@ func newTLSGRPCOptions(ctx context.Context, certPool *x509.CertPool, brokerHost,
 	}
 
 	cert.StartClientCertRotating(o.Dialer.TLSConfig.GetClientCertificate, o.Dialer)
-
-	// start a goroutine to receive resource status
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-grpcTLSBroker.ResourceStatusChan():
-			}
-		}
-	}()
-
 	return o
 }
