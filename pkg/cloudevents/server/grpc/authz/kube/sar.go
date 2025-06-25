@@ -61,7 +61,11 @@ func userInfo(ctx context.Context) (user string, groups []string, err error) {
 	}
 
 	if userValue != nil {
-		user = userValue.(string)
+		var ok bool
+		user, ok = userValue.(string)
+		if !ok {
+			return user, groups, fmt.Errorf("invalid user type in context")
+		}
 	}
 
 	if groupsValue != nil {
