@@ -58,7 +58,7 @@ func (c *CSRCodec) Encode(source string, eventType types.CloudEventsType, csr *c
 	newCSR := csr.DeepCopy()
 	newCSR.TypeMeta = metav1.TypeMeta{
 		APIVersion: certificatev1.SchemeGroupVersion.String(),
-		Kind:       "CSR",
+		Kind:       "CertificateSigningRequest",
 	}
 
 	if err := evt.SetData(cloudevents.ApplicationJSON, newCSR); err != nil {

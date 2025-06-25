@@ -95,6 +95,7 @@ func (bkr *GRPCBroker) Start(ctx context.Context, addr string) {
 	// wait until context is canceled
 	<-ctx.Done()
 	klog.Infof("Shutting down gRPC broker")
+	bkr.grpcServer.GracefulStop()
 }
 
 // Publish in stub implementation for agent publish resource status.
@@ -166,8 +167,10 @@ func (bkr *GRPCBroker) unregister(id string) {
 	defer bkr.mu.Unlock()
 
 	klog.V(10).Infof("unregister subscriber %s", id)
-	close(bkr.subscribers[id].errChan)
-	delete(bkr.subscribers, id)
+	if sub, exists := bkr.subscribers[id]; exists {
+		close(sub.errChan)
+		delete(bkr.subscribers, id)
+	}
 }
 
 // Subscribe in stub implementation for agent subscribe resource spec.
@@ -449,7 +452,8 @@ func findResourceVersion(id string, versions []payload.ResourceVersion) int64 {
 func getObj(id string, objs []*cloudevents.Event) (*cloudevents.Event, bool) {
 	for _, obj := range objs {
 		resID := obj.Extensions()[types.ExtensionResourceID]
-		if id == resID.(string) {
+		resIDStr, ok := resID.(string)
+		if ok && id == resIDStr {
 			return obj, true
 		}
 	}

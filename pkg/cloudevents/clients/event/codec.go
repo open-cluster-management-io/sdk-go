@@ -50,7 +50,7 @@ func (c *EventCodec) Encode(source string, eventType types.CloudEventsType, even
 	}
 
 	if err := evt.SetData(cloudevents.ApplicationJSON, newEvent); err != nil {
-		return nil, fmt.Errorf("failed to encode lease to a cloudevent: %v", err)
+		return nil, fmt.Errorf("failed to encode event to a cloudevent: %v", err)
 	}
 
 	return &evt, nil

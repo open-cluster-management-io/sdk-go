@@ -2,6 +2,7 @@ package csr
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	certificatev1 "k8s.io/api/certificates/v1"
@@ -38,8 +39,11 @@ func NewAgentClientHolder(ctx context.Context, opt *options.GenericClientOptions
 		csrClient, &certificatev1.CertificateSigningRequest{}, 30*time.Second,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 
-	opt.WatcherStore().(*store.AgentInformerWatcherStore[*certificatev1.CertificateSigningRequest]).
-		SetInformer(csrInformer)
+	agentStore, ok := opt.WatcherStore().(*store.AgentInformerWatcherStore[*certificatev1.CertificateSigningRequest])
+	if !ok {
+		return nil, fmt.Errorf("watcher store must be of type AgentInformerWatcherStore")
+	}
+	agentStore.SetInformer(csrInformer)
 
 	return &ClientHolder{client: csrClient, informer: csrInformer}, nil
 }
