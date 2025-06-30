@@ -2,8 +2,6 @@ module open-cluster-management.io/sdk-go
 
 go 1.24.0
 
-toolchain go1.24.2
-
 require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 v2.0.0-20240413090539-7fef29478991
