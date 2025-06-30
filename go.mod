@@ -12,7 +12,7 @@ require (
 	github.com/eclipse/paho.golang v0.21.0
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/protobuf v1.5.4
-	github.com/google/cel-go v0.22.0
+	github.com/google/cel-go v0.25.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/mochi-mqtt/server/v2 v2.6.5
@@ -40,7 +40,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.19.1 // indirect
+	cel.dev/expr v0.23.1 // indirect
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
