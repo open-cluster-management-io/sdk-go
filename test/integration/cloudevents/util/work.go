@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/evanphx/json-patch/v5"
 	"github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
