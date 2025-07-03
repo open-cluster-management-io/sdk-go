@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/evanphx/json-patch/v5"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

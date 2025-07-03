@@ -10,7 +10,7 @@ import (
 
 	confluentkafka "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	kafkav2 "github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/evanphx/json-patch/v5"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
