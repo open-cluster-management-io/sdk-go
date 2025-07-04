@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/fake"
 )
@@ -35,18 +34,17 @@ func TestCreate(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			watchStore := store.NewSimpleStore[*eventsv1.Event]()
 			ceClient, err := generic.NewCloudEventAgentClient(
 				context.Background(),
 				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
-				store.NewAgentWatcherStoreLister(watchStore),
+				nil,
 				statushash.StatusHash,
 				NewEventCodec())
 			if err != nil {
 				t.Error(err)
 			}
 
-			evtClient := NewEventClient(ceClient, watchStore).WithNamespace(c.clusterName)
+			evtClient := NewEventClient(ceClient).WithNamespace(c.clusterName)
 			if _, err := evtClient.Create(context.Background(), c.event, metav1.CreateOptions{}); err != nil {
 				t.Fatal(err)
 			}
@@ -91,22 +89,17 @@ func TestPatch(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			watchStore := store.NewSimpleStore[*eventsv1.Event]()
-			if err := watchStore.Add(c.event); err != nil {
-				t.Fatal(err)
-			}
-
 			ceClient, err := generic.NewCloudEventAgentClient(
 				context.Background(),
 				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
-				store.NewAgentWatcherStoreLister(watchStore),
+				nil,
 				statushash.StatusHash,
 				NewEventCodec())
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			evtClient := NewEventClient(ceClient, watchStore).WithNamespace(c.clusterName)
+			evtClient := NewEventClient(ceClient).WithNamespace(c.clusterName)
 
 			if _, err := evtClient.Patch(context.Background(),
 				c.event.Name,
