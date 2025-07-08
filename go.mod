@@ -1,6 +1,6 @@
 module open-cluster-management.io/sdk-go
 
-go 1.24.0
+go 1.23.6
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0
@@ -12,7 +12,7 @@ require (
 	github.com/eclipse/paho.golang v0.21.0
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/golang/protobuf v1.5.4
-	github.com/google/cel-go v0.25.0
+	github.com/google/cel-go v0.22.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/mochi-mqtt/server/v2 v2.6.5
@@ -28,10 +28,10 @@ require (
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.36.5
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.33.1
-	k8s.io/apimachinery v0.33.1
+	k8s.io/api v0.32.2
+	k8s.io/apimachinery v0.32.2
 	k8s.io/apiserver v0.32.2
-	k8s.io/client-go v0.33.1
+	k8s.io/client-go v0.32.2
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	open-cluster-management.io/api v1.0.0
@@ -57,6 +57,7 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
