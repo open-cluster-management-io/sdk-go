@@ -2,11 +2,12 @@ package options
 
 import (
 	"context"
-	certutil "k8s.io/client-go/util/cert"
 	"net"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authn"
 	"os"
 	"testing"
+
+	certutil "k8s.io/client-go/util/cert"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authn"
 )
 
 type testHook struct{}
@@ -31,6 +32,7 @@ func TestRunServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	opt := NewGRPCServerOptions()
+	opt.ClientCAFile = ""
 	opt.TLSKeyFile = path + "/tls.key"
 	opt.TLSCertFile = path + "/tls.crt"
 	server := NewServer(opt).WithAuthenticator(authn.NewMtlsAuthenticator()).WithPreStartHooks(&testHook{})

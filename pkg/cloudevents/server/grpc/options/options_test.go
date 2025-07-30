@@ -73,8 +73,8 @@ permit_ping_without_stream: true
 			setup: func(t *testing.T) string {
 				return filepath.Join(t.TempDir(), "non-existent-file.yaml")
 			},
-			expectedOpts: nil,
-			expectErr:    true,
+			expectedOpts: defaultOpts,
+			expectErr:    false,
 		},
 		{
 			name: "Invalid YAML content",
@@ -126,6 +126,9 @@ connection_timeout: 90s
 			},
 			expectedOpts: &GRPCServerOptions{
 				ServerBindPort:          "8888",
+				ClientCAFile:            "/var/run/secrets/hub/grpc/ca/ca-bundle.crt",
+				TLSCertFile:             "/var/run/secrets/hub/grpc/serving-cert/tls.crt",
+				TLSKeyFile:              "/var/run/secrets/hub/grpc/serving-cert/tls.key",
 				MaxConcurrentStreams:    defaultOpts.MaxConcurrentStreams,
 				MaxReceiveMessageSize:   defaultOpts.MaxReceiveMessageSize,
 				MaxSendMessageSize:      defaultOpts.MaxSendMessageSize,
