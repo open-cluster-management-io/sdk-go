@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"os"
 	"sync"
 
@@ -29,15 +30,16 @@ type PreStartHook interface {
 }
 
 type Server struct {
-	options        *GRPCServerOptions
-	authenticators []authn.Authenticator
-	authorizers    []authz.Authorizer
-	services       map[types.CloudEventsDataType]server.Service
-	hooks          []PreStartHook
+	options            *GRPCServerOptions
+	authenticators     []authn.Authenticator
+	authorizers        []authz.Authorizer
+	cloudeventServices map[types.CloudEventsDataType]server.Service
+	grpcService        []func(*grpc.Server)
+	hooks              []PreStartHook
 }
 
 func NewServer(opt *GRPCServerOptions) *Server {
-	return &Server{options: opt, services: make(map[types.CloudEventsDataType]server.Service)}
+	return &Server{options: opt, cloudeventServices: make(map[types.CloudEventsDataType]server.Service)}
 }
 
 func (s *Server) WithAuthenticator(authenticator authn.Authenticator) *Server {
@@ -51,12 +53,17 @@ func (s *Server) WithAuthorizer(authorizer authz.Authorizer) *Server {
 }
 
 func (s *Server) WithService(t types.CloudEventsDataType, service server.Service) *Server {
-	s.services[t] = service
+	s.cloudeventServices[t] = service
 	return s
 }
 
 func (s *Server) WithPreStartHooks(hooks ...PreStartHook) *Server {
 	s.hooks = append(s.hooks, hooks...)
+	return s
+}
+
+func (s *Server) WithGRPCService(fn func(*grpc.Server)) *Server {
+	s.grpcService = append(s.grpcService, fn)
 	return s
 }
 
@@ -116,10 +123,16 @@ func (s *Server) Run(ctx context.Context) error {
 			newAuthzStreamInterceptor(s.authorizers...)))
 
 	grpcServer := grpc.NewServer(grpcServerOptions...)
-	grpcEventServer := grpcserver.NewGRPCBroker(grpcServer)
 
-	for t, service := range s.services {
+	// Register the CloudEventServiceServer
+	grpcEventServer := grpcserver.NewGRPCBroker(grpcServer)
+	for t, service := range s.cloudeventServices {
 		grpcEventServer.RegisterService(t, service)
+	}
+
+	// Register other grpc services
+	for _, fn := range s.grpcService {
+		fn(grpcServer)
 	}
 
 	// start hook
@@ -127,8 +140,21 @@ func (s *Server) Run(ctx context.Context) error {
 		hook.Run(ctx)
 	}
 
-	go grpcEventServer.Start(ctx, ":"+s.options.ServerBindPort)
+	// start grpc server
+	lis, err := net.Listen("tcp", ":"+s.options.ServerBindPort)
+	if err != nil {
+		return fmt.Errorf("failed to listen: %v", err)
+	}
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			klog.Errorf("failed to serve gRPC broker: %v", err)
+		}
+	}()
+
 	<-ctx.Done()
+
+	klog.Infof("Shutting down gRPC server")
+	grpcServer.GracefulStop()
 	return nil
 }
 

@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
@@ -76,26 +74,6 @@ func (bkr *GRPCBroker) Subscribers() sets.Set[string] {
 	}
 
 	return subscribers
-}
-
-// Start starts the gRPC broker at the given address
-func (bkr *GRPCBroker) Start(ctx context.Context, addr string) {
-	logger := klog.FromContext(ctx)
-	logger.Info("Starting gRPC broker at addr", "addr", addr)
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		utilruntime.Must(fmt.Errorf("failed to listen: %v", err))
-	}
-	go func() {
-		if err := bkr.grpcServer.Serve(lis); err != nil {
-			utilruntime.Must(fmt.Errorf("failed to serve gRPC broker: %v", err))
-		}
-	}()
-
-	// wait until context is canceled
-	<-ctx.Done()
-	klog.Infof("Shutting down gRPC broker")
-	bkr.grpcServer.GracefulStop()
 }
 
 // Publish in stub implementation for agent publish resource status.
