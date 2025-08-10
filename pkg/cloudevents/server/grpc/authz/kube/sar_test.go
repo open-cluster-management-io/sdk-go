@@ -17,7 +17,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/lease"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authn"
+	"open-cluster-management.io/sdk-go/pkg/server/grpc/authn"
 )
 
 func TestSARAuthorize(t *testing.T) {
@@ -197,7 +197,7 @@ func TestSARAuthorize(t *testing.T) {
 
 			auth := NewSARAuthorizer(client)
 
-			err := auth.Authorize(tc.userCtx(), tc.cluster, tc.eventsType)
+			err := auth.authorize(tc.userCtx(), tc.cluster, tc.eventsType)
 			if tc.expectErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
