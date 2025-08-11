@@ -83,11 +83,14 @@ func TestProcessManifestWorkEvent(t *testing.T) {
 		utilruntime.HandleError(fmt.Errorf("failed to add indexers: %v", err))
 	}
 	gc := &GarbageCollector{
-		workClient:      fakeWorkClient.WorkV1(),
-		workIndexer:     fakeWorkInformer.Informer().GetIndexer(),
-		workInformer:    fakeWorkInformer,
-		metadataClient:  metadataClient,
-		attemptToDelete: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"), // nolint:staticcheck // SA1019
+		workClient:     fakeWorkClient.WorkV1(),
+		workIndexer:    fakeWorkInformer.Informer().GetIndexer(),
+		workInformer:   fakeWorkInformer,
+		metadataClient: metadataClient,
+		attemptToDelete: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[*dependent](),
+			workqueue.TypedRateLimitingQueueConfig[*dependent]{Name: "garbage_collector_attempt_to_delete"},
+		),
 	}
 	go fakeWorkInformer.Informer().Run(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), fakeWorkInformer.Informer().HasSynced) {
@@ -223,7 +226,10 @@ func setupGC(t *testing.T, config *rest.Config) *GarbageCollector {
 		workInformer:    workInformer.Work().V1().ManifestWorks(),
 		metadataClient:  metadataClient,
 		ownerGVRFilters: ownerGVRFilters,
-		attemptToDelete: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"), // nolint:staticcheck // SA1019
+		attemptToDelete: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[*dependent](),
+			workqueue.TypedRateLimitingQueueConfig[*dependent]{Name: "garbage_collector_attempt_to_delete"},
+		),
 	}
 }
 

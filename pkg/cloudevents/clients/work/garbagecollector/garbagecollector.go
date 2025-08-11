@@ -66,7 +66,7 @@ type GarbageCollector struct {
 	// each monitor list/watches a resource (including manifestwork)
 	monitors monitors
 	// garbage collector attempts to delete the items in attemptToDelete queue when the time is ripe.
-	attemptToDelete workqueue.RateLimitingInterface // nolint:staticcheck // SA1019
+	attemptToDelete workqueue.TypedRateLimitingInterface[*dependent]
 }
 
 // NewGarbageCollector creates a new garbage collector instance.
@@ -89,7 +89,10 @@ func NewGarbageCollector(
 		workInformer:    workInformer,
 		metadataClient:  metadataClient,
 		ownerGVRFilters: ownerGVRFilters,
-		attemptToDelete: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "garbage_collector_attempt_to_delete"), // nolint:staticcheck // SA1019
+		attemptToDelete: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.DefaultTypedControllerRateLimiter[*dependent](),
+			workqueue.TypedRateLimitingQueueConfig[*dependent]{Name: "garbage_collector_attempt_to_delete"},
+		),
 	}
 }
 
