@@ -2,10 +2,13 @@ package authz
 
 import (
 	"context"
-
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"google.golang.org/grpc"
 )
 
-type Authorizer interface {
-	Authorize(ctx context.Context, cluster string, eventsType types.CloudEventsType) error
+type UnaryAuthorizer interface {
+	AuthorizeRequest(ctx context.Context, req any) error
+}
+
+type StreamAuthorizer interface {
+	AuthorizeStream(ctx context.Context, ss grpc.ServerStream, info *grpc.StreamServerInfo) (grpc.ServerStream, error)
 }

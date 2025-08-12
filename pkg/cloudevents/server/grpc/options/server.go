@@ -5,16 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"os"
-	"sync"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+	"k8s.io/apimachinery/pkg/util/errors"
+	"os"
 
-	"k8s.io/klog/v2"
-
-	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
 	grpcserver "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc"
@@ -29,11 +25,12 @@ type PreStartHook interface {
 }
 
 type Server struct {
-	options        *GRPCServerOptions
-	authenticators []authn.Authenticator
-	authorizers    []authz.Authorizer
-	services       map[types.CloudEventsDataType]server.Service
-	hooks          []PreStartHook
+	options           *GRPCServerOptions
+	authenticators    []authn.Authenticator
+	unarayAuthorizers []authz.UnaryAuthorizer
+	streamAuthorizers []authz.StreamAuthorizer
+	services          map[types.CloudEventsDataType]server.Service
+	hooks             []PreStartHook
 }
 
 func NewServer(opt *GRPCServerOptions) *Server {
@@ -45,8 +42,13 @@ func (s *Server) WithAuthenticator(authenticator authn.Authenticator) *Server {
 	return s
 }
 
-func (s *Server) WithAuthorizer(authorizer authz.Authorizer) *Server {
-	s.authorizers = append(s.authorizers, authorizer)
+func (s *Server) WithUnarayAuthorizer(authorizer authz.UnaryAuthorizer) *Server {
+	s.unarayAuthorizers = append(s.unarayAuthorizers, authorizer)
+	return s
+}
+
+func (s *Server) WithStreamAuthorizer(authorizer authz.StreamAuthorizer) *Server {
+	s.streamAuthorizers = append(s.streamAuthorizers, authorizer)
 	return s
 }
 
@@ -110,10 +112,10 @@ func (s *Server) Run(ctx context.Context) error {
 	grpcServerOptions = append(grpcServerOptions,
 		grpc.ChainUnaryInterceptor(
 			newAuthnUnaryInterceptor(s.authenticators...),
-			newAuthzUnaryInterceptor(s.authorizers...)),
+			newAuthzUnaryInterceptor(s.unarayAuthorizers...)),
 		grpc.ChainStreamInterceptor(
 			newAuthnStreamInterceptor(s.authenticators...),
-			newAuthzStreamInterceptor(s.authorizers...)))
+			newAuthzStreamInterceptor(s.streamAuthorizers...)))
 
 	grpcServer := grpc.NewServer(grpcServerOptions...)
 	grpcEventServer := grpcserver.NewGRPCBroker(grpcServer)
@@ -155,37 +157,27 @@ func newAuthnUnaryInterceptor(authenticators ...authn.Authenticator) grpc.UnaryS
 	}
 }
 
-func newAuthzUnaryInterceptor(authorizers ...authz.Authorizer) grpc.UnaryServerInterceptor {
+func newAuthzUnaryInterceptor(authorizers ...authz.UnaryAuthorizer) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
+		var errs []error
 		for _, authorizer := range authorizers {
-			pReq, ok := req.(*pbv1.PublishRequest)
-			if !ok {
-				return nil, fmt.Errorf("unsupported request type %T", req)
-			}
-
-			eventsType, err := types.ParseCloudEventsType(pReq.Event.Type)
-			if err != nil {
-				return nil, err
-			}
-
-			// the event of grpc publish request is the original cloudevent data, we need a `ce-` prefix
-			// to get the event attribute
-			clusterAttr, ok := pReq.Event.Attributes[fmt.Sprintf("ce-%s", types.ExtensionClusterName)]
-			if !ok {
-				return nil, fmt.Errorf("missing ce-clustername in event attributes, %v", pReq.Event.Attributes)
-			}
-
-			if err := authorizer.Authorize(ctx, clusterAttr.GetCeString(), *eventsType); err != nil {
-				return nil, err
+			if err := authorizer.AuthorizeRequest(ctx, req); err == nil {
+				return handler(ctx, req)
+			} else {
+				errs = append(errs, err)
 			}
 		}
 
-		return handler(ctx, req)
+		if len(errs) > 0 {
+			return nil, errors.NewAggregate(errs)
+		}
+
+		return nil, fmt.Errorf("no authorizer found for %s", info.FullMethod)
 	}
 }
 
@@ -236,32 +228,8 @@ func newAuthnStreamInterceptor(authenticators ...authn.Authenticator) grpc.Strea
 	}
 }
 
-// wrappedAuthorizedStream caches the subscription request that is already read.
-type wrappedAuthorizedStream struct {
-	sync.Mutex
-
-	grpc.ServerStream
-	authorizedReq *pbv1.SubscriptionRequest
-}
-
-// RecvMsg set the msg from the cache.
-func (c *wrappedAuthorizedStream) RecvMsg(m any) error {
-	c.Lock()
-	defer c.Unlock()
-
-	msg, ok := m.(*pbv1.SubscriptionRequest)
-	if !ok {
-		return fmt.Errorf("unsupported request type %T", m)
-	}
-
-	msg.ClusterName = c.authorizedReq.ClusterName
-	msg.Source = c.authorizedReq.Source
-	msg.DataType = c.authorizedReq.DataType
-	return nil
-}
-
-// newAuthzStreamInterceptor is a stream interceptor that authorizes the subscription request.
-func newAuthzStreamInterceptor(authorizers ...authz.Authorizer) grpc.StreamServerInterceptor {
+// newAuthzStreamInterceptor is a stream interceptor that authorizes the stream request.
+func newAuthzStreamInterceptor(authorizers ...authz.StreamAuthorizer) grpc.StreamServerInterceptor {
 	return func(
 		srv interface{},
 		ss grpc.ServerStream,
@@ -272,32 +240,19 @@ func newAuthzStreamInterceptor(authorizers ...authz.Authorizer) grpc.StreamServe
 			return handler(srv, ss)
 		}
 
-		var req pbv1.SubscriptionRequest
-		if err := ss.RecvMsg(&req); err != nil {
-			return err
-		}
-
-		eventDataType, err := types.ParseCloudEventsDataType(req.DataType)
-		if err != nil {
-			return err
-		}
-
-		eventsType := types.CloudEventsType{
-			CloudEventsDataType: *eventDataType,
-			SubResource:         types.SubResourceSpec,
-			Action:              types.WatchRequestAction,
-		}
+		var errs []error
 		for _, authorizer := range authorizers {
-			if err := authorizer.Authorize(ss.Context(), req.ClusterName, eventsType); err != nil {
-				return err
+			if authorizedStream, err := authorizer.AuthorizeStream(ss.Context(), ss, info); err == nil {
+				return handler(srv, authorizedStream)
+			} else {
+				errs = append(errs, err)
 			}
 		}
 
-		if err := handler(srv, &wrappedAuthorizedStream{ServerStream: ss, authorizedReq: &req}); err != nil {
-			klog.Error(err)
-			return err
+		if len(errs) > 0 {
+			return errors.NewAggregate(errs)
 		}
 
-		return nil
+		return fmt.Errorf("no authorizer found for %s", info.FullMethod)
 	}
 }

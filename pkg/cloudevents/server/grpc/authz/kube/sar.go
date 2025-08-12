@@ -3,6 +3,10 @@ package sar
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc"
+	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authz"
+	"sync"
 
 	authv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,20 +21,95 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authn"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authz"
 )
 
 type SARAuthorizer struct {
 	kubeClient kubernetes.Interface
 }
 
-func NewSARAuthorizer(kubeClient kubernetes.Interface) authz.Authorizer {
+// validate SARAuthorizer implement StreamAuthorizer and UnaryAuthorizer
+var _ authz.StreamAuthorizer = (*SARAuthorizer)(nil)
+var _ authz.UnaryAuthorizer = (*SARAuthorizer)(nil)
+
+// wrappedAuthorizedStream caches the subscription request that is already read.
+type wrappedAuthorizedStream struct {
+	sync.Mutex
+
+	grpc.ServerStream
+	authorizedReq *pbv1.SubscriptionRequest
+}
+
+// RecvMsg set the msg from the cache.
+func (c *wrappedAuthorizedStream) RecvMsg(m any) error {
+	c.Lock()
+	defer c.Unlock()
+
+	msg, ok := m.(*pbv1.SubscriptionRequest)
+	if !ok {
+		return fmt.Errorf("unsupported request type %T", m)
+	}
+
+	msg.ClusterName = c.authorizedReq.ClusterName
+	msg.Source = c.authorizedReq.Source
+	msg.DataType = c.authorizedReq.DataType
+	return nil
+}
+
+func NewSARAuthorizer(kubeClient kubernetes.Interface) *SARAuthorizer {
 	return &SARAuthorizer{
 		kubeClient: kubeClient,
 	}
 }
 
-func (s *SARAuthorizer) Authorize(ctx context.Context, cluster string, eventsType types.CloudEventsType) error {
+func (s *SARAuthorizer) AuthorizeRequest(ctx context.Context, req any) error {
+	pReq, ok := req.(*pbv1.PublishRequest)
+	if !ok {
+		return fmt.Errorf("unsupported request type %T", req)
+	}
+
+	eventsType, err := types.ParseCloudEventsType(pReq.Event.Type)
+	if err != nil {
+		return err
+	}
+
+	// the event of grpc publish request is the original cloudevent data, we need a `ce-` prefix
+	// to get the event attribute
+	clusterAttr, ok := pReq.Event.Attributes[fmt.Sprintf("ce-%s", types.ExtensionClusterName)]
+	if !ok {
+		return fmt.Errorf("missing ce-clustername in event attributes, %v", pReq.Event.Attributes)
+	}
+
+	if err := s.authorize(ctx, clusterAttr.GetCeString(), *eventsType); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *SARAuthorizer) AuthorizeStream(ctx context.Context, ss grpc.ServerStream, info *grpc.StreamServerInfo) (grpc.ServerStream, error) {
+	var req pbv1.SubscriptionRequest
+	if err := ss.RecvMsg(&req); err != nil {
+		return nil, err
+	}
+
+	eventDataType, err := types.ParseCloudEventsDataType(req.DataType)
+	if err != nil {
+		return nil, err
+	}
+
+	eventsType := types.CloudEventsType{
+		CloudEventsDataType: *eventDataType,
+		SubResource:         types.SubResourceSpec,
+		Action:              types.WatchRequestAction,
+	}
+
+	if err := s.authorize(ss.Context(), req.ClusterName, eventsType); err != nil {
+		return nil, err
+	}
+
+	return &wrappedAuthorizedStream{ServerStream: ss, authorizedReq: &req}, nil
+}
+
+func (s *SARAuthorizer) authorize(ctx context.Context, cluster string, eventsType types.CloudEventsType) error {
 	user, groups, err := userInfo(ctx)
 	if err != nil {
 		return err
