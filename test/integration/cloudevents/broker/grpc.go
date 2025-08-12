@@ -10,9 +10,11 @@ import (
 )
 
 func NewGRPCBrokerServer(opt *options.GRPCServerOptions, svc *services.ResourceService) *options.Server {
+	authorizer := sar.NewSARAuthorizer(util.KubeAuthzClient())
 	return options.NewServer(opt).
 		WithService(payload.ManifestBundleEventDataType, svc).
 		WithAuthenticator(grpcauthn.NewTokenAuthenticator(util.KubeAuthnClient())).
 		WithAuthenticator(grpcauthn.NewMtlsAuthenticator()).
-		WithAuthorizer(sar.NewSARAuthorizer(util.KubeAuthzClient()))
+		WithUnarayAuthorizer(authorizer).
+		WithStreamAuthorizer(authorizer)
 }
