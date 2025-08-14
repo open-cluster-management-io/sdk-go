@@ -3,11 +3,13 @@ package grpc
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"google.golang.org/grpc"
 	grpccli "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
+	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	cetypes "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
 )
@@ -59,17 +61,34 @@ func (s *testService) create(evt *cloudevents.Event) error {
 func TestServer(t *testing.T) {
 	grpcServerOptions := []grpc.ServerOption{}
 	grpcServer := grpc.NewServer(grpcServerOptions...)
-	grpcEventServer := NewGRPCBroker(grpcServer)
+	defer grpcServer.Stop()
+
+	grpcEventServer := NewGRPCBroker()
+	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
 	grpcEventServer.RegisterService(dataType, svc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go grpcEventServer.Start(ctx, ":8888")
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	t.Cleanup(func() {
+		grpcServer.GracefulStop()
+		_ = lis.Close()
+	})
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			t.Errorf("failed to serve: %v", err)
+		}
+	}()
 
 	grpcClientOptions := grpccli.NewGRPCOptions()
-	grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: "localhost:8888"}
+	grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
 	agentOption := grpccli.NewAgentOptions(grpcClientOptions, "cluster1", "agent1")
 	protocol, err := agentOption.CloudEventsOptions.Protocol(ctx, dataType)
 	if err != nil {
@@ -90,10 +109,10 @@ func TestServer(t *testing.T) {
 		WithResourceID("test2").
 		WithClusterName("cluster1").NewEvent()
 
-	recivedEventCh := make(chan cloudevents.Event)
+	receivedEventCh := make(chan cloudevents.Event)
 	go func() {
 		if err := cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
-			recivedEventCh <- event
+			receivedEventCh <- event
 		}); err != nil {
 			t.Error(err)
 		}
@@ -110,8 +129,8 @@ func TestServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	recievedEvent := <-recivedEventCh
-	if recievedEvent.ID() != evt2.ID() {
+	receivedEvent := <-receivedEventCh
+	if receivedEvent.ID() != evt2.ID() {
 		t.Error("received event is different")
 	}
 }

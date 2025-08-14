@@ -1,6 +1,7 @@
-package options
+package grpc
 
 import (
+	"crypto/tls"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,6 +54,8 @@ permit_ping_without_stream: true
 				TLSCertFile:             "/test/tls.crt",
 				TLSKeyFile:              "/test/tls.key",
 				ClientCAFile:            "/test/ca.crt",
+				TLSMinVersion:           tls.VersionTLS12,
+				TLSMaxVersion:           tls.VersionTLS13,
 				ServerBindPort:          "9999",
 				MaxConcurrentStreams:    100,
 				MaxReceiveMessageSize:   2048,
@@ -129,6 +132,8 @@ connection_timeout: 90s
 				ClientCAFile:            "/var/run/secrets/hub/grpc/ca/ca-bundle.crt",
 				TLSCertFile:             "/var/run/secrets/hub/grpc/serving-cert/tls.crt",
 				TLSKeyFile:              "/var/run/secrets/hub/grpc/serving-cert/tls.key",
+				TLSMinVersion:           defaultOpts.TLSMinVersion,
+				TLSMaxVersion:           defaultOpts.TLSMaxVersion,
 				MaxConcurrentStreams:    defaultOpts.MaxConcurrentStreams,
 				MaxReceiveMessageSize:   defaultOpts.MaxReceiveMessageSize,
 				MaxSendMessageSize:      defaultOpts.MaxSendMessageSize,

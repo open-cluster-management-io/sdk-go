@@ -7,19 +7,25 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
+
 	mochimqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"k8s.io/klog/v2"
+	sar "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authz/kube"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
-	serveroptions "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/options"
+	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
+	cloudeventsgrpc "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc"
+	sdkgrpc "open-cluster-management.io/sdk-go/pkg/server/grpc"
+	grpcauthn "open-cluster-management.io/sdk-go/pkg/server/grpc/authn"
 
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
-	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker/services"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
@@ -37,7 +43,6 @@ const (
 var (
 	mqttBroker     *mochimqtt.Server
 	resourceServer *server.GRPCServer
-	grpcBroker     *serveroptions.Server
 
 	serverCertPairs *util.ServerCertPairs
 	clientCertPairs *util.ClientCertPairs
@@ -128,13 +133,26 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	resourceServer.SetResourceService(service)
 
 	// start the grpc broker
-	opt := serveroptions.NewGRPCServerOptions()
+	grpcBroker := cloudeventsgrpc.NewGRPCBroker()
+	grpcBroker.RegisterService(payload.ManifestBundleEventDataType, service)
+
+	opt := sdkgrpc.NewGRPCServerOptions()
 	opt.ClientCAFile = caFile
 	opt.TLSCertFile = serverCertFile
 	opt.TLSKeyFile = serverKeyFile
-	grpcBroker = broker.NewGRPCBrokerServer(opt, service)
+
+	authorizer := sar.NewSARAuthorizer(util.KubeAuthzClient())
+	grpcServer := sdkgrpc.NewGRPCServer(opt).
+		WithAuthenticator(grpcauthn.NewTokenAuthenticator(util.KubeAuthnClient())).
+		WithAuthenticator(grpcauthn.NewMtlsAuthenticator()).
+		WithUnaryAuthorizer(authorizer).
+		WithStreamAuthorizer(authorizer).
+		WithRegisterFunc(func(s *grpc.Server) {
+			pbv1.RegisterCloudEventServiceServer(s, grpcBroker)
+		})
+
 	go func() {
-		err := grpcBroker.Run(context.Background())
+		err := grpcServer.Run(context.Background())
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	}()
 
