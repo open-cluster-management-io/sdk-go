@@ -23,6 +23,7 @@ import (
 
 type GRPCServer struct {
 	options           *GRPCServerOptions
+	extraMetrics      []k8smetrics.Registerable
 	registerFuncs     []func(*grpc.Server)
 	authenticators    []authn.Authenticator
 	unaryAuthorizers  []authz.UnaryAuthorizer
@@ -37,6 +38,11 @@ func NewGRPCServer(opt *GRPCServerOptions) *GRPCServer {
 
 func (b *GRPCServer) WithRegisterFunc(registerFunc func(*grpc.Server)) *GRPCServer {
 	b.registerFuncs = append(b.registerFuncs, registerFunc)
+	return b
+}
+
+func (b *GRPCServer) WithExtraMetrics(metrics ...k8smetrics.Registerable) *GRPCServer {
+	b.extraMetrics = append(b.extraMetrics, metrics...)
 	return b
 }
 
@@ -124,7 +130,7 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 
 	grpcServer := grpc.NewServer(grpcServerOptions...)
 	// register all the general grpc server metrics
-	metrics.RegisterGRPCMetrics(promMiddleware)
+	metrics.RegisterGRPCMetrics(promMiddleware, b.extraMetrics...)
 	// initialize grpc server metrics with appropriate value.
 	promMiddleware.InitializeMetrics(grpcServer)
 

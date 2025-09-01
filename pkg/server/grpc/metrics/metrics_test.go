@@ -47,8 +47,7 @@ func startBufServer(t *testing.T) *grpc.Server {
 	grpcBroker.RegisterService(payload.ManifestBundleEventDataType, newMockWorkService())
 	pbv1.RegisterCloudEventServiceServer(server, grpcBroker)
 
-	RegisterGRPCMetrics(promMiddleware)
-	cemetrics.RegisterCloudEventsGRPCMetrics()
+	RegisterGRPCMetrics(promMiddleware, cemetrics.CloudEventsGRPCMetrics()...)
 	promMiddleware.InitializeMetrics(server)
 
 	lis = bufconn.Listen(bufSize)

@@ -3,14 +3,10 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
-
-	"k8s.io/component-base/metrics/legacyregistry"
-	"k8s.io/klog/v2"
 
 	"github.com/cloudevents/sdk-go/v2/binding"
 	cetypes "github.com/cloudevents/sdk-go/v2/types"
@@ -20,9 +16,6 @@ import (
 
 	k8smetrics "k8s.io/component-base/metrics"
 )
-
-// ensure metrics are registered only once
-var once sync.Once
 
 // subsystem used to define the metrics of grpc server for cloud events
 const grpcCEMetricsSubsystem = "grpc_server_ce"
@@ -285,22 +278,12 @@ func SplitMethod(fullMethod string) (service, method string) {
 }
 
 // Register all the grpc server metrics for cloudevents.
-func RegisterCloudEventsGRPCMetrics() {
-	once.Do(func() {
-		metrics := []k8smetrics.Registerable{
-			grpcCECalledCountMetric,
-			grpcCEProcessedCountMetric,
-			grpcCEProcessingDurationMetric,
-			grpcCEMessageReceivedCountMetric,
-			grpcCEMessageSentCountMetric,
-		}
-
-		for _, m := range metrics {
-			if m != nil {
-				legacyregistry.MustRegister(m)
-			} else {
-				klog.Errorf("failed to register nil grpc server metric")
-			}
-		}
-	})
+func CloudEventsGRPCMetrics() []k8smetrics.Registerable {
+	return []k8smetrics.Registerable{
+		grpcCECalledCountMetric,
+		grpcCEProcessedCountMetric,
+		grpcCEProcessingDurationMetric,
+		grpcCEMessageReceivedCountMetric,
+		grpcCEMessageSentCountMetric,
+	}
 }

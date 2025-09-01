@@ -97,13 +97,15 @@ func NewGRPCMetricsStreamInterceptor(promServerMetrics *prom.ServerMetrics) grpc
 }
 
 // Register all the grpc server metrics.
-func RegisterGRPCMetrics(promServerMetrics *prom.ServerMetrics) {
+func RegisterGRPCMetrics(promServerMetrics *prom.ServerMetrics, extraMetrics ...k8smetrics.Registerable) {
 	once.Do(func() {
 		metrics := []k8smetrics.Registerable{
 			grpcServerConnections,
 			grpcServerMsgRevBytes,
 			grpcServerMsgSentBytes,
 		}
+
+		metrics = append(metrics, extraMetrics...)
 
 		for _, m := range metrics {
 			if m != nil {

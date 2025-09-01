@@ -25,12 +25,13 @@ import (
 	sdkgrpc "open-cluster-management.io/sdk-go/pkg/server/grpc"
 	grpcauthn "open-cluster-management.io/sdk-go/pkg/server/grpc/authn"
 
-	cemetrics "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/broker/services"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
+
+	cemetrics "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
 )
 
 const (
@@ -151,10 +152,7 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 		WithRegisterFunc(func(s *grpc.Server) {
 			pbv1.RegisterCloudEventServiceServer(s, grpcBroker)
 		}).
-		WithRegisterFunc(func(s *grpc.Server) {
-			// register grpc metrics for cloud events
-			cemetrics.RegisterCloudEventsGRPCMetrics()
-		})
+		WithExtraMetrics(cemetrics.CloudEventsGRPCMetrics()...)
 
 	go func() {
 		err := grpcServer.Run(context.Background())
