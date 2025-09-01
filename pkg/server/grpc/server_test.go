@@ -9,6 +9,8 @@ import (
 
 	"google.golang.org/grpc"
 	certutil "k8s.io/client-go/util/cert"
+
+	cemetrics "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
 )
 
 // testAuthenticator implements Authenticator for testing
@@ -130,6 +132,18 @@ func TestGRPCServerBuilder_WithRegisterFunc(t *testing.T) {
 
 	if len(builder.registerFuncs) != 2 {
 		t.Errorf("Expected 2 register functions, got %d", len(builder.registerFuncs))
+	}
+}
+
+func TestGRPCServerBuilder_WithExtraMetrics(t *testing.T) {
+	opt := NewGRPCServerOptions()
+	builder := NewGRPCServer(opt)
+
+	// Test add extra metrics
+	builder.WithExtraMetrics(cemetrics.CloudEventsGRPCMetrics()...)
+
+	if builder.extraMetrics == nil || len(builder.extraMetrics) != len(cemetrics.CloudEventsGRPCMetrics()) {
+		t.Error("Expected extra metrics to be registered")
 	}
 }
 

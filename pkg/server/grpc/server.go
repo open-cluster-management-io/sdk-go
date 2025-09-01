@@ -8,19 +8,22 @@ import (
 	"net"
 	"os"
 
-	"k8s.io/apimachinery/pkg/util/errors"
-
+	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+	"k8s.io/apimachinery/pkg/util/errors"
+	k8smetrics "k8s.io/component-base/metrics"
 	"open-cluster-management.io/sdk-go/pkg/server/grpc/authn"
 	"open-cluster-management.io/sdk-go/pkg/server/grpc/authz"
+	"open-cluster-management.io/sdk-go/pkg/server/grpc/metrics"
 
 	"k8s.io/klog/v2"
 )
 
 type GRPCServer struct {
 	options           *GRPCServerOptions
+	extraMetrics      []k8smetrics.Registerable
 	registerFuncs     []func(*grpc.Server)
 	authenticators    []authn.Authenticator
 	unaryAuthorizers  []authz.UnaryAuthorizer
@@ -35,6 +38,11 @@ func NewGRPCServer(opt *GRPCServerOptions) *GRPCServer {
 
 func (b *GRPCServer) WithRegisterFunc(registerFunc func(*grpc.Server)) *GRPCServer {
 	b.registerFuncs = append(b.registerFuncs, registerFunc)
+	return b
+}
+
+func (b *GRPCServer) WithExtraMetrics(metrics ...k8smetrics.Registerable) *GRPCServer {
+	b.extraMetrics = append(b.extraMetrics, metrics...)
 	return b
 }
 
@@ -97,17 +105,34 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 
 	grpcServerOptions = append(grpcServerOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
 
+	// append the stats handler for metrics
+	grpcServerOptions = append(grpcServerOptions, grpc.StatsHandler(metrics.NewGRPCMetricsHandler()))
+
+	// init prometheus middleware for grpc server
+	promMiddleware := grpcprom.NewServerMetrics(
+		// enable grpc handling time histogram to measure latency distributions of RPCs
+		grpcprom.WithServerHandlingTimeHistogram(
+			grpcprom.WithHistogramBuckets(k8smetrics.ExponentialBuckets(10e-7, 10, 10)),
+		),
+	)
+
 	grpcServerOptions = append(grpcServerOptions,
 		grpc.ChainUnaryInterceptor(
+			metrics.NewGRPCMetricsUnaryInterceptor(promMiddleware),
 			newAuthnUnaryInterceptor(b.authenticators...),
 			newAuthzUnaryInterceptor(b.unaryAuthorizers...),
 		),
 		grpc.ChainStreamInterceptor(
+			metrics.NewGRPCMetricsStreamInterceptor(promMiddleware),
 			newAuthnStreamInterceptor(b.authenticators...),
 			newAuthzStreamInterceptor(b.streamAuthorizers),
 		))
 
 	grpcServer := grpc.NewServer(grpcServerOptions...)
+	// register all the general grpc server metrics
+	metrics.RegisterGRPCMetrics(promMiddleware, b.extraMetrics...)
+	// initialize grpc server metrics with appropriate value.
+	promMiddleware.InitializeMetrics(grpcServer)
 
 	for _, r := range b.registerFuncs {
 		r(grpcServer)
