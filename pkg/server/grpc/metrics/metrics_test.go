@@ -22,6 +22,8 @@ import (
 	cetypes "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
 	cegrpc "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc"
+
+	cemetrics "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
 )
 
 const bufSize = 1024 * 1024
@@ -46,6 +48,7 @@ func startBufServer(t *testing.T) *grpc.Server {
 	pbv1.RegisterCloudEventServiceServer(server, grpcBroker)
 
 	RegisterGRPCMetrics(promMiddleware)
+	cemetrics.RegisterCloudEventsGRPCMetrics()
 	promMiddleware.InitializeMetrics(server)
 
 	lis = bufconn.Listen(bufSize)

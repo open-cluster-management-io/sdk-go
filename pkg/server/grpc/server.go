@@ -123,7 +123,7 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 		))
 
 	grpcServer := grpc.NewServer(grpcServerOptions...)
-	// register all the grpc server metrics
+	// register all the general grpc server metrics
 	metrics.RegisterGRPCMetrics(promMiddleware)
 	// initialize grpc server metrics with appropriate value.
 	promMiddleware.InitializeMetrics(grpcServer)

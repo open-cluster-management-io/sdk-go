@@ -19,7 +19,7 @@ func TestSplitMethod(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotService, gotMethod := splitMethod(tt.fullMethod)
+			gotService, gotMethod := SplitMethod(tt.fullMethod)
 			if gotService != tt.expectedService {
 				t.Errorf("splitMethod(%s) gotService = %s, want %s", tt.fullMethod, gotService, tt.expectedService)
 			}

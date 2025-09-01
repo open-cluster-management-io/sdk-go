@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/stats"
+	cemetrics "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
 )
 
 type grpcHandlerContextKey string
@@ -36,7 +37,7 @@ func (h *grpcMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 // HandleRPC processes the RPC stats and records metrics.
 func (h *grpcMetricsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	fullMethod, _ := ctx.Value(contextKeyFullMethod).(string)
-	service, method := splitMethod(fullMethod)
+	service, method := cemetrics.SplitMethod(fullMethod)
 
 	switch st := s.(type) {
 	case *stats.Begin:
@@ -64,25 +65,6 @@ func (h *grpcMetricsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 		}
 		grpcServerMsgSentBytes.WithLabelValues(method, service, grpcType).Add(float64(st.Length))
 	}
-}
-
-// splitMethod parses grpc full method "/package.service/method" to service and method
-func splitMethod(fullMethod string) (service, method string) {
-	if fullMethod == "" {
-		return "unknown", "unknown"
-	}
-	// remove leading "/"
-	if fullMethod[0] == '/' {
-		fullMethod = fullMethod[1:]
-	}
-	// split at last "/"
-	for i := len(fullMethod) - 1; i >= 0; i-- {
-		if fullMethod[i] == '/' {
-			return fullMethod[:i], fullMethod[i+1:]
-		}
-	}
-
-	return fullMethod, "unknown"
 }
 
 // TagConn can attach connection remote and local address to the given context
