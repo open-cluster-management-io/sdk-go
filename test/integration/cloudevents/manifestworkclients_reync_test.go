@@ -46,16 +46,18 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 
 			// add two works in the agent cache
 			store := informer.Informer().GetStore()
-			work1UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, fmt.Sprintf("%s-1", workNamePrefix))
-			work1 := util.NewManifestWorkWithStatus(clusterName, work1UID)
+			work1Name := fmt.Sprintf("%s-1", workNamePrefix)
+			work1UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work1Name)
+			work1 := util.NewManifestWorkWithStatus(clusterName, work1Name)
 			work1.UID = apitypes.UID(work1UID)
 			work1.ResourceVersion = "1"
 			work1.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}
 			work1.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
 			gomega.Expect(store.Add(work1)).ToNot(gomega.HaveOccurred())
 
-			work2UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, fmt.Sprintf("%s-2", workNamePrefix))
-			work2 := util.NewManifestWorkWithStatus(clusterName, work2UID)
+			work2Name := fmt.Sprintf("%s-2", workNamePrefix)
+			work2UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work2Name)
+			work2 := util.NewManifestWorkWithStatus(clusterName, work2Name)
 			work2.UID = apitypes.UID(work2UID)
 			work2.ResourceVersion = "1"
 			work2.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}

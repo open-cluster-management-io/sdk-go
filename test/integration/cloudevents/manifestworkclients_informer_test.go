@@ -12,8 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/codec"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
@@ -104,13 +102,12 @@ func crudManifestWork(
 	ginkgo.By("agent update the work status", func() {
 		gomega.Eventually(func() error {
 			workClient := agentClientHolder.ManifestWorks(clusterName)
-			workID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName)
 
-			if err := util.AddWorkFinalizer(ctx, workClient, workID); err != nil {
+			if err := util.AddWorkFinalizer(ctx, workClient, workName); err != nil {
 				return err
 			}
 
-			return util.UpdateWorkStatus(ctx, workClient, workID, util.WorkCreatedCondition)
+			return util.UpdateWorkStatus(ctx, workClient, workName, util.WorkCreatedCondition)
 		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 	})
 
@@ -128,12 +125,11 @@ func crudManifestWork(
 	ginkgo.By("agent update the work status again", func() {
 		gomega.Eventually(func() error {
 			workClient := agentClientHolder.ManifestWorks(clusterName)
-			workID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName)
-			if err := util.AssertUpdatedWork(ctx, workClient, workID); err != nil {
+			if err := util.AssertUpdatedWork(ctx, workClient, workName); err != nil {
 				return err
 			}
 
-			return util.UpdateWorkStatus(ctx, workClient, workID, util.WorkUpdatedCondition)
+			return util.UpdateWorkStatus(ctx, workClient, workName, util.WorkUpdatedCondition)
 		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 	})
 
@@ -150,9 +146,8 @@ func crudManifestWork(
 
 	ginkgo.By("agent delete the work", func() {
 		gomega.Eventually(func() error {
-			workID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName)
 			workClient := agentClientHolder.ManifestWorks(clusterName)
-			return util.RemoveWorkFinalizer(ctx, workClient, workID)
+			return util.RemoveWorkFinalizer(ctx, workClient, workName)
 		}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 	})
 

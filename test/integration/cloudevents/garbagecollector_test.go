@@ -18,8 +18,6 @@ import (
 
 	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/garbagecollector"
@@ -161,21 +159,19 @@ var _ = ginkgo.Describe("Garbage Collector Test", func() {
 			ginkgo.By("agent update the work status", func() {
 				gomega.Eventually(func() error {
 					workClient := agentClientHolder.ManifestWorks(clusterName)
-					workID1 := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName1)
-					if err := util.AddWorkFinalizer(ctx, workClient, workID1); err != nil {
+					if err := util.AddWorkFinalizer(ctx, workClient, workName1); err != nil {
 						return err
 					}
 
-					if err := util.UpdateWorkStatus(ctx, workClient, workID1, util.WorkCreatedCondition); err != nil {
+					if err := util.UpdateWorkStatus(ctx, workClient, workName1, util.WorkCreatedCondition); err != nil {
 						return err
 					}
 
-					workID2 := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName2)
-					if err := util.AddWorkFinalizer(ctx, workClient, workID2); err != nil {
+					if err := util.AddWorkFinalizer(ctx, workClient, workName2); err != nil {
 						return err
 					}
 
-					return util.UpdateWorkStatus(ctx, workClient, workID2, util.WorkCreatedCondition)
+					return util.UpdateWorkStatus(ctx, workClient, workName2, util.WorkCreatedCondition)
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
 
@@ -198,8 +194,7 @@ var _ = ginkgo.Describe("Garbage Collector Test", func() {
 
 			ginkgo.By("agent delete the first work with single owner", func() {
 				gomega.Eventually(func() error {
-					workID1 := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName1)
-					return util.RemoveWorkFinalizer(ctx, agentClientHolder.ManifestWorks(clusterName), workID1)
+					return util.RemoveWorkFinalizer(ctx, agentClientHolder.ManifestWorks(clusterName), workName1)
 				}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
 
@@ -230,8 +225,7 @@ var _ = ginkgo.Describe("Garbage Collector Test", func() {
 
 			ginkgo.By("agent delete the work with two owners", func() {
 				gomega.Eventually(func() error {
-					workID2 := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName2)
-					return util.RemoveWorkFinalizer(ctx, agentClientHolder.ManifestWorks(clusterName), workID2)
+					return util.RemoveWorkFinalizer(ctx, agentClientHolder.ManifestWorks(clusterName), workName2)
 				}, 30*time.Second, 1*time.Second).Should(gomega.Succeed())
 			})
 

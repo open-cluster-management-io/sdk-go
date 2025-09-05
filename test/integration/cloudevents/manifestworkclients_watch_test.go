@@ -184,13 +184,12 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 
 				gomega.Eventually(func() error {
 					workClient := agentClient.ManifestWorks(clusterName)
-					workID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName)
 
-					if err := util.AddWorkFinalizer(ctx, workClient, workID); err != nil {
+					if err := util.AddWorkFinalizer(ctx, workClient, workName); err != nil {
 						return err
 					}
 
-					return util.UpdateWorkStatus(ctx, workClient, workID, util.WorkCreatedCondition)
+					return util.UpdateWorkStatus(ctx, workClient, workName, util.WorkCreatedCondition)
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 
 				// this updated work should be watched
@@ -222,9 +221,8 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 
 				// agent delete the work and send deleted status to source
 				gomega.Eventually(func() error {
-					workID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName)
 					workClient := agentClient.ManifestWorks(clusterName)
-					return util.RemoveWorkFinalizer(ctx, workClient, workID)
+					return util.RemoveWorkFinalizer(ctx, workClient, workName)
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
 
 				// the deleted work should be watched
@@ -275,7 +273,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 			ginkgo.By("get the work from agent", func() {
 				gomega.Eventually(func() error {
 					_, err := agentClient.ManifestWorks(clusterName).Get(
-						ctx, utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, workName), metav1.GetOptions{})
+						ctx, workName, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
