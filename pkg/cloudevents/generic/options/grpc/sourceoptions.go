@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
@@ -33,15 +32,22 @@ func (o *gRPCSourceOptions) WithContext(ctx context.Context, evtCtx cloudevents.
 }
 
 func (o *gRPCSourceOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
+	opts := []protocol.Option{
+		protocol.WithSubscribeOption(&protocol.SubscribeOption{
+			Source:   o.sourceID,
+			DataType: dataType.String(),
+		}),
+	}
+	if o.ServerHealthinessTimeout != nil {
+		opts = append(opts, protocol.WithReconnectErrorOption(o.errorChan, *o.ServerHealthinessTimeout))
+	}
+
 	receiver, err := o.GetCloudEventsProtocol(
 		ctx,
 		func(err error) {
 			o.errorChan <- err
 		},
-		protocol.WithSubscribeOption(&protocol.SubscribeOption{
-			Source:   o.sourceID,
-			DataType: dataType.String(),
-		}),
+		opts...,
 	)
 	if err != nil {
 		return nil, err

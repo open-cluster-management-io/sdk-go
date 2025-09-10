@@ -2,9 +2,7 @@ package grpc
 
 import (
 	"context"
-
 	cloudevents "github.com/cloudevents/sdk-go/v2"
-
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -34,11 +32,7 @@ func (o *grpcAgentOptions) WithContext(ctx context.Context, evtCtx cloudevents.E
 }
 
 func (o *grpcAgentOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
-	receiver, err := o.GetCloudEventsProtocol(
-		ctx,
-		func(err error) {
-			o.errorChan <- err
-		},
+	opts := []protocol.Option{
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
 			// TODO: Update this code to determine the subscription source for the agent client.
 			// Currently, the grpc agent client is not utilized, and the 'Source' field serves
@@ -47,6 +41,17 @@ func (o *grpcAgentOptions) Protocol(ctx context.Context, dataType types.CloudEve
 			ClusterName: o.clusterName,
 			DataType:    dataType.String(),
 		}),
+	}
+	if o.ServerHealthinessTimeout != nil {
+		opts = append(opts, protocol.WithReconnectErrorOption(o.errorChan, *o.ServerHealthinessTimeout))
+	}
+
+	receiver, err := o.GetCloudEventsProtocol(
+		ctx,
+		func(err error) {
+			o.errorChan <- err
+		},
+		opts...,
 	)
 	if err != nil {
 		return nil, err

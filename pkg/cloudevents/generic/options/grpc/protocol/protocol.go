@@ -3,8 +3,10 @@ package protocol
 import (
 	"context"
 	"fmt"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"io"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,6 +32,10 @@ type Protocol struct {
 	openerMutex sync.Mutex
 
 	closeChan chan struct{}
+
+	// errorChan is to send an error messsage to restart the connection
+	reconnectErrorChan chan error
+	checkInterval      time.Duration
 }
 
 var (
@@ -137,6 +143,10 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 		}
 	}()
 
+	if p.reconnectErrorChan != nil {
+		go p.healthCheck(ctx)
+	}
+
 	// Wait until external or internal context done
 	select {
 	case <-ctx.Done():
@@ -163,4 +173,59 @@ func (p *Protocol) Receive(ctx context.Context) (binding.Message, error) {
 func (p *Protocol) Close(ctx context.Context) error {
 	close(p.closeChan)
 	return nil
+}
+
+// healthCheck check status of the server
+func (p *Protocol) healthCheck(ctx context.Context) {
+	logger := cecontext.LoggerFrom(ctx)
+	watchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	healthClient := healthpb.NewHealthClient(p.clientConn)
+	stream, err := healthClient.Watch(watchCtx, &healthpb.HealthCheckRequest{Service: ""})
+	if err != nil {
+		select {
+		case p.reconnectErrorChan <- err:
+		default:
+		}
+		return
+	}
+
+	last := time.Now()
+	recvErr := make(chan error, 1)
+	go func() {
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				recvErr <- err
+				return
+			}
+			last = time.Now()
+			logger.Infof("Received server health status %s", resp.Status)
+		}
+	}()
+
+	ticker := time.NewTicker(p.checkInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-recvErr:
+			select {
+			case p.reconnectErrorChan <- err:
+			default:
+			}
+			return
+		case <-ticker.C:
+			if time.Since(last) > p.checkInterval {
+				select {
+				case p.reconnectErrorChan <- fmt.Errorf("timeout waiting for health check"):
+				default:
+				}
+				return
+			}
+		}
+	}
 }

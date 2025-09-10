@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"time"
 )
 
 // Option is the function signature
@@ -21,6 +22,21 @@ func WithSubscribeOption(subscribeOpt *SubscribeOption) Option {
 			return fmt.Errorf("the subscribe option must not be nil")
 		}
 		p.subscribeOption = subscribeOpt
+		return nil
+	}
+}
+
+func WithReconnectErrorOption(reconnectError chan error, interval time.Duration) Option {
+	return func(p *Protocol) error {
+		if reconnectError == nil {
+			return fmt.Errorf("the reconnect error option must not be nil")
+		}
+		p.reconnectErrorChan = reconnectError
+		if interval <= 0 {
+			p.checkInterval = 20 * time.Second
+		} else {
+			p.checkInterval = interval
+		}
 		return nil
 	}
 }

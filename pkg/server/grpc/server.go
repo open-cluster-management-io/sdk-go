@@ -5,18 +5,18 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"net"
-	"os"
-
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"k8s.io/apimachinery/pkg/util/errors"
 	k8smetrics "k8s.io/component-base/metrics"
+	"net"
 	"open-cluster-management.io/sdk-go/pkg/server/grpc/authn"
 	"open-cluster-management.io/sdk-go/pkg/server/grpc/authz"
+	"open-cluster-management.io/sdk-go/pkg/server/grpc/health"
 	"open-cluster-management.io/sdk-go/pkg/server/grpc/metrics"
+	"os"
 
 	"k8s.io/klog/v2"
 )
@@ -133,6 +133,8 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 	metrics.RegisterGRPCMetrics(promMiddleware, b.extraMetrics...)
 	// initialize grpc server metrics with appropriate value.
 	promMiddleware.InitializeMetrics(grpcServer)
+	// register health server
+	health.RegisterHeartbeatHealthServer(grpcServer, b.options.HealthCheckInterval)
 
 	for _, r := range b.registerFuncs {
 		r(grpcServer)

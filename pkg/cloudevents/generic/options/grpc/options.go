@@ -114,6 +114,8 @@ func (d *GRPCDialer) Close() error {
 // GRPCOptions holds the options that are used to build gRPC client.
 type GRPCOptions struct {
 	Dialer *GRPCDialer
+
+	ServerHealthinessTimeout *time.Duration
 }
 
 // GRPCConfig holds the information needed to build connect to gRPC server as a given user.
@@ -130,6 +132,10 @@ type GRPCConfig struct {
 
 	// keepalive options
 	KeepAliveConfig KeepAliveConfig `json:"keepAliveConfig,omitempty" yaml:"keepAliveConfig,omitempty"`
+
+	// serverHealthinessTimeout is the max duration that client will reconnect if no health status message is
+	// received in this duration
+	ServerHealthinessTimeout *time.Duration `json:"serverHealthinessTimeout,omitempty" yaml:"serverHealthinessTimeout,omitempty"`
 }
 
 // KeepAliveConfig holds the keepalive options for the gRPC client.
@@ -200,6 +206,7 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 			URL:   config.URL,
 			Token: token,
 		},
+		ServerHealthinessTimeout: config.ServerHealthinessTimeout,
 	}
 
 	// Default keepalive options

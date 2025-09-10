@@ -30,6 +30,7 @@ type GRPCServerOptions struct {
 	ServerPingInterval      time.Duration `json:"server_ping_interval" yaml:"server_ping_interval"`
 	ServerPingTimeout       time.Duration `json:"server_ping_timeout" yaml:"server_ping_timeout"`
 	PermitPingWithoutStream bool          `json:"permit_ping_without_stream" yaml:"permit_ping_without_stream"`
+	HealthCheckInterval     time.Duration `json:"health_check_interval" yaml:"health_check_interval"`
 }
 
 func LoadGRPCServerOptions(configPath string) (*GRPCServerOptions, error) {
@@ -73,6 +74,7 @@ func NewGRPCServerOptions() *GRPCServerOptions {
 		ServerPingTimeout:     10 * time.Second,
 		WriteBufferSize:       32 * 1024,
 		ReadBufferSize:        32 * 1024,
+		HealthCheckInterval:   10 * time.Second,
 	}
 }
 
@@ -92,6 +94,7 @@ func (o *GRPCServerOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&o.TLSCertFile, "grpc-tls-cert-file", o.TLSCertFile, "The path to the tls.crt file")
 	flags.StringVar(&o.TLSKeyFile, "grpc-tls-key-file", o.TLSKeyFile, "The path to the tls.key file")
 	flags.StringVar(&o.ClientCAFile, "grpc-client-ca-file", o.ClientCAFile, "The path to the client ca file, must specify if using mtls authentication type")
+	flags.DurationVar(&o.HealthCheckInterval, "grpc-healtch-check-interval", o.HealthCheckInterval, "The interval at which health status message is sent")
 }
 
 // Validate checks option ranges and cross-field constraints.
