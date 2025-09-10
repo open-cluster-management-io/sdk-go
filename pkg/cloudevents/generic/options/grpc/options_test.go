@@ -36,7 +36,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			name:   "customized options",
 			config: "{\"url\":\"test\"}",
 			expectedOptions: &GRPCOptions{
-				&GRPCDialer{
+				Dialer: &GRPCDialer{
 					URL: "test",
 					KeepAliveOptions: KeepAliveOptions{
 						Enable:              false,
@@ -45,13 +45,14 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 						PermitWithoutStream: false,
 					},
 				},
+				ServerHealthinessTimeout: nil,
 			},
 		},
 		{
 			name:   "customized options with yaml format",
 			config: "url: test",
 			expectedOptions: &GRPCOptions{
-				&GRPCDialer{
+				Dialer: &GRPCDialer{
 					URL: "test",
 					KeepAliveOptions: KeepAliveOptions{
 						Enable:              false,
@@ -60,13 +61,14 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 						PermitWithoutStream: false,
 					},
 				},
+				ServerHealthinessTimeout: nil,
 			},
 		},
 		{
 			name:   "customized options with keepalive",
-			config: "{\"url\":\"test\",\"keepAliveConfig\":{\"enable\":true,\"time\":10s,\"timeout\":5s,\"permitWithoutStream\":true}}",
+			config: "{\"url\":\"test\",\"keepAliveConfig\":{\"enable\":true,\"time\":\"10s\",\"timeout\":\"5s\",\"permitWithoutStream\":true}}",
 			expectedOptions: &GRPCOptions{
-				&GRPCDialer{
+				Dialer: &GRPCDialer{
 					URL: "test",
 					KeepAliveOptions: KeepAliveOptions{
 						Enable:              true,
@@ -75,6 +77,23 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 						PermitWithoutStream: true,
 					},
 				},
+				ServerHealthinessTimeout: nil,
+			},
+		},
+		{
+			name:   "customized options with server healthiness timeout",
+			config: "{\"url\":\"test\",\"serverHealthinessTimeout\":\"1m\"}",
+			expectedOptions: &GRPCOptions{
+				Dialer: &GRPCDialer{
+					URL: "test",
+					KeepAliveOptions: KeepAliveOptions{
+						Enable:              false,
+						Time:                30 * time.Second,
+						Timeout:             10 * time.Second,
+						PermitWithoutStream: false,
+					},
+				},
+				ServerHealthinessTimeout: func() *time.Duration { d := time.Minute; return &d }(),
 			},
 		},
 	}
@@ -85,7 +104,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer os.Remove(file.Name())
+			t.Cleanup(func() { _ = os.Remove(file.Name()) })
 
 			options, err := BuildGRPCOptionsFromFlags(file.Name())
 			if err != nil {

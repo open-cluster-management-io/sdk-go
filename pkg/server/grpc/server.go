@@ -302,3 +302,13 @@ func newAuthzStreamInterceptor(authorizers []authz.StreamAuthorizer) grpc.Stream
 		return fmt.Errorf("no authorizer found for %s", info.FullMethod)
 	}
 }
+
+type AllowAllAuthorizer struct{}
+
+func (a *AllowAllAuthorizer) AuthorizeRequest(_ context.Context, _ any) (authz.Decision, error) {
+	return authz.DecisionAllow, nil
+}
+
+func (a *AllowAllAuthorizer) AuthorizeStream(_ context.Context, _ grpc.ServerStream, _ *grpc.StreamServerInfo) (authz.Decision, grpc.ServerStream, error) {
+	return authz.DecisionAllow, nil, nil
+}

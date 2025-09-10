@@ -39,7 +39,7 @@ func (o *gRPCSourceOptions) Protocol(ctx context.Context, dataType types.CloudEv
 		}),
 	}
 	if o.ServerHealthinessTimeout != nil {
-		opts = append(opts, protocol.WithReconnectErrorOption(o.errorChan, *o.ServerHealthinessTimeout))
+		opts = append(opts, protocol.WithHealthCheck(*o.ServerHealthinessTimeout, o.errorChan))
 	}
 
 	receiver, err := o.GetCloudEventsProtocol(

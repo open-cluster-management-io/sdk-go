@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"open-cluster-management.io/sdk-go/pkg/server/grpc/health"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
@@ -102,6 +104,7 @@ func (svr *GRPCServer) Start(addr string, serverOpts []grpc.ServerOption) error 
 	}
 	grpcServer := grpc.NewServer(serverOpts...)
 	pbv1.RegisterCloudEventServiceServer(grpcServer, svr)
+	health.RegisterHeartbeatHealthServer(grpcServer, 10*time.Second)
 	return grpcServer.Serve(lis)
 }
 

@@ -33,7 +33,7 @@ type Protocol struct {
 
 	closeChan chan struct{}
 
-	// errorChan is to send an error messsage to restart the connection
+	// errorChan is to send an error message to restart the connection
 	reconnectErrorChan chan error
 	checkInterval      time.Duration
 }
@@ -184,6 +184,11 @@ func (p *Protocol) healthCheck(ctx context.Context) {
 	healthClient := healthpb.NewHealthClient(p.clientConn)
 	stream, err := healthClient.Watch(watchCtx, &healthpb.HealthCheckRequest{Service: ""})
 	if err != nil {
+		if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+			logger.Warnf("grpc-health Watch not implemented on server; skipping health check")
+			return
+		}
+		logger.Errorf("failed to watch health check, %v", err)
 		select {
 		case p.reconnectErrorChan <- err:
 		default:
@@ -191,17 +196,21 @@ func (p *Protocol) healthCheck(ctx context.Context) {
 		return
 	}
 
-	last := time.Now()
 	recvErr := make(chan error, 1)
+	healthReceived := make(chan struct{}, 1)
 	go func() {
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
+				// Forward all errors; main loop decides whether to propagate.
 				recvErr <- err
 				return
 			}
-			last = time.Now()
 			logger.Infof("Received server health status %s", resp.Status)
+			select {
+			case healthReceived <- struct{}{}:
+			default:
+			}
 		}
 	}()
 
@@ -213,19 +222,26 @@ func (p *Protocol) healthCheck(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case err := <-recvErr:
+			if s, ok := status.FromError(err); ok && s.Code() == codes.Unimplemented {
+				logger.Warnf("grpc-health not implemented on server; skipping health check")
+				return
+			}
 			select {
 			case p.reconnectErrorChan <- err:
 			default:
 			}
 			return
+		case <-healthReceived:
+			// Reset the ticker when we receive a health update
+			ticker.Stop()
+			ticker = time.NewTicker(p.checkInterval)
 		case <-ticker.C:
-			if time.Since(last) > p.checkInterval {
-				select {
-				case p.reconnectErrorChan <- fmt.Errorf("timeout waiting for health check"):
-				default:
-				}
-				return
+			// Timeout waiting for health check
+			select {
+			case p.reconnectErrorChan <- fmt.Errorf("timeout waiting for health check"):
+			default:
 			}
+			return
 		}
 	}
 }

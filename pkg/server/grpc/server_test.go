@@ -2,8 +2,15 @@ package grpc
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"fmt"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"net"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -186,5 +193,92 @@ func TestGRPCServerBuilder_Chaining(t *testing.T) {
 
 	if len(builder.registerFuncs) != 1 {
 		t.Errorf("Expected 1 register function, got %d", len(builder.registerFuncs))
+	}
+}
+
+func TestGRPCServerBuilder_WithHealthCheck(t *testing.T) {
+	cert, key, err := certutil.GenerateSelfSignedCertKey("localhost", []net.IP{net.ParseIP("127.0.0.1")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := os.MkdirTemp("", "certs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(path)
+
+	err = os.WriteFile(path+"/tls.crt", cert, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(path+"/tls.key", key, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	opt := NewGRPCServerOptions()
+	opt.ClientCAFile = ""
+	opt.TLSKeyFile = path + "/tls.key"
+	opt.TLSCertFile = path + "/tls.crt"
+
+	// Reserve a free port so we can dial it below.
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := lis.Addr().(*net.TCPAddr).Port
+	_ = lis.Close()
+	opt.ServerBindPort = strconv.Itoa(port)
+	opt.HealthCheckInterval = 100 * time.Millisecond
+
+	builder := NewGRPCServer(opt).WithUnaryAuthorizer(&AllowAllAuthorizer{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- builder.Run(ctx) }()
+
+	// Fail fast if the server exits early; otherwise assume it started.
+	select {
+	case err := <-errCh:
+		t.Fatalf("server failed to start: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// Dial and verify health is SERVING.
+	pool := x509.NewCertPool()
+	if ok := pool.AppendCertsFromPEM(cert); !ok {
+		t.Fatal("failed to add server cert to pool")
+	}
+	creds := credentials.NewTLS(&tls.Config{
+		RootCAs:    pool,
+		ServerName: "localhost",
+	})
+	hctx, hcancel := context.WithTimeout(ctx, time.Second)
+	defer hcancel()
+	conn, err := grpc.NewClient(fmt.Sprintf("127.0.0.1:%d", port), grpc.WithTransportCredentials(creds))
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+	hc := grpc_health_v1.NewHealthClient(conn)
+	resp, err := hc.Check(hctx, &grpc_health_v1.HealthCheckRequest{})
+	if err != nil {
+		t.Fatalf("health check failed: %v", err)
+	}
+	if got := resp.GetStatus(); got != grpc_health_v1.HealthCheckResponse_SERVING {
+		t.Fatalf("expected SERVING, got %s", got.String())
+	}
+
+	// Shutdown and ensure graceful exit.
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			t.Fatalf("unexpected server shutdown error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("server did not shut down within timeout")
 	}
 }

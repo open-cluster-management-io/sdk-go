@@ -26,12 +26,12 @@ func WithSubscribeOption(subscribeOpt *SubscribeOption) Option {
 	}
 }
 
-func WithReconnectErrorOption(reconnectError chan error, interval time.Duration) Option {
+func WithHealthCheck(interval time.Duration, errorChan chan error) Option {
 	return func(p *Protocol) error {
-		if reconnectError == nil {
+		if errorChan == nil {
 			return fmt.Errorf("the reconnect error option must not be nil")
 		}
-		p.reconnectErrorChan = reconnectError
+		p.reconnectErrorChan = errorChan
 		if interval <= 0 {
 			p.checkInterval = 20 * time.Second
 		} else {

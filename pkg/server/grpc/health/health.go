@@ -16,8 +16,13 @@ type heartbeatHealthServer struct {
 }
 
 func RegisterHeartbeatHealthServer(srv *grpc.Server, interval time.Duration) {
+	ival := interval
+	if ival <= 0 {
+		ival = 10 * time.Second
+	}
 	healthpb.RegisterHealthServer(srv, &heartbeatHealthServer{
-		interval: interval,
+		interval: ival,
+		status:   healthpb.HealthCheckResponse_SERVING,
 	})
 }
 

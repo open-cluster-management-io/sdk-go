@@ -3,9 +3,11 @@ package metrics
 import (
 	"context"
 	"encoding/json"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
@@ -56,6 +58,10 @@ func startBufServer(t *testing.T) *grpc.Server {
 			klog.Fatalf("Server exited with error: %v", err)
 		}
 	}()
+
+	// Wait for server to start accepting connections
+	time.Sleep(50 * time.Millisecond)
+
 	return server
 }
 
@@ -67,16 +73,15 @@ func TestGRPCMetricsInterceptor(t *testing.T) {
 	server := startBufServer(t)
 	defer server.Stop()
 
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", //nolint:staticcheck // DialContext is deprecated but fine for tests
-		grpc.WithContextDialer(bufDialer),
-		grpc.WithInsecure(), //nolint:staticcheck // WithInsecure is deprecated but fine for tests
-	)
+	conn, err := grpc.NewClient("passthrough:///bufnet",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(bufDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial bufnet: %v", err)
 	}
 	defer conn.Close()
 
+	ctx := context.Background()
 	client := pbv1.NewCloudEventServiceClient(conn)
 	_, err = client.Subscribe(ctx, &pbv1.SubscriptionRequest{ClusterName: "cluster1", DataType: "io.open-cluster-management.works.v1alpha1.manifestbundles"})
 	if err != nil {
