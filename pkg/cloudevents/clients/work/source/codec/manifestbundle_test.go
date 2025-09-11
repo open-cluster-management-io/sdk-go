@@ -60,11 +60,53 @@ func TestManifestBundleEncode(t *testing.T) {
 				Spec: workv1.ManifestWorkSpec{},
 			},
 		},
+		{
+			name: "encode a manifestwork with executor",
+			eventType: types.CloudEventsType{
+				CloudEventsDataType: payload.ManifestBundleEventDataType,
+				SubResource:         types.SubResourceSpec,
+				Action:              "test",
+			},
+			work: &workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:             "test",
+					ResourceVersion: "0",
+					Name:            "test-work",
+					Namespace:       "test-namespace",
+					Labels: map[string]string{
+						"cloudevents.open-cluster-management.io/originalsource": "source1",
+						"test-label": "test-value",
+					},
+					Annotations: map[string]string{
+						"test-annotation": "test-value",
+					},
+				},
+				Spec: workv1.ManifestWorkSpec{
+					Executor: &workv1.ManifestWorkExecutor{
+						Subject: workv1.ManifestWorkExecutorSubject{
+							Type: workv1.ExecutorSubjectTypeServiceAccount,
+							ServiceAccount: &workv1.ManifestWorkSubjectServiceAccount{
+								Name:      "test-executor-sa",
+								Namespace: "test-executor-ns",
+							},
+						},
+					},
+					DeleteOption: &workv1.DeleteOption{
+						PropagationPolicy: workv1.DeletePropagationPolicyTypeForeground,
+					},
+					ManifestConfigs: []workv1.ManifestConfigOption{
+						{
+							ResourceIdentifier: workv1.ResourceIdentifier{Name: "test-config"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := NewManifestBundleCodec().Encode("cluster1-work-agent", c.eventType, c.work)
+			evt, err := NewManifestBundleCodec().Encode("cluster1-work-agent", c.eventType, c.work)
 			if c.expectedErr {
 				if err == nil {
 					t.Errorf("expected an error, but failed")
@@ -74,6 +116,22 @@ func TestManifestBundleEncode(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
+			}
+
+			// Verify encoding includes Executor field when present
+			if c.work != nil && c.work.Spec.Executor != nil && evt != nil {
+				var manifestBundle payload.ManifestBundle
+				if err := evt.DataAs(&manifestBundle); err != nil {
+					t.Errorf("failed to unmarshal event data: %v", err)
+				} else {
+					if manifestBundle.Executer == nil {
+						t.Errorf("expected Executer to be set in encoded data")
+					} else if manifestBundle.Executer.Subject.ServiceAccount.Name != c.work.Spec.Executor.Subject.ServiceAccount.Name {
+						t.Errorf("expected Executer ServiceAccount name %s, got %s",
+							c.work.Spec.Executor.Subject.ServiceAccount.Name,
+							manifestBundle.Executer.Subject.ServiceAccount.Name)
+					}
+				}
 			}
 		})
 	}
@@ -244,6 +302,15 @@ func TestManifestBundleDecode(t *testing.T) {
 								ResourceIdentifier: workv1.ResourceIdentifier{Name: "test"},
 							},
 						},
+						Executer: &workv1.ManifestWorkExecutor{
+							Subject: workv1.ManifestWorkExecutorSubject{
+								Type: workv1.ExecutorSubjectTypeServiceAccount,
+								ServiceAccount: &workv1.ManifestWorkSubjectServiceAccount{
+									Name:      "test-executor-sa",
+									Namespace: "test-executor-ns",
+								},
+							},
+						},
 					},
 					Conditions: []metav1.Condition{
 						{
@@ -292,6 +359,15 @@ func TestManifestBundleDecode(t *testing.T) {
 					ManifestConfigs: []workv1.ManifestConfigOption{
 						{
 							ResourceIdentifier: workv1.ResourceIdentifier{Name: "test"},
+						},
+					},
+					Executor: &workv1.ManifestWorkExecutor{
+						Subject: workv1.ManifestWorkExecutorSubject{
+							Type: workv1.ExecutorSubjectTypeServiceAccount,
+							ServiceAccount: &workv1.ManifestWorkSubjectServiceAccount{
+								Name:      "test-executor-sa",
+								Namespace: "test-executor-ns",
+							},
 						},
 					},
 				},
