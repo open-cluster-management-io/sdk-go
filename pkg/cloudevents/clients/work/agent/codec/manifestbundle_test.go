@@ -90,11 +90,39 @@ func TestManifestBundleEncode(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "encode a manifestwork status with metadata",
+			eventType: types.CloudEventsType{
+				CloudEventsDataType: payload.ManifestBundleEventDataType,
+				SubResource:         types.SubResourceStatus,
+				Action:              "test",
+			},
+			work: &workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:             "test",
+					ResourceVersion: "13",
+					Name:            "test-work",
+					Namespace:       "test-namespace",
+					Labels: map[string]string{
+						"cloudevents.open-cluster-management.io/originalsource": "source1",
+						"test-label": "test-value",
+					},
+					Annotations: map[string]string{
+						"test-annotation": "test-value",
+					},
+					Finalizers: []string{"test-finalizer"},
+				},
+				Status: workv1.ManifestWorkStatus{
+					Conditions:     []metav1.Condition{},
+					ResourceStatus: workv1.ManifestResourceStatus{},
+				},
+			},
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := NewManifestBundleCodec().Encode("cluster1-work-agent", c.eventType, c.work)
+			evt, err := NewManifestBundleCodec().Encode("cluster1-work-agent", c.eventType, c.work)
 			if c.expectedErr {
 				if err == nil {
 					t.Errorf("expected an error, but failed")
@@ -104,6 +132,23 @@ func TestManifestBundleEncode(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
+			}
+
+			// Verify that ExtensionWorkMeta is set when encoding manifestwork status
+			if c.work != nil && evt != nil {
+				workMetaExt := evt.Extensions()[types.ExtensionWorkMeta]
+				if workMetaExt == nil {
+					t.Errorf("expected ExtensionWorkMeta to be set")
+				} else {
+					// Verify the metadata can be unmarshaled
+					var metaObj metav1.ObjectMeta
+					if err := json.Unmarshal([]byte(workMetaExt.(string)), &metaObj); err != nil {
+						t.Errorf("failed to unmarshal metadata: %v", err)
+					}
+					if metaObj.UID != c.work.ObjectMeta.UID {
+						t.Errorf("expected UID %s, got %s", c.work.ObjectMeta.UID, metaObj.UID)
+					}
+				}
 			}
 		})
 	}
@@ -255,11 +300,57 @@ func TestManifestBundleDecode(t *testing.T) {
 				return &evt
 			}(),
 		},
+		{
+			name: "decode a cloudevent with metadata extension",
+			event: func() *cloudevents.Event {
+				metaJson, err := json.Marshal(metav1.ObjectMeta{
+					UID:             "original-uid",
+					ResourceVersion: "5",
+					Name:            "original-name",
+					Namespace:       "original-namespace",
+					Labels:          map[string]string{"original-label": "original-value"},
+					Annotations:     map[string]string{"original-annotation": "original-value"},
+					Finalizers:      []string{"original-finalizer"},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				evt := cloudevents.NewEvent()
+				evt.SetSource("source1")
+				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.spec.test")
+				evt.SetExtension("resourceid", "test")
+				evt.SetExtension("resourceversion", "13")
+				evt.SetExtension("clustername", "cluster1")
+				evt.SetExtension("resourcename", "work1")
+				evt.SetExtension(types.ExtensionWorkMeta, string(metaJson))
+				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundle{
+					Manifests: []workv1.Manifest{
+						{
+							RawExtension: runtime.RawExtension{
+								Raw: toConfigMap(t),
+							},
+						},
+					},
+					Executer: &workv1.ManifestWorkExecutor{
+						Subject: workv1.ManifestWorkExecutorSubject{
+							Type: workv1.ExecutorSubjectTypeServiceAccount,
+							ServiceAccount: &workv1.ManifestWorkSubjectServiceAccount{
+								Name:      "test-sa",
+								Namespace: "test-ns",
+							},
+						},
+					},
+				}); err != nil {
+					t.Fatal(err)
+				}
+				return &evt
+			}(),
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := NewManifestBundleCodec().Decode(c.event)
+			work, err := NewManifestBundleCodec().Decode(c.event)
 			if c.expectedErr {
 				if err == nil {
 					t.Errorf("expected an error, but failed")
@@ -269,6 +360,39 @@ func TestManifestBundleDecode(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("unexpected error %v", err)
+			}
+
+			// Additional verification for metadata extension test case
+			if c.name == "decode a cloudevent with metadata extension" && work != nil {
+				// Verify that original metadata from extension was merged correctly
+				if work.ObjectMeta.Labels["original-label"] != "original-value" {
+					t.Errorf("expected original-label to be preserved, got %v", work.ObjectMeta.Labels)
+				}
+				if work.ObjectMeta.Annotations["original-annotation"] != "original-value" {
+					t.Errorf("expected original-annotation to be preserved, got %v", work.ObjectMeta.Annotations)
+				}
+				if len(work.ObjectMeta.Finalizers) == 0 || work.ObjectMeta.Finalizers[0] != "original-finalizer" {
+					t.Errorf("expected original-finalizer to be preserved, got %v", work.ObjectMeta.Finalizers)
+				}
+				// Verify that event-specific metadata overrides
+				if work.ObjectMeta.UID != "test" {
+					t.Errorf("expected UID to be overridden to 'test', got %s", work.ObjectMeta.UID)
+				}
+				if work.ObjectMeta.Name != "work1" {
+					t.Errorf("expected Name to be overridden to 'work1', got %s", work.ObjectMeta.Name)
+				}
+				if work.ObjectMeta.Namespace != "cluster1" {
+					t.Errorf("expected Namespace to be overridden to 'cluster1', got %s", work.ObjectMeta.Namespace)
+				}
+				if work.ObjectMeta.ResourceVersion != "13" {
+					t.Errorf("expected ResourceVersion to be overridden to '13', got %s", work.ObjectMeta.ResourceVersion)
+				}
+				// Verify Executor field
+				if work.Spec.Executor == nil {
+					t.Errorf("expected Executor to be set")
+				} else if work.Spec.Executor.Subject.ServiceAccount.Name != "test-sa" {
+					t.Errorf("expected Executor ServiceAccount name to be 'test-sa', got %s", work.Spec.Executor.Subject.ServiceAccount.Name)
+				}
 			}
 		})
 	}

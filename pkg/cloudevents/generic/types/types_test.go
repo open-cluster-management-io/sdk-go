@@ -66,6 +66,13 @@ func TestParseCloudEventsDataType(t *testing.T) {
 	}
 }
 
+func TestExtensionConstants(t *testing.T) {
+	// Test ExtensionWorkMeta constant
+	if ExtensionWorkMeta != "metadata" {
+		t.Errorf("expected ExtensionWorkMeta to be 'metadata', got %s", ExtensionWorkMeta)
+	}
+}
+
 func TestParseCloudEventsType(t *testing.T) {
 	cases := []struct {
 		name         string
