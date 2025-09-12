@@ -99,9 +99,9 @@ func TestCloudEventsMetrics(t *testing.T) {
 			time.Sleep(time.Second)
 
 			// ensure metrics are updated
-			sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.dataType.String(), string(c.subresource), string(c.action))
+			sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
-			receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.dataType.String(), string(c.subresource), string(c.action))
+			receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(receivedTotal)))
 
 			cancel()
@@ -235,20 +235,20 @@ func TestResyncMetrics(t *testing.T) {
 				// receive resync request and publish associated resources
 				source.receive(ctx, evt)
 
-				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncRequestAction))
+				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.clusterName, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncRequestAction))
 				require.Equal(t, 1, int(toFloat64Counter(receivedTotal)))
 
 				// wait 1 seconds to respond to the spec resync request
 				time.Sleep(1 * time.Second)
 
 				// check spec resync duration metric as a histogram
-				h := resourceSpecResyncDurationMetric.WithLabelValues(c.sourceID, c.dataType.String())
+				h := resourceSpecResyncDurationMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String())
 				count, sum := toFloat64HistCountAndSum(h)
 				require.Equal(t, uint64(1), count)
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
 
-				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncResponseAction))
+				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncResponseAction))
 				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 
@@ -274,20 +274,20 @@ func TestResyncMetrics(t *testing.T) {
 				// receive resync request and publish associated resources
 				agent.receive(ctx, evt)
 
-				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncRequestAction))
+				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncRequestAction))
 				require.Equal(t, 1, int(toFloat64Counter(receivedTotal)))
 
 				// wait 1 seconds to respond to the resync request
 				time.Sleep(1 * time.Second)
 
 				// check status resync duration metric as a histogram
-				h := resourceStatusResyncDurationMetric.WithLabelValues(c.sourceID, c.dataType.String())
+				h := resourceStatusResyncDurationMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String())
 				count, sum := toFloat64HistCountAndSum(h)
 				require.Equal(t, uint64(1), count)
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
 
-				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(testAgentName, noneOriginalSource, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
+				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(testAgentName, noneOriginalSource, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
 				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 
