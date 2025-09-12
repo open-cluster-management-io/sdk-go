@@ -28,8 +28,8 @@ const (
 
 const noneOriginalSource = "none"
 
-// cloudeventsReceivedMetricsLabels - Array of labels added to cloudevents received metrics:
-var cloudeventsReceivedMetricsLabels = []string{
+// cloudeventsReceivedBySourceMetricsLabels - Array of labels added to cloudevents received by source metrics:
+var cloudeventsReceivedBySourceMetricsLabels = []string{
 	metricsSourceLabel,      // source
 	metricsConsumerLabel,    // consumer
 	metricsDataTypeLabel,    // data type, e.g. manifests, manifestbundles
@@ -37,11 +37,28 @@ var cloudeventsReceivedMetricsLabels = []string{
 	metricsActionLabel,      // action, eg, create, update, delete, resync_request, resync_response
 }
 
-// cloudeventsSentMetricsLabels - Array of labels added to cloudevents sent metrics:
-var cloudeventsSentMetricsLabels = []string{
+// cloudeventsReceivedByClientMetricsLabels - Array of labels added to cloudevents received by client metrics:
+var cloudeventsReceivedByClientMetricsLabels = []string{
+	metricsSourceLabel,      // source
+	metricsDataTypeLabel,    // data type, e.g. manifests, manifestbundles
+	metricsSubResourceLabel, // subresource, eg, spec or status
+	metricsActionLabel,      // action, eg, create, update, delete, resync_request, resync_response
+}
+
+// cloudeventsSentFromSourceMetricsLabels - Array of labels added to cloudevents sent from source metrics:
+var cloudeventsSentFromSourceMetricsLabels = []string{
 	metricsSourceLabel,         // source
 	metricsOriginalSourceLabel, // original source, if no, set to "none"
 	metricsConsumerLabel,       // consumer
+	metricsDataTypeLabel,       // data type, e.g. manifests, manifestbundles
+	metricsSubResourceLabel,    // subresource, eg, spec or status
+	metricsActionLabel,         // action, eg, create, update, delete, resync_request, resync_response
+}
+
+// cloudeventsSentFromClientMetricsLabels - Array of labels added to cloudevents sent from client metrics:
+var cloudeventsSentFromClientMetricsLabels = []string{
+	metricsSourceLabel,         // source
+	metricsOriginalSourceLabel, // original source, if no, set to "none"
 	metricsDataTypeLabel,       // data type, e.g. manifests, manifestbundles
 	metricsSubResourceLabel,    // subresource, eg, spec or status
 	metricsActionLabel,         // action, eg, create, update, delete, resync_request, resync_response
@@ -75,34 +92,60 @@ const (
 	workProcessedCounter       = "processed_total"
 )
 
-// The cloudevents received counter metric is a counter with a base metric name of 'received_total'
-// and a help string of 'The total number of received CloudEvents.'
-// For example, 2 CloudEvents received from source1 to consumer1 with data type manifests, one for resource create,
+// The cloudevents received by source counter metric is a counter with a base metric name of 'received_by_source_total'
+// and a help string of 'The total number of CloudEvents received by source.'
+// For example, 2 CloudEvents received from agent to source with consumer1 for data type manifests, one for resource create,
 // another for resource update would result in the following metrics:
-// cloudevents_received_total{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="create"} 1
-// cloudevents_received_total{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="update"} 1
-var cloudeventsReceivedCounterMetric = prometheus.NewCounterVec(
+// cloudevents_received_total{source="agent1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="create"} 1
+// cloudevents_received_total{source="agent1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="update"} 1
+var cloudeventsReceivedBySourceCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
 		Name:      receivedCounterMetric,
-		Help:      "The total number of received CloudEvents.",
+		Help:      "The total number of CloudEvents received by source.",
 	},
-	cloudeventsReceivedMetricsLabels,
+	cloudeventsReceivedBySourceMetricsLabels,
 )
 
-// The cloudevents sent counter metric is a counter with a base metric name of 'sent_total'
-// and a help string of 'The total number of sent CloudEvents.'
-// For example, 1 cloudevent sent from source1 with data type manifestbundles for resource spec create (original source is empty),
-// and 2 CloudEvents sent from consumer1-work-agent back to source1 for resource status update would result in the following metrics:
-// cloudevents_sent_total{source="source1",original_source="none",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="spec",action="create"} 1
-// cloudevents_sent_total{source="consumer1-work-agent",original_source="source1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="status",action="update"} 2
-var cloudeventsSentCounterMetric = prometheus.NewCounterVec(
+// The cloudevents received by agent counter metric is a counter with a base metric name of 'received_by_agent_total'
+// and a help string of 'The total number of CloudEvents received by agent.'
+// For example, 2 CloudEvents received from source1 by agent with data type manifests, one for resource create,
+// another for resource update would result in the following metrics:
+// cloudevents_received_total{source="source1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="create"} 1
+// cloudevents_received_total{source="source1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="update"} 1
+var cloudeventsReceivedByClientCounterMetric = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Subsystem: cloudeventsMetricsSubsystem,
+		Name:      receivedCounterMetric,
+		Help:      "The total number of CloudEvents received by client.",
+	},
+	cloudeventsReceivedByClientMetricsLabels,
+)
+
+// The cloudevents sent from source counter metric is a counter with a base metric name of 'sent_from_source_total'
+// and a help string of 'The total number of CloudEvents sent from source.'
+// For example, 1 cloudevent sent from source1 to consumer1 with data type manifestbundles for resource spec create would result in the following metrics:
+// cloudevents_sent_total{source="source1",original_source="none",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="spec",action="create"} 1
+var cloudeventsSentFromSourceCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
 		Name:      sentCounterMetric,
-		Help:      "The total number of sent CloudEvents.",
+		Help:      "The total number of CloudEvents sent from source.",
 	},
-	cloudeventsSentMetricsLabels,
+	cloudeventsSentFromSourceMetricsLabels,
+)
+
+// The cloudevents sent from agent counter metric is a counter with a base metric name of 'sent_from_agent_total'
+// and a help string of 'The total number of CloudEvents sent from agent.'
+// For example, 2 CloudEvents sent from consumer1-work-agent back to source1 for resource status update would result in the following metrics:
+// cloudevents_sent_total{source="consumer1-work-agent",original_source="source1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="status",action="update"} 2
+var cloudeventsSentFromClientCounterMetric = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Subsystem: cloudeventsMetricsSubsystem,
+		Name:      sentCounterMetric,
+		Help:      "The total number of CloudEvents sent from client.",
+	},
+	cloudeventsSentFromClientMetricsLabels,
 )
 
 // The resource spec resync duration metric is a histogram with a base metric name of 'resource_spec_resync_duration_second'
@@ -195,53 +238,79 @@ var workProcessedCounterMetric = prometheus.NewCounterVec(
 	workMetricsLabels,
 )
 
-// Register the metrics:
-func RegisterCloudEventsMetrics(register prometheus.Registerer) {
-	register.MustRegister(cloudeventsReceivedCounterMetric)
-	register.MustRegister(cloudeventsSentCounterMetric)
-	register.MustRegister(resourceSpecResyncDurationMetric)
+// Register the metrics
+func RegisterClientCloudEventsMetrics(register prometheus.Registerer) {
+	register.MustRegister(cloudeventsReceivedByClientCounterMetric)
+	register.MustRegister(cloudeventsSentFromClientCounterMetric)
 	register.MustRegister(resourceStatusResyncDurationMetric)
-	register.MustRegister(clientReconnectedCounterMetric)
 	register.MustRegister(workProcessedCounterMetric)
 }
 
-// Unregister the metrics:
-func UnregisterCloudEventsMetrics(register prometheus.Registerer) {
-	register.Unregister(cloudeventsReceivedCounterMetric)
-	register.Unregister(cloudeventsSentCounterMetric)
-	register.Unregister(resourceStatusResyncDurationMetric)
-	register.Unregister(resourceStatusResyncDurationMetric)
-	register.Unregister(clientReconnectedCounterMetric)
-	register.Unregister(workProcessedCounterMetric)
+// Register the metrics
+func RegisterSourceCloudEventsMetrics(register prometheus.Registerer) {
+	register.MustRegister(cloudeventsReceivedBySourceCounterMetric)
+	register.MustRegister(cloudeventsSentFromSourceCounterMetric)
+	register.MustRegister(resourceSpecResyncDurationMetric)
+	register.MustRegister(clientReconnectedCounterMetric)
 }
 
-// ResetCloudEventsMetrics resets all collectors
-func ResetCloudEventsMetrics() {
-	cloudeventsReceivedCounterMetric.Reset()
-	cloudeventsSentCounterMetric.Reset()
+// ResetSourceCloudEventsMetrics resets all collectors from source
+func ResetSourceCloudEventsMetrics() {
+	cloudeventsReceivedBySourceCounterMetric.Reset()
+	cloudeventsSentFromSourceCounterMetric.Reset()
 	resourceSpecResyncDurationMetric.Reset()
-	resourceStatusResyncDurationMetric.Reset()
 	clientReconnectedCounterMetric.Reset()
+}
+
+// ResetClientCloudEventsMetrics resets all collectors from client
+func ResetClientCloudEventsMetrics() {
+	cloudeventsReceivedByClientCounterMetric.Reset()
+	cloudeventsSentFromClientCounterMetric.Reset()
+	resourceStatusResyncDurationMetric.Reset()
 	workProcessedCounterMetric.Reset()
 }
 
-// increaseCloudEventsReceivedCounter increases the cloudevents received counter metric:
-func increaseCloudEventsReceivedCounter(source, consumer, dataType, subresource, action string) {
+// increaseCloudEventsReceivedBySourceCounter increases the cloudevents received by source counter metric:
+func increaseCloudEventsReceivedBySourceCounter(source, consumer, dataType, subresource, action string) {
+	labels := prometheus.Labels{
+		metricsSourceLabel:      source,
+		metricsConsumerLabel:    consumer,
+		metricsDataTypeLabel:    dataType,
+		metricsSubResourceLabel: subresource,
+		metricsActionLabel:      action,
+	}
+	cloudeventsReceivedBySourceCounterMetric.With(labels).Inc()
+}
+
+// increaseCloudEventsReceivedByAgentCounter increases the cloudevents received by agent counter metric:
+func increaseCloudEventsReceivedByAgentCounter(source, dataType, subresource, action string) {
 	labels := prometheus.Labels{
 		metricsSourceLabel:      source,
 		metricsDataTypeLabel:    dataType,
 		metricsSubResourceLabel: subresource,
 		metricsActionLabel:      action,
 	}
-	// if it is called by the agent, the consumer is empty
-	if consumer != "" {
-		labels[metricsConsumerLabel] = consumer
-	}
-	cloudeventsReceivedCounterMetric.With(labels).Inc()
+	cloudeventsReceivedByClientCounterMetric.With(labels).Inc()
 }
 
-// increaseCloudEventsSentCounter increases the cloudevents sent counter metric:
-func increaseCloudEventsSentCounter(source, originalSource, consumer, dataType, subresource, action string) {
+// increaseCloudEventsSentFromSourceCounter increases the cloudevents sent from source counter metric:
+func increaseCloudEventsSentFromSourceCounter(source, originalSource, consumer, dataType, subresource, action string) {
+	if originalSource == "" {
+		originalSource = noneOriginalSource
+	}
+	labels := prometheus.Labels{
+		metricsSourceLabel:         source,
+		metricsOriginalSourceLabel: originalSource,
+		metricsConsumerLabel:       consumer,
+		metricsDataTypeLabel:       dataType,
+		metricsSubResourceLabel:    subresource,
+		metricsActionLabel:         action,
+	}
+	cloudeventsSentFromSourceCounterMetric.With(labels).Inc()
+}
+
+// increaseCloudEventsSentFromAgentCounter increases the cloudevents sent from agent counter metric:
+func increaseCloudEventsSentFromAgentCounter(source, originalSource, dataType, subresource, action string) {
 	if originalSource == "" {
 		originalSource = noneOriginalSource
 	}
@@ -252,11 +321,7 @@ func increaseCloudEventsSentCounter(source, originalSource, consumer, dataType, 
 		metricsSubResourceLabel:    subresource,
 		metricsActionLabel:         action,
 	}
-	// if it is called by the agent, the consumer is empty
-	if consumer != "" {
-		labels[metricsConsumerLabel] = consumer
-	}
-	cloudeventsSentCounterMetric.With(labels).Inc()
+	cloudeventsSentFromClientCounterMetric.With(labels).Inc()
 }
 
 // updateResourceSpecResyncDurationMetric updates the resource spec resync duration metric:

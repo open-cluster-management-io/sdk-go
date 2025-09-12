@@ -49,7 +49,7 @@ func TestSourceResync(t *testing.T) {
 
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
 
 			eventChan := make(chan receiveEvent)
@@ -108,7 +108,7 @@ func TestSourcePublish(t *testing.T) {
 
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister()
-			source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
 
 			eventChan := make(chan receiveEvent)
@@ -291,7 +291,7 @@ func TestSpecResyncResponse(t *testing.T) {
 
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
 
 			// start receiver
@@ -398,7 +398,7 @@ func TestReceiveResourceStatus(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
 			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient[*mockResource](context.TODO(), sourceOptions, lister, statusHash, newMockResourceCodec())
+			source, err := NewCloudEventSourceClient(context.TODO(), sourceOptions, lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
 
 			var actualEvent types.ResourceAction
