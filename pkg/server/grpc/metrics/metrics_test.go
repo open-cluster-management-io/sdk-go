@@ -126,18 +126,18 @@ var expectedMetrics = `# HELP grpc_server_active_connections [ALPHA] Current num
 grpc_server_active_connections{local_addr="bufconn",remote_addr="bufconn"} 1
 # HELP grpc_server_ce_called_total [ALPHA] Total number of RPC requests for cloudevents called on the grpc server.
 # TYPE grpc_server_ce_called_total counter
-grpc_server_ce_called_total{cluster="cluster1",data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Publish"} 1
-grpc_server_ce_called_total{cluster="cluster1",data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Subscribe"} 1
+grpc_server_ce_called_total{data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Publish"} 1
+grpc_server_ce_called_total{data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Subscribe"} 1
 # HELP grpc_server_ce_msg_received_total [ALPHA] Total number of messages for cloudevents received on the gRPC server.
 # TYPE grpc_server_ce_msg_received_total counter
-grpc_server_ce_msg_received_total{cluster="cluster1",data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Publish"} 1
-grpc_server_ce_msg_received_total{cluster="cluster1",data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Subscribe"} 1
+grpc_server_ce_msg_received_total{data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Publish"} 1
+grpc_server_ce_msg_received_total{data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Subscribe"} 1
 # HELP grpc_server_ce_msg_sent_total [ALPHA] Total number of messages for cloudevents sent by the gRPC server.
 # TYPE grpc_server_ce_msg_sent_total counter
-grpc_server_ce_msg_sent_total{cluster="cluster1",data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Publish"} 1
+grpc_server_ce_msg_sent_total{data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",method="Publish"} 1
 # HELP grpc_server_ce_processed_total [ALPHA] Total number of RPC requests for cloudevents processed on the server, regardless of success or failure.
 # TYPE grpc_server_ce_processed_total counter
-grpc_server_ce_processed_total{cluster="cluster1",data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",grpc_code="OK",method="Publish"} 1
+grpc_server_ce_processed_total{data_type="io.open-cluster-management.works.v1alpha1.manifestbundles",grpc_code="OK",method="Publish"} 1
 # HELP grpc_server_msg_received_bytes_total [ALPHA] Total number of bytes received on the gRPC server.
 # TYPE grpc_server_msg_received_bytes_total counter
 grpc_server_msg_received_bytes_total{grpc_method="Publish",grpc_service="io.cloudevents.v1.CloudEventService",grpc_type="unary"} 2286
