@@ -204,7 +204,6 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.spec.test")
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
-				evt.SetExtension("resourcename", "work1")
 				return &evt
 			}(),
 			expectedErr: true,
@@ -217,7 +216,6 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.spec.test")
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
-				evt.SetExtension("resourcename", "work1")
 				return &evt
 			}(),
 			expectedErr: true,
@@ -231,7 +229,6 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
 				evt.SetExtension("clustername", "cluster1")
-				evt.SetExtension("resourcename", "work1")
 				evt.SetExtension("deletiontimestamp", "1985-04-12T23:20:50.52Z")
 				return &evt
 			}(),
@@ -245,7 +242,6 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
 				evt.SetExtension("clustername", "cluster1")
-				evt.SetExtension("resourcename", "work1")
 				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundle{}); err != nil {
 					t.Fatal(err)
 				}
@@ -255,30 +251,6 @@ func TestManifestBundleDecode(t *testing.T) {
 		},
 		{
 			name: "decode a cloudevent",
-			event: func() *cloudevents.Event {
-				evt := cloudevents.NewEvent()
-				evt.SetSource("source1")
-				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.spec.test")
-				evt.SetExtension("resourceid", "test")
-				evt.SetExtension("resourceversion", "13")
-				evt.SetExtension("clustername", "cluster1")
-				evt.SetExtension("resourcename", "work1")
-				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundle{
-					Manifests: []workv1.Manifest{
-						{
-							RawExtension: runtime.RawExtension{
-								Raw: toConfigMap(t),
-							},
-						},
-					},
-				}); err != nil {
-					t.Fatal(err)
-				}
-				return &evt
-			}(),
-		},
-		{
-			name: "decode a cloudevent with empty resourceName",
 			event: func() *cloudevents.Event {
 				evt := cloudevents.NewEvent()
 				evt.SetSource("source1")
@@ -321,7 +293,6 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetExtension("resourceid", "test")
 				evt.SetExtension("resourceversion", "13")
 				evt.SetExtension("clustername", "cluster1")
-				evt.SetExtension("resourcename", "work1")
 				evt.SetExtension(types.ExtensionWorkMeta, string(metaJson))
 				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundle{
 					Manifests: []workv1.Manifest{
@@ -378,7 +349,7 @@ func TestManifestBundleDecode(t *testing.T) {
 				if work.ObjectMeta.UID != "test" {
 					t.Errorf("expected UID to be overridden to 'test', got %s", work.ObjectMeta.UID)
 				}
-				if work.ObjectMeta.Name != "work1" {
+				if work.ObjectMeta.Name != "original-name" {
 					t.Errorf("expected Name to be overridden to 'work1', got %s", work.ObjectMeta.Name)
 				}
 				if work.ObjectMeta.Namespace != "cluster1" {
