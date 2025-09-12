@@ -182,7 +182,7 @@ func TestManifestBundleDecode(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			name: "decode a manifestbundle status cloudevent with unset resourceName",
+			name: "decode a manifestbundle status cloudevent",
 			event: func() *cloudevents.Event {
 				evt := cloudevents.NewEvent()
 				evt.SetSource("source1")
@@ -222,53 +222,12 @@ func TestManifestBundleDecode(t *testing.T) {
 			},
 		},
 		{
-			name: "decode a manifestbundle status cloudevent",
-			event: func() *cloudevents.Event {
-				evt := cloudevents.NewEvent()
-				evt.SetSource("source1")
-				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.status.test")
-				evt.SetExtension("resourceid", "test")
-				evt.SetExtension("resourceversion", "13")
-				evt.SetExtension("resourcename", "work1")
-				evt.SetExtension("sequenceid", "1834773391719010304")
-				if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   "Test",
-							Status: metav1.ConditionTrue,
-						},
-					},
-				}); err != nil {
-					t.Fatal(err)
-				}
-				return &evt
-			}(),
-			expectedWork: &workv1.ManifestWork{
-				ObjectMeta: metav1.ObjectMeta{
-					UID:             kubetypes.UID("test"),
-					ResourceVersion: "13",
-					Annotations: map[string]string{
-						"cloudevents.open-cluster-management.io/sequenceid": "1834773391719010304",
-					},
-					Name: "work1",
-				},
-				Status: workv1.ManifestWorkStatus{
-					Conditions: []metav1.Condition{
-						{
-							Type:   "Test",
-							Status: metav1.ConditionTrue,
-						},
-					},
-				},
-			},
-		},
-		{
 			name: "decode a manifestbundle status cloudevent with meta and spec",
 			event: func() *cloudevents.Event {
 				metaJson, err := json.Marshal(metav1.ObjectMeta{
 					UID:             kubetypes.UID("test"),
 					ResourceVersion: "13",
-					Name:            "test",
+					Name:            "work1",
 					Namespace:       "cluster1",
 					Labels:          map[string]string{"test1": "test1"},
 					Annotations:     map[string]string{"test2": "test2"},
@@ -281,7 +240,6 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetSource("source1")
 				evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.status.test")
 				evt.SetExtension("resourceid", "test")
-				evt.SetExtension("resourcename", "work1")
 				evt.SetExtension("resourceversion", "13")
 				evt.SetExtension("metadata", string(metaJson))
 				evt.SetExtension("sequenceid", "1834773391719010304")
