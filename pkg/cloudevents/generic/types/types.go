@@ -9,6 +9,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// HeartbeatCloudEventsType indicates the type of heartbeat cloud events.
+const HeartbeatCloudEventsType = "io.open-cluster-management.cloudevents.heartbeat"
+
 const (
 	// ClusterAll is the default argument to specify on a context when you want to list or filter resources across all
 	// managed clusters.
