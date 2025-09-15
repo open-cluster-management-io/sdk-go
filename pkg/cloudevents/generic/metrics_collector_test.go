@@ -60,7 +60,8 @@ func TestCloudEventsMetrics(t *testing.T) {
 	}
 	for _, c := range cases {
 		// reset metrics
-		ResetCloudEventsMetrics()
+		ResetSourceCloudEventsMetrics()
+		ResetClientCloudEventsMetrics()
 		// run test
 		t.Run(c.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -69,13 +70,13 @@ func TestCloudEventsMetrics(t *testing.T) {
 			// initialize source client
 			sourceOptions := fake.NewSourceOptions(sendReceiver, c.sourceID)
 			lister := newMockResourceLister([]*mockResource{}...)
-			source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
 
 			// initialize agent client
 			agentOptions := fake.NewAgentOptions(sendReceiver, nil, c.clusterName, testAgentName)
 			agentLister := newMockResourceLister([]*mockResource{}...)
-			agent, err := NewCloudEventAgentClient[*mockResource](ctx, agentOptions, agentLister, statusHash, newMockResourceCodec())
+			agent, err := NewCloudEventAgentClient(ctx, agentOptions, agentLister, statusHash, newMockResourceCodec())
 			require.NoError(t, err)
 
 			// start agent subscription
@@ -99,9 +100,9 @@ func TestCloudEventsMetrics(t *testing.T) {
 			time.Sleep(time.Second)
 
 			// ensure metrics are updated
-			sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
+			sentTotal := cloudeventsSentFromSourceCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
-			receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(c.subresource), string(c.action))
+			receivedTotal := cloudeventsReceivedByClientCounterMetric.WithLabelValues(c.sourceID, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(receivedTotal)))
 
 			cancel()
@@ -111,7 +112,7 @@ func TestCloudEventsMetrics(t *testing.T) {
 
 func TestReconnectMetrics(t *testing.T) {
 	// reset metrics
-	ResetCloudEventsMetrics()
+	ResetSourceCloudEventsMetrics()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	originalDelayFn := DelayFn
@@ -125,7 +126,7 @@ func TestReconnectMetrics(t *testing.T) {
 	errChan := make(chan error)
 	agentOptions := fake.NewAgentOptions(gochan.New(), errChan, "cluster1", testAgentName)
 	agentLister := newMockResourceLister([]*mockResource{}...)
-	_, err := NewCloudEventAgentClient[*mockResource](ctx, agentOptions, agentLister, statusHash, newMockResourceCodec())
+	_, err := NewCloudEventAgentClient(ctx, agentOptions, agentLister, statusHash, newMockResourceCodec())
 	require.NoError(t, err)
 
 	// mimic agent disconnection by sending an error
@@ -174,7 +175,7 @@ func toFloat64Counter(c prometheus.Counter) float64 {
 	panic(fmt.Errorf("collected a non-counter metric: %s", pb))
 }
 
-func TestResyncMetrics(t *testing.T) {
+func TestResyncSpecMetrics(t *testing.T) {
 	cases := []struct {
 		name        string
 		resyncType  testResyncType
@@ -194,21 +195,11 @@ func TestResyncMetrics(t *testing.T) {
 			},
 			dataType: mockEventDataType,
 		},
-		{
-			name:        "resync status",
-			resyncType:  testStatusResync,
-			clusterName: "cluster1",
-			sourceID:    "source1",
-			resources: []*mockResource{
-				{Namespace: "cluster1", UID: kubetypes.UID("test1"), ResourceVersion: "2", Status: "test1"},
-			},
-			dataType: mockEventDataType,
-		},
 	}
 
 	for _, c := range cases {
 		// reset metrics
-		ResetCloudEventsMetrics()
+		ResetSourceCloudEventsMetrics()
 		// run test
 		t.Run(c.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -216,7 +207,7 @@ func TestResyncMetrics(t *testing.T) {
 			if c.resyncType == testSpecResync {
 				sourceOptions := fake.NewSourceOptions(gochan.New(), c.sourceID)
 				lister := newMockResourceLister(c.resources...)
-				source, err := NewCloudEventSourceClient[*mockResource](ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+				source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
 				require.NoError(t, err)
 
 				eventType := types.CloudEventsType{
@@ -235,7 +226,7 @@ func TestResyncMetrics(t *testing.T) {
 				// receive resync request and publish associated resources
 				source.receive(ctx, evt)
 
-				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.clusterName, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncRequestAction))
+				receivedTotal := cloudeventsReceivedBySourceCounterMetric.WithLabelValues(c.clusterName, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncRequestAction))
 				require.Equal(t, 1, int(toFloat64Counter(receivedTotal)))
 
 				// wait 1 seconds to respond to the spec resync request
@@ -248,14 +239,47 @@ func TestResyncMetrics(t *testing.T) {
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
 
-				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncResponseAction))
+				sentTotal := cloudeventsSentFromSourceCounterMetric.WithLabelValues(c.sourceID, noneOriginalSource, c.clusterName, c.dataType.String(), string(types.SubResourceSpec), string(types.ResyncResponseAction))
 				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
+
+			cancel()
+		})
+	}
+}
+
+func TestResyncStatusMetrics(t *testing.T) {
+	cases := []struct {
+		name        string
+		resyncType  testResyncType
+		clusterName string
+		sourceID    string
+		resources   []*mockResource
+		dataType    types.CloudEventsDataType
+	}{
+		{
+			name:        "resync status",
+			resyncType:  testStatusResync,
+			clusterName: "cluster1",
+			sourceID:    "source1",
+			resources: []*mockResource{
+				{Namespace: "cluster1", UID: kubetypes.UID("test1"), ResourceVersion: "2", Status: "test1"},
+			},
+			dataType: mockEventDataType,
+		},
+	}
+
+	for _, c := range cases {
+		// reset metrics
+		ResetClientCloudEventsMetrics()
+		// run test
+		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
 
 			if c.resyncType == testStatusResync {
 				agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
 				lister := newMockResourceLister(c.resources...)
-				agent, err := NewCloudEventAgentClient[*mockResource](ctx, agentOptions, lister, statusHash, newMockResourceCodec())
+				agent, err := NewCloudEventAgentClient(ctx, agentOptions, lister, statusHash, newMockResourceCodec())
 				require.NoError(t, err)
 
 				eventType := types.CloudEventsType{
@@ -274,7 +298,7 @@ func TestResyncMetrics(t *testing.T) {
 				// receive resync request and publish associated resources
 				agent.receive(ctx, evt)
 
-				receivedTotal := cloudeventsReceivedCounterMetric.WithLabelValues(c.sourceID, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncRequestAction))
+				receivedTotal := cloudeventsReceivedByClientCounterMetric.WithLabelValues(c.sourceID, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncRequestAction))
 				require.Equal(t, 1, int(toFloat64Counter(receivedTotal)))
 
 				// wait 1 seconds to respond to the resync request
@@ -287,7 +311,7 @@ func TestResyncMetrics(t *testing.T) {
 				require.Greater(t, sum, 0.0)
 				require.Less(t, sum, 1.0)
 
-				sentTotal := cloudeventsSentCounterMetric.WithLabelValues(testAgentName, noneOriginalSource, c.clusterName, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
+				sentTotal := cloudeventsSentFromClientCounterMetric.WithLabelValues(testAgentName, noneOriginalSource, c.dataType.String(), string(types.SubResourceStatus), string(types.ResyncResponseAction))
 				require.Equal(t, len(c.resources), int(toFloat64Counter(sentTotal)))
 			}
 
