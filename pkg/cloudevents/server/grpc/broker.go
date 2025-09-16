@@ -41,16 +41,18 @@ var _ server.AgentEventServer = &GRPCBroker{}
 // It broadcasts resource spec to agents and listens for resource status updates from them.
 type GRPCBroker struct {
 	pbv1.UnimplementedCloudEventServiceServer
-	services    map[types.CloudEventsDataType]server.Service
-	subscribers map[string]*subscriber // registered subscribers
-	mu          sync.RWMutex
+	services               map[types.CloudEventsDataType]server.Service
+	subscribers            map[string]*subscriber // registered subscribers
+	heartbeatCheckInterval time.Duration
+	mu                     sync.RWMutex
 }
 
 // NewGRPCBroker creates a new gRPC broker with the given gRPC server.
 func NewGRPCBroker() *GRPCBroker {
 	broker := &GRPCBroker{
-		subscribers: make(map[string]*subscriber),
-		services:    make(map[types.CloudEventsDataType]server.Service),
+		subscribers:            make(map[string]*subscriber),
+		services:               make(map[types.CloudEventsDataType]server.Service),
+		heartbeatCheckInterval: 10 * time.Second,
 	}
 	return broker
 }
@@ -160,6 +162,37 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 	if err != nil {
 		return fmt.Errorf("invalid subscription request: invalid data type %v", err)
 	}
+
+	ctx, cancel := context.WithCancel(subServer.Context())
+	defer cancel()
+
+	sendCh := make(chan *pbv1.CloudEvent, 100)
+	sendErrCh := make(chan error, 1)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case evt, ok := <-sendCh:
+				if !ok {
+					return
+				}
+				if err := subServer.Send(evt); err != nil {
+					klog.Errorf("failed to send event: %v", err)
+					select {
+					// Return the error without wrapping, as it includes the gRPC error code and message for further handling.
+					// For unrecoverable errors, such as a connection closed by an intermediate proxy, push the error to subscriber's
+					// error channel to unregister the subscriber.
+					case sendErrCh <- err:
+					default:
+					}
+					return
+				}
+			}
+		}
+	}()
+
 	subscriberID, errChan := bkr.register(subReq.ClusterName, *dataType, func(evt *cloudevents.Event) error {
 		// WARNING: don't use "pbEvt, err := pb.ToProto(evt)" to convert cloudevent to protobuf
 		pbEvt := &pbv1.CloudEvent{}
@@ -170,16 +203,38 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 
 		// send the cloudevent to the subscriber
 		klog.V(4).Infof("sending the event to spec subscribers, %s", evt.Context)
-		if err := subServer.Send(pbEvt); err != nil {
-			klog.Errorf("failed to send grpc event, %v", err)
-			// Return the error without wrapping, as it includes the gRPC error code and message for further handling.
-			// For unrecoverable errors, such as a connection closed by an intermediate proxy, push the error to subscriber's
-			// error channel to unregister the subscriber.
-			return err
+		select {
+		case sendCh <- pbEvt:
+		case <-ctx.Done():
+			return status.Error(codes.Unavailable, "stream context canceled")
 		}
 
 		return nil
 	})
+
+	go func() {
+		ticker := time.NewTicker(bkr.heartbeatCheckInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				heartbeat := &pbv1.CloudEvent{
+					SpecVersion: "1.0",
+					Id:          uuid.New().String(),
+					Type:        types.HeartbeatCloudEventsType,
+				}
+
+				select {
+				case sendCh <- heartbeat:
+				default:
+					klog.Warning("send channel is full, dropping heartbeat")
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	select {
 	case err := <-errChan:
@@ -188,7 +243,11 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		klog.Errorf("unregister subscriber %s, error= %v", subscriberID, err)
 		bkr.unregister(subscriberID)
 		return err
-	case <-subServer.Context().Done():
+	case err := <-sendErrCh:
+		klog.Errorf("failed to send event, unregister subscriber %s, error=%v", subscriberID, err)
+		bkr.unregister(subscriberID)
+		return err
+	case <-ctx.Done():
 		// The context of the stream has been canceled or completed.
 		// This could happen if:
 		// - The client closed the connection or canceled the stream.

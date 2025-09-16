@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/utils/ptr"
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
 
@@ -36,7 +37,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			name:   "customized options",
 			config: "{\"url\":\"test\"}",
 			expectedOptions: &GRPCOptions{
-				&GRPCDialer{
+				Dialer: &GRPCDialer{
 					URL: "test",
 					KeepAliveOptions: KeepAliveOptions{
 						Enable:              false,
@@ -51,7 +52,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			name:   "customized options with yaml format",
 			config: "url: test",
 			expectedOptions: &GRPCOptions{
-				&GRPCDialer{
+				Dialer: &GRPCDialer{
 					URL: "test",
 					KeepAliveOptions: KeepAliveOptions{
 						Enable:              false,
@@ -66,7 +67,7 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 			name:   "customized options with keepalive",
 			config: "{\"url\":\"test\",\"keepAliveConfig\":{\"enable\":true,\"time\":10s,\"timeout\":5s,\"permitWithoutStream\":true}}",
 			expectedOptions: &GRPCOptions{
-				&GRPCDialer{
+				Dialer: &GRPCDialer{
 					URL: "test",
 					KeepAliveOptions: KeepAliveOptions{
 						Enable:              true,
@@ -75,6 +76,22 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 						PermitWithoutStream: true,
 					},
 				},
+			},
+		},
+		{
+			name:   "customized options with ServerHealthinessTimeout",
+			config: "{\"url\":\"test\",\"serverHealthinessTimeout\":\"10s\"}",
+			expectedOptions: &GRPCOptions{
+				Dialer: &GRPCDialer{
+					URL: "test",
+					KeepAliveOptions: KeepAliveOptions{
+						Enable:              false,
+						Time:                30 * time.Second,
+						Timeout:             10 * time.Second,
+						PermitWithoutStream: false,
+					},
+				},
+				ServerHealthinessTimeout: ptr.To(10 * time.Second),
 			},
 		},
 	}
