@@ -166,24 +166,34 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 	ctx, cancel := context.WithCancel(subServer.Context())
 	defer cancel()
 
-	sendCh := make(chan *pbv1.CloudEvent, 100)
+	// TODO make the channel size configurable
+	eventCh := make(chan *pbv1.CloudEvent, 100)
+	heartbeatCh := make(chan *pbv1.CloudEvent, 10)
 	sendErrCh := make(chan error, 1)
 
+	// send events
+	// The grpc send is not concurrency safe and non-blocking, see: https://github.com/grpc/grpc-go/blob/v1.75.1/stream.go#L1571
+	// Return the error without wrapping, as it includes the gRPC error code and message for further handling.
+	// For unrecoverable errors, such as a connection closed by an intermediate proxy, push the error to subscriber's
+	// error channel to unregister the subscriber.
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case evt, ok := <-sendCh:
-				if !ok {
+			case evt := <-heartbeatCh:
+				if err := subServer.Send(evt); err != nil {
+					klog.Errorf("failed to send heartbeat: %v", err)
+					select {
+					case sendErrCh <- err:
+					default:
+					}
 					return
 				}
+			case evt := <-eventCh:
 				if err := subServer.Send(evt); err != nil {
 					klog.Errorf("failed to send event: %v", err)
 					select {
-					// Return the error without wrapping, as it includes the gRPC error code and message for further handling.
-					// For unrecoverable errors, such as a connection closed by an intermediate proxy, push the error to subscriber's
-					// error channel to unregister the subscriber.
 					case sendErrCh <- err:
 					default:
 					}
@@ -204,7 +214,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		// send the cloudevent to the subscriber
 		klog.V(4).Infof("sending the event to spec subscribers, %s", evt.Context)
 		select {
-		case sendCh <- pbEvt:
+		case eventCh <- pbEvt:
 		case <-ctx.Done():
 			return status.Error(codes.Unavailable, "stream context canceled")
 		}
@@ -226,7 +236,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 				}
 
 				select {
-				case sendCh <- heartbeat:
+				case heartbeatCh <- heartbeat:
 				default:
 					klog.Warning("send channel is full, dropping heartbeat")
 				}
