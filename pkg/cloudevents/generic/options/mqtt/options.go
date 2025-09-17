@@ -226,6 +226,7 @@ func (o *MQTTOptions) GetCloudEventsProtocol(
 	}
 
 	// setting a pinger with debug enabled
+	fmt.Println("---------------enable debug--------------")
 	pinger := paho.NewDefaultPinger()
 	pinger.SetDebug(&PahoDebugLogger{})
 
