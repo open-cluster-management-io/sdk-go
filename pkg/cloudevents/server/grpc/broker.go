@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/heartbeat"
 	"sync"
 	"time"
 
@@ -168,7 +169,8 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 
 	// TODO make the channel size configurable
 	eventCh := make(chan *pbv1.CloudEvent, 100)
-	heartbeatCh := make(chan *pbv1.CloudEvent, 10)
+
+	hearbeater := heartbeat.NewHeartbeater(bkr.heartbeatCheckInterval, 10)
 	sendErrCh := make(chan error, 1)
 
 	// send events
@@ -181,7 +183,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 			select {
 			case <-ctx.Done():
 				return
-			case evt := <-heartbeatCh:
+			case evt := <-hearbeater.Heartbeat():
 				if err := subServer.Send(evt); err != nil {
 					klog.Errorf("failed to send heartbeat: %v", err)
 					// Unblock producers (handler select) and exit heartbeat ticker.
@@ -226,29 +228,7 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		return nil
 	})
 
-	go func() {
-		ticker := time.NewTicker(bkr.heartbeatCheckInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				heartbeat := &pbv1.CloudEvent{
-					SpecVersion: "1.0",
-					Id:          uuid.New().String(),
-					Type:        types.HeartbeatCloudEventsType,
-				}
-
-				select {
-				case heartbeatCh <- heartbeat:
-				default:
-					klog.Warning("send channel is full, dropping heartbeat")
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go hearbeater.Start(ctx)
 
 	select {
 	case err := <-errChan:
