@@ -225,10 +225,15 @@ func (o *MQTTOptions) GetCloudEventsProtocol(
 		return nil, err
 	}
 
+	// setting a pinger with debug enabled
+	pinger := paho.NewDefaultPinger()
+	pinger.SetDebug(&PahoDebugLogger{})
+
 	config := &paho.ClientConfig{
 		ClientID:      clientID,
 		Conn:          netConn,
 		OnClientError: errorHandler,
+		PingHandler:   pinger,
 	}
 
 	opts := []cloudeventsmqtt.Option{cloudeventsmqtt.WithConnect(o.GetMQTTConnectOption(clientID))}
