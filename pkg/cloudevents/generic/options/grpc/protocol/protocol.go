@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/heartbeat"
 	"sync"
 	"time"
 
@@ -128,13 +129,13 @@ func (p *Protocol) OpenInbound(ctx context.Context) error {
 	}
 
 	subCtx, cancel := context.WithCancel(ctx)
-	heartbeatCh := make(chan *pbv1.CloudEvent, 1)
+	healthChecker := heartbeat.NewHealthChecker(p.serverHealthinessTimeout, p.reconnectErrorChan)
 
 	// start to receive the events from stream
-	go p.startEventsReceiver(subCtx, subClient, heartbeatCh)
+	go p.startEventsReceiver(subCtx, subClient, healthChecker.Input())
 
 	// start to watch the stream heartbeat
-	go p.startHeartbeatWatcher(subCtx, heartbeatCh)
+	go healthChecker.Start(subCtx)
 
 	// Wait until external or internal context done
 	select {
@@ -191,51 +192,6 @@ func (p *Protocol) startEventsReceiver(ctx context.Context,
 
 		select {
 		case p.incoming <- evt:
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (p *Protocol) startHeartbeatWatcher(ctx context.Context, heartbeatCh <-chan *pbv1.CloudEvent) {
-	logger := cecontext.LoggerFrom(ctx)
-	// if serverHealthinessTimeout is not set, ignore the heartbeat timeout check
-	if p.serverHealthinessTimeout == nil {
-		for {
-			select {
-			case msg := <-heartbeatCh:
-				logger.Debugf("heartbeat received %v", msg)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}
-
-	// if no heartbeat was received duration the serverHealthinessTimeout, send the
-	// timeout error to reconnectErrorChan
-	timeout := *p.serverHealthinessTimeout
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	for {
-		select {
-		case heartbeat := <-heartbeatCh:
-			logger.Debugf("heartbeat received %v", heartbeat)
-
-			// reset timer safely
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(timeout)
-		case <-timer.C:
-			select {
-			case p.reconnectErrorChan <- fmt.Errorf("stream timeout: no heartbeat received for %v", timeout):
-			default:
-			}
-			return
 		case <-ctx.Done():
 			return
 		}
