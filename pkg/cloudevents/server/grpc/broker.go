@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/heartbeat"
 	"sync"
 	"time"
+
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/heartbeat"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 
@@ -134,6 +136,7 @@ func (bkr *GRPCBroker) register(
 	}
 
 	klog.V(4).Infof("register a subscriber %s (cluster name = %s)", id, clusterName)
+	metrics.IncGRPCCESubscribersMetric(clusterName, dataType.String())
 
 	return id, errChan
 }
@@ -147,6 +150,7 @@ func (bkr *GRPCBroker) unregister(id string) {
 	if sub, exists := bkr.subscribers[id]; exists {
 		close(sub.errChan)
 		delete(bkr.subscribers, id)
+		metrics.DecGRPCCESubscribersMetric(sub.clusterName, sub.dataType.String())
 	}
 }
 
