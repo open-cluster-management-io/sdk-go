@@ -105,7 +105,7 @@ func (c *CloudEventSourceClient[T]) Resync(ctx context.Context, clusterName stri
 		return err
 	}
 
-	increaseCloudEventsSentFromSourceCounter(evt.Source(), "", clusterName, c.codec.EventDataType().String(), string(eventType.SubResource), string(eventType.Action))
+	increaseCloudEventsSentFromSourceCounter(evt.Source(), clusterName, c.codec.EventDataType().String(), string(eventType.SubResource), string(eventType.Action))
 
 	return nil
 }
@@ -130,7 +130,7 @@ func (c *CloudEventSourceClient[T]) Publish(ctx context.Context, eventType types
 	}
 
 	clusterName := evt.Context.GetExtensions()[types.ExtensionClusterName].(string)
-	increaseCloudEventsSentFromSourceCounter(evt.Source(), "", clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
+	increaseCloudEventsSentFromSourceCounter(evt.Source(), clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 
 	return nil
 }
@@ -290,7 +290,7 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 		if err := c.publish(ctx, evt); err != nil {
 			return err
 		}
-		increaseCloudEventsSentFromSourceCounter(evt.Source(), "", fmt.Sprintf("%s", clusterName), evtDataType.String(), string(eventType.SubResource), string(eventType.Action))
+		increaseCloudEventsSentFromSourceCounter(evt.Source(), fmt.Sprintf("%s", clusterName), evtDataType.String(), string(eventType.SubResource), string(eventType.Action))
 	}
 
 	return nil

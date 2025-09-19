@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/cloudevents/sdk-go/v2/binding"
+	cetypes "github.com/cloudevents/sdk-go/v2/types"
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -21,28 +22,42 @@ const grpcCEMetricsSubsystem = "grpc_server_ce"
 
 // Names of the labels added to metrics:
 const (
+	grpcCEMetricsClusterLabel  = "consumer"
 	grpcCEMetricsDataTypeLabel = "data_type"
 	grpcCEMetricsMethodLabel   = "method"
 	grpcMetricsCodeLabel       = "grpc_code"
 )
 
-// grpcCEMetricsLabels - Array of labels added to grpc server metrics for cloudevents:
-var grpcCEMetricsLabels = []string{
+// grpcCEMetricsCommonLabels - Array of common labels added to grpc server metrics for cloudevents:
+var grpcCEMetricsCommonLabels = []string{
+	grpcCEMetricsClusterLabel,
 	grpcCEMetricsDataTypeLabel,
-	grpcCEMetricsMethodLabel,
 }
 
+// grpcCEMetricsHandlerLabels - Array of handler labels added to grpc server metrics for cloudevents:
+var grpcCEMetricsHandlerLabels = append(grpcCEMetricsCommonLabels, grpcCEMetricsMethodLabel)
+
 // grpcCEMetricsAllLabels - Array of all labels added to grpc server metrics for cloudevents:
-var grpcCEMetricsAllLabels = append(grpcCEMetricsLabels, grpcMetricsCodeLabel)
+var grpcCEMetricsAllLabels = append(grpcCEMetricsHandlerLabels, grpcMetricsCodeLabel)
 
 // Names of the grpc server metrics for cloudevents:
 const (
+	subscribersMetric          = "subscribers"
 	calledCountMetric          = "called_total"
 	processedCountMetric       = "processed_total"
 	processingDurationMetric   = "processing_duration_seconds"
 	messageReceivedCountMetric = "msg_received_total"
 	messageSentCountMetric     = "msg_sent_total"
 )
+
+// grpcCESubscribersMetric is a gauge metric that tracks the number of registered
+// subscribers for cloudevents on the gRPC server.
+var grpcCESubscribersMetric = k8smetrics.NewGaugeVec(&k8smetrics.GaugeOpts{
+	Subsystem:      grpcCEMetricsSubsystem,
+	Name:           subscribersMetric,
+	StabilityLevel: k8smetrics.ALPHA,
+	Help:           "Number of registered subscribers for cloudevents on the grpc server.",
+}, grpcCEMetricsCommonLabels)
 
 // grpcCECalledCountMetric is a counter metric that tracks the total number of
 // RPC requests for cloudevents called on the gRPC server.
@@ -51,7 +66,7 @@ var grpcCECalledCountMetric = k8smetrics.NewCounterVec(&k8smetrics.CounterOpts{
 	Name:           calledCountMetric,
 	StabilityLevel: k8smetrics.ALPHA,
 	Help:           "Total number of RPC requests for cloudevents called on the grpc server.",
-}, grpcCEMetricsLabels)
+}, grpcCEMetricsHandlerLabels)
 
 // grpcCEMessageReceivedCountMetric is a counter metric that tracks the total number of
 // messages for cloudevents received on the gRPC server.
@@ -60,7 +75,7 @@ var grpcCEMessageReceivedCountMetric = k8smetrics.NewCounterVec(&k8smetrics.Coun
 	Name:           messageReceivedCountMetric,
 	StabilityLevel: k8smetrics.ALPHA,
 	Help:           "Total number of messages for cloudevents received on the gRPC server.",
-}, grpcCEMetricsLabels)
+}, grpcCEMetricsHandlerLabels)
 
 // grpcCEMessageSentCountMetric is a counter metric that tracks the total number of
 // messages for cloudevents sent by the gRPC server.
@@ -69,7 +84,7 @@ var grpcCEMessageSentCountMetric = k8smetrics.NewCounterVec(&k8smetrics.CounterO
 	Name:           messageSentCountMetric,
 	StabilityLevel: k8smetrics.ALPHA,
 	Help:           "Total number of messages for cloudevents sent by the gRPC server.",
-}, grpcCEMetricsLabels)
+}, grpcCEMetricsHandlerLabels)
 
 // grpcCEProcessedCountMetric is a counter metric that tracks the total number of
 // RPC requests for cloudevents processed on the server, regardless of success or failure.
@@ -106,61 +121,72 @@ func NewCloudEventsMetricsUnaryInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// initialize defaults for error cases
+		cluster := "unknown"
 		dataType := "unknown"
 
 		pubReq, ok := req.(*pbv1.PublishRequest)
 		if !ok {
 			err := fmt.Errorf("invalid request type for Publish method")
-			recordCloudEventsMetrics(dataType, method, err, startTime)
+			recordCloudEventsMetrics(cluster, dataType, method, err, startTime)
 			return nil, err
 		}
 		// convert the request to cloudevent and extract the source
 		evt, err := binding.ToEvent(ctx, protocol.NewMessage(pubReq.Event))
 		if err != nil {
 			err = fmt.Errorf("failed to convert to cloudevent: %v", err)
-			recordCloudEventsMetrics(dataType, method, err, startTime)
+			recordCloudEventsMetrics(cluster, dataType, method, err, startTime)
 			return nil, err
 		}
+
+		// extract the cluster name from event extensions
+		clusterVal, err := cetypes.ToString(evt.Context.GetExtensions()[types.ExtensionClusterName])
+		if err != nil {
+			err = fmt.Errorf("failed to get clustername extension: %v", err)
+			recordCloudEventsMetrics(cluster, dataType, method, err, startTime)
+			return nil, err
+		}
+		cluster = clusterVal
 
 		// extract the data type from event type
 		eventType, err := types.ParseCloudEventsType(evt.Type())
 		if err != nil {
 			err = fmt.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
-			recordCloudEventsMetrics(dataType, method, err, startTime)
+			recordCloudEventsMetrics(cluster, dataType, method, err, startTime)
 			return nil, err
 		}
 		dataType = eventType.CloudEventsDataType.String()
 
-		grpcCECalledCountMetric.WithLabelValues(dataType, method).Inc()
-		grpcCEMessageReceivedCountMetric.WithLabelValues(dataType, method).Inc()
+		grpcCECalledCountMetric.WithLabelValues(cluster, dataType, method).Inc()
+		grpcCEMessageReceivedCountMetric.WithLabelValues(cluster, dataType, method).Inc()
 		// call rpc handler to handle RPC request
 		resp, err := handler(ctx, req)
 		duration := time.Since(startTime).Seconds()
-		grpcCEMessageSentCountMetric.WithLabelValues(dataType, method).Inc()
+		grpcCEMessageSentCountMetric.WithLabelValues(cluster, dataType, method).Inc()
 
 		// get status code from error
 		status := statusFromError(err)
 		code := status.Code()
-		grpcCEProcessedCountMetric.WithLabelValues(dataType, method, code.String()).Inc()
-		grpcCEProcessingDurationMetric.WithLabelValues(dataType, method, code.String()).Observe(duration)
+		grpcCEProcessedCountMetric.WithLabelValues(cluster, dataType, method, code.String()).Inc()
+		grpcCEProcessingDurationMetric.WithLabelValues(cluster, dataType, method, code.String()).Observe(duration)
 
 		return resp, err
 	}
 }
 
-func recordCloudEventsMetrics(dataType, method string, err error, startTime time.Time) {
+func recordCloudEventsMetrics(cluster, dataType, method string, err error, startTime time.Time) {
 	duration := time.Since(startTime).Seconds()
 	status := statusFromError(err)
 	code := status.Code()
-	grpcCEProcessedCountMetric.WithLabelValues(dataType, method, code.String()).Inc()
-	grpcCEProcessingDurationMetric.WithLabelValues(dataType, method, code.String()).Observe(duration)
+	grpcCEProcessedCountMetric.WithLabelValues(cluster, dataType, method, code.String()).Inc()
+	grpcCEProcessingDurationMetric.WithLabelValues(cluster, dataType, method, code.String()).Observe(duration)
 }
 
 // wrappedCloudEventsMetricsStream wraps a grpc.ServerStream, capturing the request source
 // emitting metrics for the stream interceptor.
 type wrappedCloudEventsMetricsStream struct {
-	dataType *string
-	method   string
+	clusterName *string
+	dataType    *string
+	method      string
 	grpc.ServerStream
 	ctx context.Context
 }
@@ -178,10 +204,11 @@ func (w *wrappedCloudEventsMetricsStream) RecvMsg(m interface{}) error {
 		return fmt.Errorf("invalid request type for Subscribe method")
 	}
 
-	if w.dataType != nil {
+	if w.clusterName != nil && w.dataType != nil {
+		*w.clusterName = subReq.ClusterName
 		*w.dataType = subReq.DataType
-		grpcCECalledCountMetric.WithLabelValues(*w.dataType, w.method).Inc()
-		grpcCEMessageReceivedCountMetric.WithLabelValues(*w.dataType, w.method).Inc()
+		grpcCECalledCountMetric.WithLabelValues(*w.clusterName, *w.dataType, w.method).Inc()
+		grpcCEMessageReceivedCountMetric.WithLabelValues(*w.clusterName, *w.dataType, w.method).Inc()
 	}
 
 	return nil
@@ -194,16 +221,16 @@ func (w *wrappedCloudEventsMetricsStream) SendMsg(m interface{}) error {
 		return err
 	}
 
-	if w.dataType != nil && *w.dataType != "" {
-		grpcCEMessageSentCountMetric.WithLabelValues(*w.dataType, w.method).Inc()
+	if w.clusterName != nil && w.dataType != nil && *w.clusterName != "" && *w.dataType != "" {
+		grpcCEMessageSentCountMetric.WithLabelValues(*w.clusterName, *w.dataType, w.method).Inc()
 	}
 
 	return nil
 }
 
-// newWrappedCloudEventsMetricsStream creates a wrappedCloudEventsMetricsStream with the specified type reference.
-func newWrappedCloudEventsMetricsStream(dataType *string, method string, ctx context.Context, ss grpc.ServerStream) grpc.ServerStream {
-	return &wrappedCloudEventsMetricsStream{dataType, method, ss, ctx}
+// newWrappedCloudEventsMetricsStream creates a wrappedCloudEventsMetricsStream with the specified type and cluster reference.
+func newWrappedCloudEventsMetricsStream(clusterName, dataType *string, method string, ctx context.Context, ss grpc.ServerStream) grpc.ServerStream {
+	return &wrappedCloudEventsMetricsStream{clusterName, dataType, method, ss, ctx}
 }
 
 // NewCloudEventsMetricsStreamInterceptor creates a stream server interceptor for server metrics.
@@ -217,15 +244,16 @@ func NewCloudEventsMetricsStreamInterceptor() grpc.StreamServerInterceptor {
 		}
 
 		dataType := ""
+		cluster := ""
 		// create a wrapped stream to capture the source and emit metrics
-		wrappedCEMetricsStream := newWrappedCloudEventsMetricsStream(&dataType, method, stream.Context(), stream)
+		wrappedCEMetricsStream := newWrappedCloudEventsMetricsStream(&cluster, &dataType, method, stream.Context(), stream)
 		// call rpc handler to handle RPC request
 		err := handler(srv, wrappedCEMetricsStream)
 
 		// get status code from error
 		status := statusFromError(err)
 		code := status.Code()
-		grpcCEProcessedCountMetric.WithLabelValues(dataType, method, code.String()).Inc()
+		grpcCEProcessedCountMetric.WithLabelValues(cluster, dataType, method, code.String()).Inc()
 
 		return err
 	}
@@ -264,10 +292,21 @@ func SplitMethod(fullMethod string) (service, method string) {
 // Register all the grpc server metrics for cloudevents.
 func CloudEventsGRPCMetrics() []k8smetrics.Registerable {
 	return []k8smetrics.Registerable{
+		grpcCESubscribersMetric,
 		grpcCECalledCountMetric,
 		grpcCEProcessedCountMetric,
 		grpcCEProcessingDurationMetric,
 		grpcCEMessageReceivedCountMetric,
 		grpcCEMessageSentCountMetric,
 	}
+}
+
+// IncGRPCCESubscribersMetric increments the grpcCESubscribersMetric by 1 for the given cluster and dataType.
+func IncGRPCCESubscribersMetric(cluster, dataType string) {
+	grpcCESubscribersMetric.WithLabelValues(cluster, dataType).Inc()
+}
+
+// DecGRPCCESubscribersMetric decrements the grpcCESubscribersMetric by 1 for the given cluster and dataType.
+func DecGRPCCESubscribersMetric(cluster, dataType string) {
+	grpcCESubscribersMetric.WithLabelValues(cluster, dataType).Dec()
 }
