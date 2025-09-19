@@ -47,12 +47,11 @@ var cloudeventsReceivedByClientMetricsLabels = []string{
 
 // cloudeventsSentFromSourceMetricsLabels - Array of labels added to cloudevents sent from source metrics:
 var cloudeventsSentFromSourceMetricsLabels = []string{
-	metricsSourceLabel,         // source
-	metricsOriginalSourceLabel, // original source, if no, set to "none"
-	metricsConsumerLabel,       // consumer
-	metricsDataTypeLabel,       // data type, e.g. manifests, manifestbundles
-	metricsSubResourceLabel,    // subresource, eg, spec or status
-	metricsActionLabel,         // action, eg, create, update, delete, resync_request, resync_response
+	metricsSourceLabel,      // source
+	metricsConsumerLabel,    // consumer
+	metricsDataTypeLabel,    // data type, e.g. manifests, manifestbundles
+	metricsSubResourceLabel, // subresource, eg, spec or status
+	metricsActionLabel,      // action, eg, create, update, delete, resync_request, resync_response
 }
 
 // cloudeventsSentFromClientMetricsLabels - Array of labels added to cloudevents sent from client metrics:
@@ -125,7 +124,7 @@ var cloudeventsReceivedByClientCounterMetric = prometheus.NewCounterVec(
 // The cloudevents sent from source counter metric is a counter with a base metric name of 'sent_from_source_total'
 // and a help string of 'The total number of CloudEvents sent from source.'
 // For example, 1 cloudevent sent from source1 to consumer1 with data type manifestbundles for resource spec create would result in the following metrics:
-// cloudevents_sent_total{source="source1",original_source="none",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="spec",action="create"} 1
+// cloudevents_sent_total{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="spec",action="create"} 1
 var cloudeventsSentFromSourceCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
@@ -294,17 +293,13 @@ func increaseCloudEventsReceivedByAgentCounter(source, dataType, subresource, ac
 }
 
 // increaseCloudEventsSentFromSourceCounter increases the cloudevents sent from source counter metric:
-func increaseCloudEventsSentFromSourceCounter(source, originalSource, consumer, dataType, subresource, action string) {
-	if originalSource == "" {
-		originalSource = noneOriginalSource
-	}
+func increaseCloudEventsSentFromSourceCounter(source, consumer, dataType, subresource, action string) {
 	labels := prometheus.Labels{
-		metricsSourceLabel:         source,
-		metricsOriginalSourceLabel: originalSource,
-		metricsConsumerLabel:       consumer,
-		metricsDataTypeLabel:       dataType,
-		metricsSubResourceLabel:    subresource,
-		metricsActionLabel:         action,
+		metricsSourceLabel:      source,
+		metricsConsumerLabel:    consumer,
+		metricsDataTypeLabel:    dataType,
+		metricsSubResourceLabel: subresource,
+		metricsActionLabel:      action,
 	}
 	cloudeventsSentFromSourceCounterMetric.With(labels).Inc()
 }
