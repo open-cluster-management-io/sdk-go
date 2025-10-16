@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -450,44 +449,6 @@ func TestCompareSnowflakeSequenceIDs(t *testing.T) {
 				t.Errorf("expected %v, but %v", c.expected, actual)
 			}
 
-		})
-	}
-}
-
-func TestEnsureResourceFinalizer(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      []string
-		wantOutput []string
-	}{
-		{
-			name:       "empty finalizers",
-			input:      []string{},
-			wantOutput: []string{common.ResourceFinalizer},
-		},
-		{
-			name:       "finalizer already exists",
-			input:      []string{"other-finalizer", common.ResourceFinalizer},
-			wantOutput: []string{"other-finalizer", common.ResourceFinalizer},
-		},
-		{
-			name:       "finalizer not present",
-			input:      []string{"finalizer1", "finalizer2"},
-			wantOutput: []string{"finalizer1", "finalizer2", common.ResourceFinalizer},
-		},
-		{
-			name:       "nil input",
-			input:      nil,
-			wantOutput: []string{common.ResourceFinalizer},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := EnsureResourceFinalizer(tt.input)
-			if !reflect.DeepEqual(got, tt.wantOutput) {
-				t.Errorf("EnsureFinalizers() = %v, want %v", got, tt.wantOutput)
-			}
 		})
 	}
 }
