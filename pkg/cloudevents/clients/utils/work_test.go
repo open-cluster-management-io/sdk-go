@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -59,6 +60,44 @@ func TestEncodeManifests(t *testing.T) {
 
 			if !equality.Semantic.DeepEqual(cm, c.expectedManifest) {
 				t.Errorf("expected %v, but got %v", c.expectedManifest, cm)
+			}
+		})
+	}
+}
+
+func TestEnsureManifestWorkFinalizer(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      []string
+		wantOutput []string
+	}{
+		{
+			name:       "empty finalizers",
+			input:      []string{},
+			wantOutput: []string{workv1.ManifestWorkFinalizer},
+		},
+		{
+			name:       "finalizer already exists",
+			input:      []string{"other-finalizer", workv1.ManifestWorkFinalizer},
+			wantOutput: []string{"other-finalizer", workv1.ManifestWorkFinalizer},
+		},
+		{
+			name:       "finalizer not present",
+			input:      []string{"finalizer1", "finalizer2"},
+			wantOutput: []string{"finalizer1", "finalizer2", workv1.ManifestWorkFinalizer},
+		},
+		{
+			name:       "nil input",
+			input:      nil,
+			wantOutput: []string{workv1.ManifestWorkFinalizer},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EnsureManifestWorkFinalizer(tt.input)
+			if !reflect.DeepEqual(got, tt.wantOutput) {
+				t.Errorf("EnsureManifestWorkFinalizer() = %v, want %v", got, tt.wantOutput)
 			}
 		})
 	}

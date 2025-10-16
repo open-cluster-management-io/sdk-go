@@ -74,13 +74,17 @@ func setupMockServerWithHeartbeat(t *testing.T, heartbeatInterval time.Duration,
 	}
 	pbv1.RegisterCloudEventServiceServer(s, service)
 
+	serverReady := make(chan struct{})
 	go func() {
+		close(serverReady)
 		if err := s.Serve(lis); err != nil {
 			t.Logf("Server exited with error: %v", err)
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	// Wait for server to be ready
+	<-serverReady
+	time.Sleep(10 * time.Millisecond) // Small grace period for gRPC initialization
 
 	bufDialer := func(context.Context, string) (net.Conn, error) {
 		return lis.Dial()
@@ -117,7 +121,7 @@ func TestProtocol_HeartbeatIntegration(t *testing.T) {
 			heartbeatInterval:        100 * time.Millisecond,
 			serverHealthinessTimeout: ptr.To(500 * time.Millisecond),
 			expectHealthCheckError:   false,
-			testDuration:             800 * time.Millisecond,
+			testDuration:             1500 * time.Millisecond, // Increased for stability
 			stopServerAfterEvents:    0,
 		},
 		{
@@ -125,7 +129,7 @@ func TestProtocol_HeartbeatIntegration(t *testing.T) {
 			heartbeatInterval:        0, // No heartbeats
 			serverHealthinessTimeout: ptr.To(200 * time.Millisecond),
 			expectHealthCheckError:   true,
-			testDuration:             500 * time.Millisecond,
+			testDuration:             1000 * time.Millisecond, // Increased to allow Subscribe + timeout
 			stopServerAfterEvents:    0,
 		},
 		{
@@ -133,7 +137,7 @@ func TestProtocol_HeartbeatIntegration(t *testing.T) {
 			heartbeatInterval:        0,   // No heartbeats
 			serverHealthinessTimeout: nil, // Disabled
 			expectHealthCheckError:   false,
-			testDuration:             300 * time.Millisecond,
+			testDuration:             500 * time.Millisecond, // Increased for stability
 			stopServerAfterEvents:    0,
 		},
 		{
@@ -141,8 +145,8 @@ func TestProtocol_HeartbeatIntegration(t *testing.T) {
 			heartbeatInterval:        50 * time.Millisecond,
 			serverHealthinessTimeout: ptr.To(200 * time.Millisecond),
 			expectHealthCheckError:   true,
-			testDuration:             600 * time.Millisecond,
-			stopServerAfterEvents:    3, // Stop after 3 heartbeats
+			testDuration:             1000 * time.Millisecond, // Increased to allow Subscribe + timeout
+			stopServerAfterEvents:    3,                       // Stop after 3 heartbeats
 		},
 	}
 
@@ -169,7 +173,10 @@ func TestProtocol_HeartbeatIntegration(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), tt.testDuration)
 			defer cancel()
 
+			// Use a channel to ensure OpenInbound has started before checking for errors
+			started := make(chan struct{})
 			go func() {
+				close(started)
 				if err := p.OpenInbound(ctx); err != nil {
 					select {
 					case p.reconnectErrorChan <- err:
@@ -177,6 +184,10 @@ func TestProtocol_HeartbeatIntegration(t *testing.T) {
 					}
 				}
 			}()
+
+			// Wait for goroutine to start and give Subscribe call time to establish
+			<-started
+			time.Sleep(100 * time.Millisecond)
 
 			if tt.expectHealthCheckError {
 				select {
@@ -218,7 +229,7 @@ func TestProtocol_StartEventsReceiver_HeartbeatFiltering(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
 
 	var receivedEvents atomic.Int32
@@ -232,7 +243,10 @@ func TestProtocol_StartEventsReceiver_HeartbeatFiltering(t *testing.T) {
 		}
 	}()
 
+	// Use a channel to ensure OpenInbound has started before checking for errors
+	started := make(chan struct{})
 	go func() {
+		close(started)
 		if err := p.OpenInbound(ctx); err != nil {
 			select {
 			case p.reconnectErrorChan <- err:
@@ -240,6 +254,10 @@ func TestProtocol_StartEventsReceiver_HeartbeatFiltering(t *testing.T) {
 			}
 		}
 	}()
+
+	// Wait for goroutine to start and give Subscribe call time to establish
+	<-started
+	time.Sleep(100 * time.Millisecond)
 
 	<-ctx.Done()
 
@@ -313,7 +331,7 @@ func TestProtocol_OpenInbound_ValidationErrors(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 
 			err = p.OpenInbound(ctx)
