@@ -1,10 +1,17 @@
+// After making changes to the *.proto files, always run the following
+// command in current directory to update the generated code:
+// go generate
+
 syntax = "proto3";
 
-package open-cluster-management.io.sdk-go.plugin;
+package io.openclustermanagement.sdkgo.plugin;
 
-import "google/protobuf/struct.proto";
+// import "google/protobuf/struct.proto";
+// import "k8s.io/apimachinery/pkg/runtime/generated.proto";
+// import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
+import "google/protobuf/any.proto";
 
-option go_package = "open-cluster-management.io/sdk-go/pkg/plugin;plugin";
+option go_package = "open-cluster-management.io/sdk-go/plugin;plugin";
 
 // RolloutPluginService is the service for the rollout plugin.
 service RolloutPluginService {
@@ -14,7 +21,7 @@ service RolloutPluginService {
   // BeginRollout is called before the manifestwork resource is applied.
   // It is used to prepare the rollout.
   rpc BeginRollout(RolloutPluginRequest) returns (RolloutPluginResponse);
-  
+
   // ProgressRollout is called after the manifestwork is applied.
   // Whenever the feedbacks are updated, this method will be called.
   // The plugin can execute the rollout logic based on the feedback status changes.
@@ -55,7 +62,8 @@ message InitPluginRequest {
   string ocm_version = 1;
 }
 
-// InitPluginResponse is the response to initialize the plugin.
+// InitPluginResponse is the response from the plugin after initialization. 
+// The plugin returns the name, version, and capabilities of the plugin.
 message InitPluginResponse {
   // name is the name of the plugin.
   string name = 1;
@@ -88,9 +96,6 @@ message ClusterRolloutStatus {
 
 // RolloutDetails is the details of the rollout.
 message RolloutDetails {
-  // placement_total_clusters is the total clusters in placement decision.
-  int32 placement_total_clusters = 1;
-
   // completed is the clusters that have been completed.
   repeated ClusterRolloutStatus completed = 1;
 
@@ -102,6 +107,9 @@ message RolloutDetails {
   
   // removed is the clusters that have been removed.
   repeated ClusterRolloutStatus removed = 4;
+
+  // placement_total_clusters is the total clusters in placement decision.
+  int32 placement_total_clusters = 6;
 }
 
 message RolloutMeta {
@@ -142,9 +150,14 @@ message RolloutPluginResponse {
   
   // result is the result of the response.
   Result result = 1;
-  
-  // details is the message of the response.
-  optional string details = 2;
+
+  oneof data {
+    // text_data is the text data of the response.
+    string text_data = 2;
+
+    // proto_data is the protobuf data of the response.
+    google.protobuf.Any proto_data = 3;
+  }
 }
 
 // ValidateRolloutResponse is the response from the plugin for the validation of the rollout.
@@ -154,22 +167,29 @@ message ValidateRolloutResponse {
     // RESULT_UNSPECIFIED is the unspecified result.
     RESULT_UNSPECIFIED = 0;
     
-    // OK is the ok result.
-    OK = 1;
-    
-    // FAILED is the failed result.
+    // SUCCEEDED represents the successful result of the validation.
+    // MWRS Controller continues the rollout to the next group of clusters.
+    SUCCEEDED = 1;
+
+    // FAILED represents the failed result of the validation.
+    // MWRS Controller stops the current rollout and rollback is triggered if the rollback is required.
     FAILED = 2;
 
-    // INPROGRESS is the state where the validation is still in progress.
-    // MWRS Controller will keep calling this method until the result is not INPROGRESS.
+    // INPROGRESS represents the state where the validation is still in progress.
+    // MWRS Controller keeps calling this method until the result is not INPROGRESS.
     INPROGRESS = 3;
   }
   
   // result is the result of the response.
   Result result = 1;
 
-  // details is the message of the response.
-  optional string details = 2;
+  oneof data {
+    // text_data is the text data of the response.
+    string text_data = 2;
+
+    // proto_data is the protobuf data of the response.
+    google.protobuf.Any proto_data = 3;
+  }
 }
 
 // MutateManifestWorkRequest is the request to mutate the manifestwork resource before it is applied.
