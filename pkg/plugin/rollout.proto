@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package open-cluster-management.io.sdk-go.plugin;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "open-cluster-management.io/sdk-go/pkg/plugin;plugin";
+
+// RolloutPluginService is the service for the rollout plugin.
+service RolloutPluginService {
+  // InitPlugin initializes the plugin
+  rpc InitPlugin(InitPluginRequest) returns (InitPluginResponse);
+
+  // BeginRollout is called before the manifestwork resource is applied.
+  // It is used to prepare the rollout.
+  rpc BeginRollout(RolloutPluginRequest) returns (RolloutPluginResponse);
+  
+  // ProgressRollout is called after the manifestwork is applied.
+  // Whenever the feedbacks are updated, this method will be called.
+  // The plugin can execute the rollout logic based on the feedback status changes.
+  rpc ProgressRollout(RolloutPluginRequest) returns (RolloutPluginResponse);
+
+  // ValidateRollout is called to validate the completion of the rollout.
+  // It is used to check if the rollout is completed successfully.
+  // If the validation is completed successfully, the plugin should return a OK result.
+  // If the validation is still in progress, the plugin should return a INPROGRESS result.
+  // If the validation is failed, the plugin should return a FAILED result.
+  rpc ValidateRollout(RolloutPluginRequest) returns (ValidateRolloutResponse);
+
+  // BeginRollback is called before the manifestwork resource is rolled back.
+  // It is used to prepare the rollback.
+  rpc BeginRollback(RolloutPluginRequest) returns (RolloutPluginResponse);
+
+  // ProgressRollback is called after the manifestwork is rolled back.
+  // Whenever the feedbacks are updated, this method will be called.
+  // The plugin can execute the rollback logic based on the feedback status changes.
+  rpc ProgressRollback(RolloutPluginRequest) returns (RolloutPluginResponse);
+
+  // ValidateRollback is called to validate the completion of the rollback.
+  // It is used to check if the rollback is completed successfully.
+  // If the validation is completed successfully, the plugin should return a OK result.
+  // If the validation is still in progress, the plugin should return a INPROGRESS result.
+  // If the validation is failed, the plugin should return a FAILED result.
+  rpc ValidateRollback(RolloutPluginRequest) returns (ValidateRolloutResponse);
+
+  // MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
+  // MWRS controller provides the current rollout status to the plugin.
+  // The plugin can use this information to mutate the manifestwork resource.
+  rpc MutateManifestWork(MutateManifestWorkRequest) returns (MutateManifestWorkResponse);
+}
+
+// InitPluginRequest is the request to initialize the plugin.
+message InitPluginRequest {
+  // ocm_version is the version of the OCM API.
+  string ocm_version = 1;
+}
+
+// InitPluginResponse is the response to initialize the plugin.
+message InitPluginResponse {
+  // name is the name of the plugin.
+  string name = 1;
+  
+  // version is the version of the plugin.
+  string version = 2;
+
+  message Capabilities {
+    // rollout is the capability to rollout.
+    bool rollout = 1;
+
+    // rollback is the capability to rollback.
+    bool rollback = 2;
+
+    // mutate_manifestwork is the capability to mutate the manifestwork resource.
+    bool mutate_manifestwork = 3;
+  }
+  // capabilities is the capabilities of the plugin.
+  Capabilities capabilities = 3;
+}
+
+// ClusterRolloutStatus is the status of the cluster rollout.
+message ClusterRolloutStatus {
+  // name is the name of the cluster.
+  string name = 1;
+
+  // rollout_status is the status of the cluster rollout.
+  string rollout_status = 2;
+}
+
+// RolloutDetails is the details of the rollout.
+message RolloutDetails {
+  // placement_total_clusters is the total clusters in placement decision.
+  int32 placement_total_clusters = 1;
+
+  // completed is the clusters that have been completed.
+  repeated ClusterRolloutStatus completed = 1;
+
+  // in_progress is the clusters that are currently being rolled out.
+  repeated ClusterRolloutStatus in_progress = 2;
+  
+  // timed_out is the clusters that have timed out.
+  repeated ClusterRolloutStatus timed_out = 3;
+  
+  // removed is the clusters that have been removed.
+  repeated ClusterRolloutStatus removed = 4;
+}
+
+message RolloutMeta {
+  // mwrs_name is the name of the manifestwork resource set.
+  string mwrs_name = 1;
+
+  // placement_name is the name of the placement.
+  string placement_name = 2;
+
+  // namespace is the namespace where mwrs and placement are located.
+  string namespace = 3;
+
+  // cluster_name is the name of the cluster.
+  optional string cluster_name = 4;
+}
+
+// RolloutPluginRequest is the request to the rollout plugin.
+message RolloutPluginRequest {
+  // metadata is the metadata of the rollout.
+  RolloutMeta metadata = 1;
+
+  // rollout_details is the details of the rollout.
+  optional RolloutDetails rollout_details = 7;
+}
+
+// RolloutPluginResponse is the response from the plugin.
+message RolloutPluginResponse {
+  // Result is the result of the plugin response.
+  enum Result {
+    RESULT_UNSPECIFIED = 0;
+  
+    // OK is the ok response.
+    OK = 1;
+  
+    // FAILED is the failed response.
+    FAILED = 2;
+  }
+  
+  // result is the result of the response.
+  Result result = 1;
+  
+  // details is the message of the response.
+  optional string details = 2;
+}
+
+// ValidateRolloutResponse is the response from the plugin for the validation of the rollout.
+message ValidateRolloutResponse {
+  // Result is the result of the validation response.
+  enum Result {
+    // RESULT_UNSPECIFIED is the unspecified result.
+    RESULT_UNSPECIFIED = 0;
+    
+    // OK is the ok result.
+    OK = 1;
+    
+    // FAILED is the failed result.
+    FAILED = 2;
+
+    // INPROGRESS is the state where the validation is still in progress.
+    // MWRS Controller will keep calling this method until the result is not INPROGRESS.
+    INPROGRESS = 3;
+  }
+  
+  // result is the result of the response.
+  Result result = 1;
+
+  // details is the message of the response.
+  optional string details = 2;
+}
+
+// MutateManifestWorkRequest is the request to mutate the manifestwork resource before it is applied.
+message MutateManifestWorkRequest {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+
+    // ROLLOUT is the type of the mutation for the rollout.
+    ROLLOUT = 1;
+
+    // ROLLBACK is the type of the mutation for the rollback.
+    ROLLBACK = 2;
+  }
+
+  // type is the type of the mutation.
+  Type type = 1;
+
+  // metadata is the metadata of the rollout.
+  RolloutMeta metadata = 2;
+
+  // rollout_details is the details of the rollout.
+  optional RolloutDetails rollout_details = 3;
+  
+  // manifestwork is the unstructured manifestwork resource.
+  RuntimeObject manifestwork = 4;
+}
+
+// MutateManifestWorkResponse is the response to mutate the manifestwork resource before it is applied.
+message MutateManifestWorkResponse {
+  // manifestwork is the mutated manifestwork resource.
+  RuntimeObject manifestwork = 1;
+}
+
+// TypeMeta is the type meta of the kubernetes runtime object.
+message TypeMeta {
+  string api_version = 1;
+
+  string kind = 2;
+}
+
+// RuntimeObject is the kubernetes runtime object.
+message RuntimeObject {
+  TypeMeta type_meta = 1;
+
+  // Raw will hold the complete serialized object which couldn't be matched
+  // with a registered type. Most likely, nothing should be done with this
+  // except for passing it through the system.
+  bytes raw = 2;
+
+  // ContentType  is serialization method used to serialize 'Raw'.
+  // Unspecified means ContentTypeJSON.
+  string contentType = 3;
+}
