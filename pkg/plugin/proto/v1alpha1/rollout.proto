@@ -4,19 +4,17 @@
 
 syntax = "proto3";
 
-package io.openclustermanagement.sdkgo.plugin;
+package io.openclustermanagement.sdkgo.plugin.proto.v1alpha1;
 
-// import "google/protobuf/struct.proto";
-// import "k8s.io/apimachinery/pkg/runtime/generated.proto";
-// import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 import "google/protobuf/any.proto";
+import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 
-option go_package = "open-cluster-management.io/sdk-go/plugin;plugin";
+option go_package = "open-cluster-management.io/sdk-go/plugin/proto/v1alpha1;v1alpha1";
 
 // RolloutPluginService is the service for the rollout plugin.
 service RolloutPluginService {
-  // InitPlugin initializes the plugin
-  rpc InitPlugin(InitPluginRequest) returns (InitPluginResponse);
+  // Initialize initializes the plugin
+  rpc Initialize(InitializeRequest) returns (InitializeResponse);
 
   // BeginRollout is called before the manifestwork resource is applied.
   // It is used to prepare the rollout.
@@ -56,15 +54,15 @@ service RolloutPluginService {
   rpc MutateManifestWork(MutateManifestWorkRequest) returns (MutateManifestWorkResponse);
 }
 
-// InitPluginRequest is the request to initialize the plugin.
-message InitPluginRequest {
+// InitializeRequest is the request to initialize the plugin.
+message InitializeRequest {
   // ocm_version is the version of the OCM API.
   string ocm_version = 1;
 }
 
-// InitPluginResponse is the response from the plugin after initialization. 
+// InitializeResponse is the response from the plugin after initialization. 
 // The plugin returns the name, version, and capabilities of the plugin.
-message InitPluginResponse {
+message InitializeResponse {
   // name is the name of the plugin.
   string name = 1;
   
@@ -112,6 +110,7 @@ message RolloutDetails {
   int32 placement_total_clusters = 6;
 }
 
+// RolloutMeta is the metadata of the rollout.
 message RolloutMeta {
   // mwrs_name is the name of the manifestwork resource set.
   string mwrs_name = 1;
@@ -194,18 +193,18 @@ message ValidateRolloutResponse {
 
 // MutateManifestWorkRequest is the request to mutate the manifestwork resource before it is applied.
 message MutateManifestWorkRequest {
-  enum Type {
-    TYPE_UNSPECIFIED = 0;
+  enum RolloutState {
+    ROLLOUT_STATE_UNSPECIFIED = 0;
 
-    // ROLLOUT is the type of the mutation for the rollout.
+    // ROLLOUT is the rollout state for the rollout.
     ROLLOUT = 1;
 
-    // ROLLBACK is the type of the mutation for the rollback.
+    // ROLLBACK is the rollout state for the rollback.
     ROLLBACK = 2;
   }
 
-  // type is the type of the mutation.
-  Type type = 1;
+  // rollout_state is the rollout state.
+  RolloutState rollout_state = 1;
 
   // metadata is the metadata of the rollout.
   RolloutMeta metadata = 2;
@@ -214,32 +213,11 @@ message MutateManifestWorkRequest {
   optional RolloutDetails rollout_details = 3;
   
   // manifestwork is the unstructured manifestwork resource.
-  RuntimeObject manifestwork = 4;
+  k8s.io.apimachinery.pkg.runtime.Unknown manifestwork = 4;
 }
 
 // MutateManifestWorkResponse is the response to mutate the manifestwork resource before it is applied.
 message MutateManifestWorkResponse {
   // manifestwork is the mutated manifestwork resource.
-  RuntimeObject manifestwork = 1;
-}
-
-// TypeMeta is the type meta of the kubernetes runtime object.
-message TypeMeta {
-  string api_version = 1;
-
-  string kind = 2;
-}
-
-// RuntimeObject is the kubernetes runtime object.
-message RuntimeObject {
-  TypeMeta type_meta = 1;
-
-  // Raw will hold the complete serialized object which couldn't be matched
-  // with a registered type. Most likely, nothing should be done with this
-  // except for passing it through the system.
-  bytes raw = 2;
-
-  // ContentType  is serialization method used to serialize 'Raw'.
-  // Unspecified means ContentTypeJSON.
-  string contentType = 3;
+  k8s.io.apimachinery.pkg.runtime.Unknown manifestwork = 1;
 }

@@ -8,7 +8,7 @@
 // - protoc             v6.33.0
 // source: rollout.proto
 
-package plugin
+package v1alpha1
 
 import (
 	context "context"
@@ -23,14 +23,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RolloutPluginService_InitPlugin_FullMethodName         = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/InitPlugin"
-	RolloutPluginService_BeginRollout_FullMethodName       = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/BeginRollout"
-	RolloutPluginService_ProgressRollout_FullMethodName    = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/ProgressRollout"
-	RolloutPluginService_ValidateRollout_FullMethodName    = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/ValidateRollout"
-	RolloutPluginService_BeginRollback_FullMethodName      = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/BeginRollback"
-	RolloutPluginService_ProgressRollback_FullMethodName   = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/ProgressRollback"
-	RolloutPluginService_ValidateRollback_FullMethodName   = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/ValidateRollback"
-	RolloutPluginService_MutateManifestWork_FullMethodName = "/io.openclustermanagement.sdkgo.plugin.RolloutPluginService/MutateManifestWork"
+	RolloutPluginService_Initialize_FullMethodName         = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/Initialize"
+	RolloutPluginService_BeginRollout_FullMethodName       = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/BeginRollout"
+	RolloutPluginService_ProgressRollout_FullMethodName    = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ProgressRollout"
+	RolloutPluginService_ValidateRollout_FullMethodName    = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ValidateRollout"
+	RolloutPluginService_BeginRollback_FullMethodName      = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/BeginRollback"
+	RolloutPluginService_ProgressRollback_FullMethodName   = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ProgressRollback"
+	RolloutPluginService_ValidateRollback_FullMethodName   = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ValidateRollback"
+	RolloutPluginService_MutateManifestWork_FullMethodName = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/MutateManifestWork"
 )
 
 // RolloutPluginServiceClient is the client API for RolloutPluginService service.
@@ -39,8 +39,8 @@ const (
 //
 // RolloutPluginService is the service for the rollout plugin.
 type RolloutPluginServiceClient interface {
-	// InitPlugin initializes the plugin
-	InitPlugin(ctx context.Context, in *InitPluginRequest, opts ...grpc.CallOption) (*InitPluginResponse, error)
+	// Initialize initializes the plugin
+	Initialize(ctx context.Context, in *InitializeRequest, opts ...grpc.CallOption) (*InitializeResponse, error)
 	// BeginRollout is called before the manifestwork resource is applied.
 	// It is used to prepare the rollout.
 	BeginRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error)
@@ -81,10 +81,10 @@ func NewRolloutPluginServiceClient(cc grpc.ClientConnInterface) RolloutPluginSer
 	return &rolloutPluginServiceClient{cc}
 }
 
-func (c *rolloutPluginServiceClient) InitPlugin(ctx context.Context, in *InitPluginRequest, opts ...grpc.CallOption) (*InitPluginResponse, error) {
+func (c *rolloutPluginServiceClient) Initialize(ctx context.Context, in *InitializeRequest, opts ...grpc.CallOption) (*InitializeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InitPluginResponse)
-	err := c.cc.Invoke(ctx, RolloutPluginService_InitPlugin_FullMethodName, in, out, cOpts...)
+	out := new(InitializeResponse)
+	err := c.cc.Invoke(ctx, RolloutPluginService_Initialize_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -167,8 +167,8 @@ func (c *rolloutPluginServiceClient) MutateManifestWork(ctx context.Context, in 
 //
 // RolloutPluginService is the service for the rollout plugin.
 type RolloutPluginServiceServer interface {
-	// InitPlugin initializes the plugin
-	InitPlugin(context.Context, *InitPluginRequest) (*InitPluginResponse, error)
+	// Initialize initializes the plugin
+	Initialize(context.Context, *InitializeRequest) (*InitializeResponse, error)
 	// BeginRollout is called before the manifestwork resource is applied.
 	// It is used to prepare the rollout.
 	BeginRollout(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error)
@@ -209,8 +209,8 @@ type RolloutPluginServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedRolloutPluginServiceServer struct{}
 
-func (UnimplementedRolloutPluginServiceServer) InitPlugin(context.Context, *InitPluginRequest) (*InitPluginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InitPlugin not implemented")
+func (UnimplementedRolloutPluginServiceServer) Initialize(context.Context, *InitializeRequest) (*InitializeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Initialize not implemented")
 }
 func (UnimplementedRolloutPluginServiceServer) BeginRollout(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginRollout not implemented")
@@ -254,20 +254,20 @@ func RegisterRolloutPluginServiceServer(s grpc.ServiceRegistrar, srv RolloutPlug
 	s.RegisterService(&RolloutPluginService_ServiceDesc, srv)
 }
 
-func _RolloutPluginService_InitPlugin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InitPluginRequest)
+func _RolloutPluginService_Initialize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InitializeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RolloutPluginServiceServer).InitPlugin(ctx, in)
+		return srv.(RolloutPluginServiceServer).Initialize(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RolloutPluginService_InitPlugin_FullMethodName,
+		FullMethod: RolloutPluginService_Initialize_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RolloutPluginServiceServer).InitPlugin(ctx, req.(*InitPluginRequest))
+		return srv.(RolloutPluginServiceServer).Initialize(ctx, req.(*InitializeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -402,12 +402,12 @@ func _RolloutPluginService_MutateManifestWork_Handler(srv interface{}, ctx conte
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var RolloutPluginService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "io.openclustermanagement.sdkgo.plugin.RolloutPluginService",
+	ServiceName: "io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService",
 	HandlerType: (*RolloutPluginServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "InitPlugin",
-			Handler:    _RolloutPluginService_InitPlugin_Handler,
+			MethodName: "Initialize",
+			Handler:    _RolloutPluginService_Initialize_Handler,
 		},
 		{
 			MethodName: "BeginRollout",
