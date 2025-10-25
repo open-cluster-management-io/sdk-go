@@ -53,7 +53,7 @@ type RolloutPluginServiceClient interface {
 	// If the validation is completed successfully, the plugin should return a OK result.
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
-	ValidateRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateRolloutResponse, error)
+	ValidateRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	// BeginRollback is called before the manifestwork resource is rolled back.
 	// It is used to prepare the rollback.
 	BeginRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error)
@@ -66,7 +66,7 @@ type RolloutPluginServiceClient interface {
 	// If the validation is completed successfully, the plugin should return a OK result.
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
-	ValidateRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateRolloutResponse, error)
+	ValidateRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
 	// MWRS controller provides the current rollout status to the plugin.
 	// The plugin can use this information to mutate the manifestwork resource.
@@ -111,9 +111,9 @@ func (c *rolloutPluginServiceClient) ProgressRollout(ctx context.Context, in *Ro
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) ValidateRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateRolloutResponse, error) {
+func (c *rolloutPluginServiceClient) ValidateRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ValidateRolloutResponse)
+	out := new(ValidateResponse)
 	err := c.cc.Invoke(ctx, RolloutPluginService_ValidateRollout_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -141,9 +141,9 @@ func (c *rolloutPluginServiceClient) ProgressRollback(ctx context.Context, in *R
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) ValidateRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateRolloutResponse, error) {
+func (c *rolloutPluginServiceClient) ValidateRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ValidateRolloutResponse)
+	out := new(ValidateResponse)
 	err := c.cc.Invoke(ctx, RolloutPluginService_ValidateRollback_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ type RolloutPluginServiceServer interface {
 	// If the validation is completed successfully, the plugin should return a OK result.
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
-	ValidateRollout(context.Context, *RolloutPluginRequest) (*ValidateRolloutResponse, error)
+	ValidateRollout(context.Context, *RolloutPluginRequest) (*ValidateResponse, error)
 	// BeginRollback is called before the manifestwork resource is rolled back.
 	// It is used to prepare the rollback.
 	BeginRollback(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error)
@@ -194,7 +194,7 @@ type RolloutPluginServiceServer interface {
 	// If the validation is completed successfully, the plugin should return a OK result.
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
-	ValidateRollback(context.Context, *RolloutPluginRequest) (*ValidateRolloutResponse, error)
+	ValidateRollback(context.Context, *RolloutPluginRequest) (*ValidateResponse, error)
 	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
 	// MWRS controller provides the current rollout status to the plugin.
 	// The plugin can use this information to mutate the manifestwork resource.
@@ -218,7 +218,7 @@ func (UnimplementedRolloutPluginServiceServer) BeginRollout(context.Context, *Ro
 func (UnimplementedRolloutPluginServiceServer) ProgressRollout(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ProgressRollout not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) ValidateRollout(context.Context, *RolloutPluginRequest) (*ValidateRolloutResponse, error) {
+func (UnimplementedRolloutPluginServiceServer) ValidateRollout(context.Context, *RolloutPluginRequest) (*ValidateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateRollout not implemented")
 }
 func (UnimplementedRolloutPluginServiceServer) BeginRollback(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
@@ -227,7 +227,7 @@ func (UnimplementedRolloutPluginServiceServer) BeginRollback(context.Context, *R
 func (UnimplementedRolloutPluginServiceServer) ProgressRollback(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ProgressRollback not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) ValidateRollback(context.Context, *RolloutPluginRequest) (*ValidateRolloutResponse, error) {
+func (UnimplementedRolloutPluginServiceServer) ValidateRollback(context.Context, *RolloutPluginRequest) (*ValidateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateRollback not implemented")
 }
 func (UnimplementedRolloutPluginServiceServer) MutateManifestWork(context.Context, *MutateManifestWorkRequest) (*MutateManifestWorkResponse, error) {

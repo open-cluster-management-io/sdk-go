@@ -80,31 +80,31 @@ func (RolloutPluginResponse_Result) EnumDescriptor() ([]byte, []int) {
 }
 
 // Result is the result of the validation response.
-type ValidateRolloutResponse_Result int32
+type ValidateResponse_Result int32
 
 const (
 	// RESULT_UNSPECIFIED is the unspecified result.
-	ValidateRolloutResponse_RESULT_UNSPECIFIED ValidateRolloutResponse_Result = 0
+	ValidateResponse_RESULT_UNSPECIFIED ValidateResponse_Result = 0
 	// SUCCEEDED represents the successful result of the validation.
 	// MWRS Controller continues the rollout to the next group of clusters.
-	ValidateRolloutResponse_SUCCEEDED ValidateRolloutResponse_Result = 1
+	ValidateResponse_SUCCEEDED ValidateResponse_Result = 1
 	// FAILED represents the failed result of the validation.
 	// MWRS Controller stops the current rollout and rollback is triggered if the rollback is required.
-	ValidateRolloutResponse_FAILED ValidateRolloutResponse_Result = 2
+	ValidateResponse_FAILED ValidateResponse_Result = 2
 	// INPROGRESS represents the state where the validation is still in progress.
 	// MWRS Controller keeps calling this method until the result is not INPROGRESS.
-	ValidateRolloutResponse_INPROGRESS ValidateRolloutResponse_Result = 3
+	ValidateResponse_INPROGRESS ValidateResponse_Result = 3
 )
 
-// Enum value maps for ValidateRolloutResponse_Result.
+// Enum value maps for ValidateResponse_Result.
 var (
-	ValidateRolloutResponse_Result_name = map[int32]string{
+	ValidateResponse_Result_name = map[int32]string{
 		0: "RESULT_UNSPECIFIED",
 		1: "SUCCEEDED",
 		2: "FAILED",
 		3: "INPROGRESS",
 	}
-	ValidateRolloutResponse_Result_value = map[string]int32{
+	ValidateResponse_Result_value = map[string]int32{
 		"RESULT_UNSPECIFIED": 0,
 		"SUCCEEDED":          1,
 		"FAILED":             2,
@@ -112,30 +112,30 @@ var (
 	}
 )
 
-func (x ValidateRolloutResponse_Result) Enum() *ValidateRolloutResponse_Result {
-	p := new(ValidateRolloutResponse_Result)
+func (x ValidateResponse_Result) Enum() *ValidateResponse_Result {
+	p := new(ValidateResponse_Result)
 	*p = x
 	return p
 }
 
-func (x ValidateRolloutResponse_Result) String() string {
+func (x ValidateResponse_Result) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (ValidateRolloutResponse_Result) Descriptor() protoreflect.EnumDescriptor {
+func (ValidateResponse_Result) Descriptor() protoreflect.EnumDescriptor {
 	return file_rollout_proto_enumTypes[1].Descriptor()
 }
 
-func (ValidateRolloutResponse_Result) Type() protoreflect.EnumType {
+func (ValidateResponse_Result) Type() protoreflect.EnumType {
 	return &file_rollout_proto_enumTypes[1]
 }
 
-func (x ValidateRolloutResponse_Result) Number() protoreflect.EnumNumber {
+func (x ValidateResponse_Result) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use ValidateRolloutResponse_Result.Descriptor instead.
-func (ValidateRolloutResponse_Result) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use ValidateResponse_Result.Descriptor instead.
+func (ValidateResponse_Result) EnumDescriptor() ([]byte, []int) {
 	return file_rollout_proto_rawDescGZIP(), []int{7, 0}
 }
 
@@ -660,34 +660,34 @@ func (*RolloutPluginResponse_TextData) isRolloutPluginResponse_Data() {}
 
 func (*RolloutPluginResponse_ProtoData) isRolloutPluginResponse_Data() {}
 
-// ValidateRolloutResponse is the response from the plugin for the validation of the rollout.
-type ValidateRolloutResponse struct {
+// ValidateResponse is the response from the plugin for the validation of the rollout.
+type ValidateResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// result is the result of the response.
-	Result ValidateRolloutResponse_Result `protobuf:"varint,1,opt,name=result,proto3,enum=io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse_Result" json:"result,omitempty"`
+	Result ValidateResponse_Result `protobuf:"varint,1,opt,name=result,proto3,enum=io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse_Result" json:"result,omitempty"`
 	// Types that are valid to be assigned to Data:
 	//
-	//	*ValidateRolloutResponse_TextData
-	//	*ValidateRolloutResponse_ProtoData
-	Data          isValidateRolloutResponse_Data `protobuf_oneof:"data"`
+	//	*ValidateResponse_TextData
+	//	*ValidateResponse_ProtoData
+	Data          isValidateResponse_Data `protobuf_oneof:"data"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ValidateRolloutResponse) Reset() {
-	*x = ValidateRolloutResponse{}
+func (x *ValidateResponse) Reset() {
+	*x = ValidateResponse{}
 	mi := &file_rollout_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ValidateRolloutResponse) String() string {
+func (x *ValidateResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ValidateRolloutResponse) ProtoMessage() {}
+func (*ValidateResponse) ProtoMessage() {}
 
-func (x *ValidateRolloutResponse) ProtoReflect() protoreflect.Message {
+func (x *ValidateResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_rollout_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -699,60 +699,60 @@ func (x *ValidateRolloutResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ValidateRolloutResponse.ProtoReflect.Descriptor instead.
-func (*ValidateRolloutResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ValidateResponse.ProtoReflect.Descriptor instead.
+func (*ValidateResponse) Descriptor() ([]byte, []int) {
 	return file_rollout_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *ValidateRolloutResponse) GetResult() ValidateRolloutResponse_Result {
+func (x *ValidateResponse) GetResult() ValidateResponse_Result {
 	if x != nil {
 		return x.Result
 	}
-	return ValidateRolloutResponse_RESULT_UNSPECIFIED
+	return ValidateResponse_RESULT_UNSPECIFIED
 }
 
-func (x *ValidateRolloutResponse) GetData() isValidateRolloutResponse_Data {
+func (x *ValidateResponse) GetData() isValidateResponse_Data {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-func (x *ValidateRolloutResponse) GetTextData() string {
+func (x *ValidateResponse) GetTextData() string {
 	if x != nil {
-		if x, ok := x.Data.(*ValidateRolloutResponse_TextData); ok {
+		if x, ok := x.Data.(*ValidateResponse_TextData); ok {
 			return x.TextData
 		}
 	}
 	return ""
 }
 
-func (x *ValidateRolloutResponse) GetProtoData() *anypb.Any {
+func (x *ValidateResponse) GetProtoData() *anypb.Any {
 	if x != nil {
-		if x, ok := x.Data.(*ValidateRolloutResponse_ProtoData); ok {
+		if x, ok := x.Data.(*ValidateResponse_ProtoData); ok {
 			return x.ProtoData
 		}
 	}
 	return nil
 }
 
-type isValidateRolloutResponse_Data interface {
-	isValidateRolloutResponse_Data()
+type isValidateResponse_Data interface {
+	isValidateResponse_Data()
 }
 
-type ValidateRolloutResponse_TextData struct {
+type ValidateResponse_TextData struct {
 	// text_data is the text data of the response.
 	TextData string `protobuf:"bytes,2,opt,name=text_data,json=textData,proto3,oneof"`
 }
 
-type ValidateRolloutResponse_ProtoData struct {
+type ValidateResponse_ProtoData struct {
 	// proto_data is the protobuf data of the response.
 	ProtoData *anypb.Any `protobuf:"bytes,3,opt,name=proto_data,json=protoData,proto3,oneof"`
 }
 
-func (*ValidateRolloutResponse_TextData) isValidateRolloutResponse_Data() {}
+func (*ValidateResponse_TextData) isValidateResponse_Data() {}
 
-func (*ValidateRolloutResponse_ProtoData) isValidateRolloutResponse_Data() {}
+func (*ValidateResponse_ProtoData) isValidateResponse_Data() {}
 
 // MutateManifestWorkRequest is the request to mutate the manifestwork resource before it is applied.
 type MutateManifestWorkRequest struct {
@@ -982,9 +982,9 @@ const file_rollout_proto_rawDesc = "" +
 	"\x02OK\x10\x01\x12\n" +
 	"\n" +
 	"\x06FAILED\x10\x02B\x06\n" +
-	"\x04data\"\xb2\x02\n" +
-	"\x17ValidateRolloutResponse\x12l\n" +
-	"\x06result\x18\x01 \x01(\x0e2T.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse.ResultR\x06result\x12\x1d\n" +
+	"\x04data\"\xa4\x02\n" +
+	"\x10ValidateResponse\x12e\n" +
+	"\x06result\x18\x01 \x01(\x0e2M.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse.ResultR\x06result\x12\x1d\n" +
 	"\ttext_data\x18\x02 \x01(\tH\x00R\btextData\x125\n" +
 	"\n" +
 	"proto_data\x18\x03 \x01(\v2\x14.google.protobuf.AnyH\x00R\tprotoData\"K\n" +
@@ -1007,16 +1007,17 @@ const file_rollout_proto_rawDesc = "" +
 	"\bROLLBACK\x10\x02B\x12\n" +
 	"\x10_rollout_details\"j\n" +
 	"\x1aMutateManifestWorkResponse\x12L\n" +
-	"\fmanifestwork\x18\x01 \x01(\v2(.k8s.io.apimachinery.pkg.runtime.UnknownR\fmanifestwork2\x81\v\n" +
+	"\fmanifestwork\x18\x01 \x01(\v2(.k8s.io.apimachinery.pkg.runtime.UnknownR\fmanifestwork2\xf3\n" +
+	"\n" +
 	"\x14RolloutPluginService\x12\x9f\x01\n" +
 	"\n" +
 	"Initialize\x12G.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeRequest\x1aH.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse\x12\xa7\x01\n" +
 	"\fBeginRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aK.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse\x12\xaa\x01\n" +
-	"\x0fProgressRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aK.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse\x12\xac\x01\n" +
-	"\x0fValidateRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aM.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse\x12\xa8\x01\n" +
+	"\x0fProgressRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aK.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse\x12\xa5\x01\n" +
+	"\x0fValidateRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aF.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse\x12\xa8\x01\n" +
 	"\rBeginRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aK.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse\x12\xab\x01\n" +
-	"\x10ProgressRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aK.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse\x12\xad\x01\n" +
-	"\x10ValidateRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aM.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse\x12\xb7\x01\n" +
+	"\x10ProgressRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aK.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse\x12\xa6\x01\n" +
+	"\x10ValidateRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aF.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse\x12\xb7\x01\n" +
 	"\x12MutateManifestWork\x12O.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest\x1aP.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkResponseBBZ@open-cluster-management.io/sdk-go/plugin/proto/v1alpha1;v1alpha1b\x06proto3"
 
 var (
@@ -1035,7 +1036,7 @@ var file_rollout_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_rollout_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_rollout_proto_goTypes = []any{
 	(RolloutPluginResponse_Result)(0),           // 0: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse.Result
-	(ValidateRolloutResponse_Result)(0),         // 1: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse.Result
+	(ValidateResponse_Result)(0),                // 1: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse.Result
 	(MutateManifestWorkRequest_RolloutState)(0), // 2: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest.RolloutState
 	(*InitializeRequest)(nil),                   // 3: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeRequest
 	(*InitializeResponse)(nil),                  // 4: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse
@@ -1044,7 +1045,7 @@ var file_rollout_proto_goTypes = []any{
 	(*RolloutMeta)(nil),                         // 7: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutMeta
 	(*RolloutPluginRequest)(nil),                // 8: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
 	(*RolloutPluginResponse)(nil),               // 9: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse
-	(*ValidateRolloutResponse)(nil),             // 10: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse
+	(*ValidateResponse)(nil),                    // 10: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse
 	(*MutateManifestWorkRequest)(nil),           // 11: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest
 	(*MutateManifestWorkResponse)(nil),          // 12: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkResponse
 	(*InitializeResponse_Capabilities)(nil),     // 13: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse.Capabilities
@@ -1061,8 +1062,8 @@ var file_rollout_proto_depIdxs = []int32{
 	6,  // 6: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest.rollout_details:type_name -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutDetails
 	0,  // 7: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse.result:type_name -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse.Result
 	14, // 8: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse.proto_data:type_name -> google.protobuf.Any
-	1,  // 9: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse.result:type_name -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse.Result
-	14, // 10: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse.proto_data:type_name -> google.protobuf.Any
+	1,  // 9: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse.result:type_name -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse.Result
+	14, // 10: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse.proto_data:type_name -> google.protobuf.Any
 	2,  // 11: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest.rollout_state:type_name -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest.RolloutState
 	7,  // 12: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest.metadata:type_name -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutMeta
 	6,  // 13: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest.rollout_details:type_name -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutDetails
@@ -1079,10 +1080,10 @@ var file_rollout_proto_depIdxs = []int32{
 	4,  // 24: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.Initialize:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse
 	9,  // 25: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.BeginRollout:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse
 	9,  // 26: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ProgressRollout:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse
-	10, // 27: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollout:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse
+	10, // 27: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollout:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse
 	9,  // 28: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.BeginRollback:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse
 	9,  // 29: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ProgressRollback:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginResponse
-	10, // 30: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollback:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateRolloutResponse
+	10, // 30: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollback:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse
 	12, // 31: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.MutateManifestWork:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkResponse
 	24, // [24:32] is the sub-list for method output_type
 	16, // [16:24] is the sub-list for method input_type
@@ -1103,8 +1104,8 @@ func file_rollout_proto_init() {
 		(*RolloutPluginResponse_ProtoData)(nil),
 	}
 	file_rollout_proto_msgTypes[7].OneofWrappers = []any{
-		(*ValidateRolloutResponse_TextData)(nil),
-		(*ValidateRolloutResponse_ProtoData)(nil),
+		(*ValidateResponse_TextData)(nil),
+		(*ValidateResponse_ProtoData)(nil),
 	}
 	file_rollout_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}

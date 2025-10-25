@@ -30,7 +30,7 @@ service RolloutPluginService {
   // If the validation is completed successfully, the plugin should return a OK result.
   // If the validation is still in progress, the plugin should return a INPROGRESS result.
   // If the validation is failed, the plugin should return a FAILED result.
-  rpc ValidateRollout(RolloutPluginRequest) returns (ValidateRolloutResponse);
+  rpc ValidateRollout(RolloutPluginRequest) returns (ValidateResponse);
 
   // BeginRollback is called before the manifestwork resource is rolled back.
   // It is used to prepare the rollback.
@@ -46,7 +46,7 @@ service RolloutPluginService {
   // If the validation is completed successfully, the plugin should return a OK result.
   // If the validation is still in progress, the plugin should return a INPROGRESS result.
   // If the validation is failed, the plugin should return a FAILED result.
-  rpc ValidateRollback(RolloutPluginRequest) returns (ValidateRolloutResponse);
+  rpc ValidateRollback(RolloutPluginRequest) returns (ValidateResponse);
 
   // MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
   // MWRS controller provides the current rollout status to the plugin.
@@ -159,8 +159,8 @@ message RolloutPluginResponse {
   }
 }
 
-// ValidateRolloutResponse is the response from the plugin for the validation of the rollout.
-message ValidateRolloutResponse {
+// ValidateResponse is the response from the plugin for the validation of the rollout.
+message ValidateResponse {
   // Result is the result of the validation response.
   enum Result {
     // RESULT_UNSPECIFIED is the unspecified result.
