@@ -6,7 +6,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/constants"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 )
 
@@ -46,21 +45,6 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 		}
 
 		return grpcOptions.Dialer.URL, grpcOptions, nil
-
-	case constants.ConfigTypeKafka:
-		kafkaOptions, err := kafka.BuildKafkaOptionsFromFlags(l.configPath)
-		if err != nil {
-			return "", nil, err
-		}
-		val, found := kafkaOptions.ConfigMap["bootstrap.servers"]
-		if found {
-			server, ok := val.(string)
-			if !ok {
-				return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
-			}
-			return server, kafkaOptions, nil
-		}
-		return "", nil, fmt.Errorf("failed to get kafka bootstrap.servers from configMap")
 	}
 
 	return "", nil, fmt.Errorf("unsupported config type %s", l.configType)
@@ -73,8 +57,6 @@ func BuildCloudEventsSourceOptions(config any, clientId, sourceId string) (*opti
 		return mqtt.NewSourceOptions(config, clientId, sourceId), nil
 	case *grpc.GRPCOptions:
 		return grpc.NewSourceOptions(config, sourceId), nil
-	case *kafka.KafkaOptions:
-		return kafka.NewSourceOptions(config, sourceId), nil
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}
@@ -87,8 +69,6 @@ func BuildCloudEventsAgentOptions(config any, clusterName, clientId string) (*op
 		return mqtt.NewAgentOptions(config, clusterName, clientId), nil
 	case *grpc.GRPCOptions:
 		return grpc.NewAgentOptions(config, clusterName, clientId), nil
-	case *kafka.KafkaOptions:
-		return kafka.NewAgentOptions(config, clusterName, clientId), nil
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}

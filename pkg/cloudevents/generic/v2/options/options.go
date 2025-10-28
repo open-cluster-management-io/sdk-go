@@ -8,11 +8,6 @@ import (
 
 type ReceiveHandler func(cloudevents.Event)
 
-// EventTransport provides transport to send/receive cloudevents based on different event protocol.
-//
-// Available implementations:
-//   - MQTT
-//   - gRPC
 type EventTransport interface {
 	Connect(ctx context.Context) error
 	Send(ctx context.Context, evt cloudevents.Event) error

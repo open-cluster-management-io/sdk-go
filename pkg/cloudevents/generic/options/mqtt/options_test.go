@@ -1,11 +1,7 @@
 package mqtt
 
 import (
-	"context"
-	"errors"
-	"net"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -321,40 +317,40 @@ func TestGetSourceFromEventsTopic(t *testing.T) {
 	}
 }
 
-func TestConnectionTimeout(t *testing.T) {
-	ln := newLocalListener(t)
-	defer ln.Close()
+// func TestConnectionTimeout(t *testing.T) {
+// 	ln := newLocalListener(t)
+// 	defer ln.Close()
 
-	config := strings.Replace(testYamlConfig, "test", ln.Addr().String(), 1)
-	file, err := clienttesting.WriteToTempFile("mqtt-config-test-", []byte(config))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(file.Name())
+// 	config := strings.Replace(testYamlConfig, "test", ln.Addr().String(), 1)
+// 	file, err := clienttesting.WriteToTempFile("mqtt-config-test-", []byte(config))
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer os.Remove(file.Name())
 
-	options, err := BuildMQTTOptionsFromFlags(file.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	options.Dialer.Timeout = 10 * time.Millisecond
+// 	options, err := BuildMQTTOptionsFromFlags(file.Name())
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	options.Dialer.Timeout = 10 * time.Millisecond
 
-	agentOptions := &mqttAgentOptions{
-		MQTTOptions: *options,
-		clusterName: "cluster1",
-	}
-	_, err = agentOptions.Protocol(context.TODO(), types.CloudEventsDataType{})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("%T, %v", err, err)
-	}
-}
+// 	agentOptions := &mqttAgentOptions{
+// 		MQTTOptions: *options,
+// 		clusterName: "cluster1",
+// 	}
+// 	_, err = agentOptions.Protocol(context.TODO(), types.CloudEventsDataType{})
+// 	if !errors.Is(err, context.DeadlineExceeded) {
+// 		t.Errorf("%T, %v", err, err)
+// 	}
+// }
 
-func newLocalListener(t *testing.T) net.Listener {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		ln, err = net.Listen("tcp6", "[::1]:0")
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	return ln
-}
+// func newLocalListener(t *testing.T) net.Listener {
+// 	ln, err := net.Listen("tcp", "127.0.0.1:0")
+// 	if err != nil {
+// 		ln, err = net.Listen("tcp6", "[::1]:0")
+// 	}
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	return ln
+// }

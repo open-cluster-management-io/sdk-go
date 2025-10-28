@@ -340,7 +340,6 @@ var _ = ginkgo.Describe("Heartbeat Reconnection Integration Test", func() {
 			case <-time.After(500 * time.Millisecond):
 				// No errors for 500ms, consider it stable
 				reconnectStabilized = true
-				break
 			}
 		}
 

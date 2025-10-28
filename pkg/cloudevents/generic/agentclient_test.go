@@ -68,7 +68,8 @@ func TestAgentResync(t *testing.T) {
 			stop := make(chan bool)
 
 			go func() {
-				err = agent.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+				baseClient := agent.baseClientInterface.(*baseClient)
+				err = baseClient.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
 					eventChan <- receiveEvent{event: event}
 				})
 				if err != nil {
@@ -136,7 +137,8 @@ func TestAgentPublish(t *testing.T) {
 			eventChan := make(chan receiveEvent)
 			stop := make(chan bool)
 			go func() {
-				err = agent.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+				baseClient := agent.baseClientInterface.(*baseClient)
+				err = baseClient.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
 					eventChan <- receiveEvent{event: event}
 				})
 				if err != nil {
@@ -292,7 +294,8 @@ func TestStatusResyncResponse(t *testing.T) {
 			mutex := &sync.Mutex{}
 
 			go func() {
-				_ = agent.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+				baseClient := agent.baseClientInterface.(*baseClient)
+				_ = baseClient.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
 					mutex.Lock()
 					defer mutex.Unlock()
 					receivedEvents = append(receivedEvents, event)

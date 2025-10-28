@@ -45,10 +45,9 @@ func NewCloudEventAgentClient[T ResourceObject](
 ) (*CloudEventAgentClient[T], error) {
 	baseClient := &baseClient{
 		clientID:               agentOptions.AgentID,
-		cloudEventsOptions:     agentOptions.CloudEventsOptions,
+		transport:              agentOptions.EventTransport,
 		cloudEventsRateLimiter: NewRateLimiter(agentOptions.EventRateLimit),
 		reconnectedChan:        make(chan struct{}),
-		dataType:               codec.EventDataType(),
 	}
 
 	if err := baseClient.connect(ctx); err != nil {

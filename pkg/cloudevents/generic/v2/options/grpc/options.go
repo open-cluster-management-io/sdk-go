@@ -244,5 +244,8 @@ func BuildGRPCOptionsFromFlags(configPath string) (*GRPCOptions, error) {
 	}
 
 	options.ServerHealthinessTimeout = config.ServerHealthinessTimeout
+	if options.ServerHealthinessTimeout != nil && *options.ServerHealthinessTimeout <= 0 {
+		return nil, fmt.Errorf("the server healthiness timeout must be greater than 0")
+	}
 	return options, nil
 }
