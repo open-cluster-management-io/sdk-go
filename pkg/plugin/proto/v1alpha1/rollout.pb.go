@@ -851,16 +851,16 @@ const file_rollout_proto_rawDesc = "" +
 	"\bROLLBACK\x10\x02B\x12\n" +
 	"\x10_rollout_details\"j\n" +
 	"\x1aMutateManifestWorkResponse\x12L\n" +
-	"\fmanifestwork\x18\x01 \x01(\v2(.k8s.io.apimachinery.pkg.runtime.UnknownR\fmanifestwork2\x9b\t\n" +
+	"\fmanifestwork\x18\x01 \x01(\v2(.k8s.io.apimachinery.pkg.runtime.UnknownR\fmanifestwork2\xaf\t\n" +
 	"\x14RolloutPluginService\x12\x9f\x01\n" +
 	"\n" +
 	"Initialize\x12G.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeRequest\x1aH.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse\x12r\n" +
 	"\fBeginRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1a\x16.google.protobuf.Empty\x12u\n" +
-	"\x0fProgressRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1a\x16.google.protobuf.Empty\x12\xa5\x01\n" +
-	"\x0fValidateRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aF.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse\x12s\n" +
+	"\x0fProgressRollout\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1a\x16.google.protobuf.Empty\x12\xaf\x01\n" +
+	"\x19ValidateRolloutCompletion\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aF.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse\x12s\n" +
 	"\rBeginRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1a\x16.google.protobuf.Empty\x12v\n" +
-	"\x10ProgressRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1a\x16.google.protobuf.Empty\x12\xa6\x01\n" +
-	"\x10ValidateRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aF.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse\x12\xb7\x01\n" +
+	"\x10ProgressRollback\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1a\x16.google.protobuf.Empty\x12\xb0\x01\n" +
+	"\x1aValidateRollbackCompletion\x12J.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest\x1aF.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse\x12\xb7\x01\n" +
 	"\x12MutateManifestWork\x12O.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest\x1aP.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkResponseBBZ@open-cluster-management.io/sdk-go/plugin/proto/v1alpha1;v1alpha1b\x06proto3"
 
 var (
@@ -912,18 +912,18 @@ var file_rollout_proto_depIdxs = []int32{
 	2,  // 14: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.Initialize:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeRequest
 	7,  // 15: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.BeginRollout:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
 	7,  // 16: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ProgressRollout:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
-	7,  // 17: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollout:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
+	7,  // 17: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRolloutCompletion:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
 	7,  // 18: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.BeginRollback:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
 	7,  // 19: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ProgressRollback:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
-	7,  // 20: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollback:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
+	7,  // 20: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollbackCompletion:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginRequest
 	9,  // 21: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.MutateManifestWork:input_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest
 	3,  // 22: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.Initialize:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse
 	14, // 23: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.BeginRollout:output_type -> google.protobuf.Empty
 	14, // 24: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ProgressRollout:output_type -> google.protobuf.Empty
-	8,  // 25: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollout:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse
+	8,  // 25: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRolloutCompletion:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse
 	14, // 26: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.BeginRollback:output_type -> google.protobuf.Empty
 	14, // 27: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ProgressRollback:output_type -> google.protobuf.Empty
-	8,  // 28: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollback:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse
+	8,  // 28: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.ValidateRollbackCompletion:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse
 	10, // 29: io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService.MutateManifestWork:output_type -> io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkResponse
 	22, // [22:30] is the sub-list for method output_type
 	14, // [14:22] is the sub-list for method input_type

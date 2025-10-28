@@ -27,12 +27,12 @@ service RolloutPluginService {
   // The plugin can execute the rollout logic based on the feedback status changes.
   rpc ProgressRollout(RolloutPluginRequest) returns (google.protobuf.Empty);
 
-  // ValidateRollout is called to validate the completion of the rollout.
+  // ValidateRolloutCompletion is called to validate the completion of the rollout.
   // It is used to check if the rollout is completed successfully.
-  // If the validation is completed successfully, the plugin should return a OK result.
+  // If the validation is completed successfully, the plugin should return a SUCCEEDED result.
   // If the validation is still in progress, the plugin should return a INPROGRESS result.
   // If the validation is failed, the plugin should return a FAILED result.
-  rpc ValidateRollout(RolloutPluginRequest) returns (ValidateResponse);
+  rpc ValidateRolloutCompletion(RolloutPluginRequest) returns (ValidateResponse);
 
   // BeginRollback is called before the manifestwork resource is rolled back.
   // It is used to prepare the rollback.
@@ -43,12 +43,12 @@ service RolloutPluginService {
   // The plugin can execute the rollback logic based on the feedback status changes.
   rpc ProgressRollback(RolloutPluginRequest) returns (google.protobuf.Empty);
 
-  // ValidateRollback is called to validate the completion of the rollback.
+  // ValidateRollbackCompletion is called to validate the completion of the rollback.
   // It is used to check if the rollback is completed successfully.
-  // If the validation is completed successfully, the plugin should return a OK result.
+  // If the validation is completed successfully, the plugin should return a SUCCEEDED result.
   // If the validation is still in progress, the plugin should return a INPROGRESS result.
   // If the validation is failed, the plugin should return a FAILED result.
-  rpc ValidateRollback(RolloutPluginRequest) returns (ValidateResponse);
+  rpc ValidateRollbackCompletion(RolloutPluginRequest) returns (ValidateResponse);
 
   // MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
   // MWRS controller provides the current rollout status to the plugin.
