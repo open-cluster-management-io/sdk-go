@@ -5,6 +5,7 @@ import (
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/protocol"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/cloudevent"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
@@ -25,6 +26,16 @@ type CloudEventsOptions interface {
 
 	// ErrorChan returns a chan which will receive the cloudevents connection error. The source/agent client will try to
 	// reconnect the when this error occurs.
+	ErrorChan() <-chan error
+}
+
+type ReceiveHandler func(cloudevent.Event)
+
+type EventTransport interface {
+	Connect(ctx context.Context) error
+	Send(ctx context.Context, evt cloudevent.Event) error
+	Receive(ctx context.Context, handler ReceiveHandler) error
+	Close(ctx context.Context) error
 	ErrorChan() <-chan error
 }
 

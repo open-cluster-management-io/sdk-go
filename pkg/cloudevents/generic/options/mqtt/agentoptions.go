@@ -11,6 +11,7 @@ import (
 	"github.com/eclipse/paho.golang/paho"
 	"k8s.io/klog/v2"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/cloudevent"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -115,4 +116,145 @@ func (o *mqttAgentOptions) Protocol(ctx context.Context, dataType types.CloudEve
 
 func (o *mqttAgentOptions) ErrorChan() <-chan error {
 	return o.errorChan
+}
+
+type MQTTTransport interface {
+	options.EventTransport
+
+	GetPublishTopic(evt cloudevent.Event) (string, error)
+	GetSubscriptions() []paho.SubscribeOptions
+}
+
+type mqttTransport struct {
+	MQTTOptions
+	client      *paho.Client
+	clusterName string
+	agentID     string
+	errorChan   chan error
+	msgChan     chan *paho.Publish
+	closeChan   chan struct{}
+}
+
+func (t *mqttTransport) Connect(ctx context.Context) error {
+	netConn, err := t.Dialer.Dial()
+	if err != nil {
+		return err
+	}
+
+	config := paho.ClientConfig{
+		ClientID: t.agentID,
+		Conn:     netConn,
+		OnClientError: func(err error) {
+			t.errorChan <- err
+		},
+		OnPublishReceived: []func(paho.PublishReceived) (bool, error){
+			func(pr paho.PublishReceived) (bool, error) {
+				t.msgChan <- pr.Packet
+				return true, nil
+			},
+		},
+	}
+
+	t.client = paho.NewClient(config)
+
+	// Connect to the MQTT broker
+	connAck, err := t.client.Connect(ctx, t.GetMQTTConnectOption(t.agentID))
+	if err != nil {
+		return err
+	}
+	if connAck.ReasonCode != 0 {
+		return fmt.Errorf("failed to establish the connection: %s", connAck.String())
+	}
+
+	return nil
+}
+
+func (t *mqttTransport) Send(ctx context.Context, evt cloudevent.Event) error {
+	topic, err := t.GetPublishTopic(evt)
+	if err != nil {
+		return err
+	}
+	if _, err := t.client.Publish(ctx, &paho.Publish{
+		QoS:   byte(t.PubQoS),
+		Topic: topic,
+		Properties: &paho.PublishProperties{
+			ContentType:     "json",
+			CorrelationData: []byte{}, // unmarshal event
+		},
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *mqttTransport) Receive(ctx context.Context, handler options.ReceiveHandler) error {
+	_, err := t.client.Subscribe(ctx, &paho.Subscribe{Subscriptions: t.GetSubscriptions()})
+	if err != nil {
+		return nil
+	}
+
+	select {
+	case <-ctx.Done():
+	case <-t.msgChan:
+		// msg received
+		//handler()
+	}
+
+	return nil
+}
+
+func (t *mqttTransport) ErrorChan() <-chan error {
+	return t.errorChan
+}
+
+func (t *mqttTransport) Close() error {
+	return t.client.Disconnect(&paho.Disconnect{ReasonCode: 0})
+}
+
+func (t *mqttTransport) GetPublishTopic(evt cloudevent.Event) (string, error) {
+	eventType, err := types.ParseCloudEventsType(evt.Type)
+	if err != nil {
+		return "", fmt.Errorf("unsupported event type %s, %v", eventType, err)
+	}
+
+	originalSource := evt.OriginalSource
+	if eventType.Action == types.ResyncRequestAction && originalSource == types.SourceAll {
+		if len(t.Topics.AgentBroadcast) == 0 {
+			klog.Warningf("the agent broadcast topic not set, fall back to the agent events topic")
+
+			// TODO after supporting multiple sources, we should list each source
+			return replaceLast(t.Topics.AgentEvents, "+", t.clusterName), nil
+		}
+
+		return strings.Replace(t.Topics.AgentBroadcast, "+", t.clusterName, 1), nil
+	}
+
+	topicSource, err := getSourceFromEventsTopic(t.Topics.AgentEvents)
+	if err != nil {
+		return "", err
+	}
+
+	// agent publishes status events or spec resync events
+	eventsTopic := replaceLast(t.Topics.AgentEvents, "+", t.clusterName)
+	return replaceLast(eventsTopic, "+", topicSource), nil
+}
+
+func (t *mqttTransport) GetSubscriptions() []paho.SubscribeOptions {
+	subscriptions := []paho.SubscribeOptions{
+		{
+			// TODO support multiple sources, currently the client require the source events topic has a sourceID, in
+			// the future, client may need a source list, it will subscribe to each source
+			// receiving the sources events
+			Topic: replaceLast(t.Topics.SourceEvents, "+", t.clusterName), QoS: byte(t.SubQoS),
+		},
+	}
+
+	if len(t.Topics.SourceBroadcast) != 0 {
+		subscriptions = append(subscriptions, paho.SubscribeOptions{
+			Topic: t.Topics.SourceBroadcast,
+			QoS:   byte(t.SubQoS),
+		})
+	}
+
+	return subscriptions
 }
