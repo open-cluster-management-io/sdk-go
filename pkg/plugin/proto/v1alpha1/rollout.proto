@@ -7,6 +7,8 @@ syntax = "proto3";
 package io.openclustermanagement.sdkgo.plugin.proto.v1alpha1;
 
 import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 
 option go_package = "open-cluster-management.io/sdk-go/plugin/proto/v1alpha1;v1alpha1";
@@ -18,12 +20,12 @@ service RolloutPluginService {
 
   // BeginRollout is called before the manifestwork resource is applied.
   // It is used to prepare the rollout.
-  rpc BeginRollout(RolloutPluginRequest) returns (RolloutPluginResponse);
+  rpc BeginRollout(RolloutPluginRequest) returns (google.protobuf.Empty);
 
   // ProgressRollout is called after the manifestwork is applied.
   // Whenever the feedbacks are updated, this method will be called.
   // The plugin can execute the rollout logic based on the feedback status changes.
-  rpc ProgressRollout(RolloutPluginRequest) returns (RolloutPluginResponse);
+  rpc ProgressRollout(RolloutPluginRequest) returns (google.protobuf.Empty);
 
   // ValidateRollout is called to validate the completion of the rollout.
   // It is used to check if the rollout is completed successfully.
@@ -34,12 +36,12 @@ service RolloutPluginService {
 
   // BeginRollback is called before the manifestwork resource is rolled back.
   // It is used to prepare the rollback.
-  rpc BeginRollback(RolloutPluginRequest) returns (RolloutPluginResponse);
+  rpc BeginRollback(RolloutPluginRequest) returns (google.protobuf.Empty);
 
   // ProgressRollback is called after the manifestwork is rolled back.
   // Whenever the feedbacks are updated, this method will be called.
   // The plugin can execute the rollback logic based on the feedback status changes.
-  rpc ProgressRollback(RolloutPluginRequest) returns (RolloutPluginResponse);
+  rpc ProgressRollback(RolloutPluginRequest) returns (google.protobuf.Empty);
 
   // ValidateRollback is called to validate the completion of the rollback.
   // It is used to check if the rollback is completed successfully.
@@ -132,31 +134,6 @@ message RolloutPluginRequest {
 
   // rollout_details is the details of the rollout.
   optional RolloutDetails rollout_details = 7;
-}
-
-// RolloutPluginResponse is the response from the plugin.
-message RolloutPluginResponse {
-  // Result is the result of the plugin response.
-  enum Result {
-    RESULT_UNSPECIFIED = 0;
-  
-    // OK is the ok response.
-    OK = 1;
-  
-    // FAILED is the failed response.
-    FAILED = 2;
-  }
-  
-  // result is the result of the response.
-  Result result = 1;
-
-  oneof data {
-    // text_data is the text data of the response.
-    string text_data = 2;
-
-    // proto_data is the protobuf data of the response.
-    google.protobuf.Any proto_data = 3;
-  }
 }
 
 // ValidateResponse is the response from the plugin for the validation of the rollout.

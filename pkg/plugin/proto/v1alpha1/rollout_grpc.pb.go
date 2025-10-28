@@ -15,6 +15,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -43,11 +44,11 @@ type RolloutPluginServiceClient interface {
 	Initialize(ctx context.Context, in *InitializeRequest, opts ...grpc.CallOption) (*InitializeResponse, error)
 	// BeginRollout is called before the manifestwork resource is applied.
 	// It is used to prepare the rollout.
-	BeginRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error)
+	BeginRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// ProgressRollout is called after the manifestwork is applied.
 	// Whenever the feedbacks are updated, this method will be called.
 	// The plugin can execute the rollout logic based on the feedback status changes.
-	ProgressRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error)
+	ProgressRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// ValidateRollout is called to validate the completion of the rollout.
 	// It is used to check if the rollout is completed successfully.
 	// If the validation is completed successfully, the plugin should return a OK result.
@@ -56,11 +57,11 @@ type RolloutPluginServiceClient interface {
 	ValidateRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	// BeginRollback is called before the manifestwork resource is rolled back.
 	// It is used to prepare the rollback.
-	BeginRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error)
+	BeginRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// ProgressRollback is called after the manifestwork is rolled back.
 	// Whenever the feedbacks are updated, this method will be called.
 	// The plugin can execute the rollback logic based on the feedback status changes.
-	ProgressRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error)
+	ProgressRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// ValidateRollback is called to validate the completion of the rollback.
 	// It is used to check if the rollback is completed successfully.
 	// If the validation is completed successfully, the plugin should return a OK result.
@@ -91,9 +92,9 @@ func (c *rolloutPluginServiceClient) Initialize(ctx context.Context, in *Initial
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) BeginRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error) {
+func (c *rolloutPluginServiceClient) BeginRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RolloutPluginResponse)
+	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, RolloutPluginService_BeginRollout_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -101,9 +102,9 @@ func (c *rolloutPluginServiceClient) BeginRollout(ctx context.Context, in *Rollo
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) ProgressRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error) {
+func (c *rolloutPluginServiceClient) ProgressRollout(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RolloutPluginResponse)
+	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, RolloutPluginService_ProgressRollout_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -121,9 +122,9 @@ func (c *rolloutPluginServiceClient) ValidateRollout(ctx context.Context, in *Ro
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) BeginRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error) {
+func (c *rolloutPluginServiceClient) BeginRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RolloutPluginResponse)
+	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, RolloutPluginService_BeginRollback_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -131,9 +132,9 @@ func (c *rolloutPluginServiceClient) BeginRollback(ctx context.Context, in *Roll
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) ProgressRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*RolloutPluginResponse, error) {
+func (c *rolloutPluginServiceClient) ProgressRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RolloutPluginResponse)
+	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, RolloutPluginService_ProgressRollback_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -171,11 +172,11 @@ type RolloutPluginServiceServer interface {
 	Initialize(context.Context, *InitializeRequest) (*InitializeResponse, error)
 	// BeginRollout is called before the manifestwork resource is applied.
 	// It is used to prepare the rollout.
-	BeginRollout(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error)
+	BeginRollout(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
 	// ProgressRollout is called after the manifestwork is applied.
 	// Whenever the feedbacks are updated, this method will be called.
 	// The plugin can execute the rollout logic based on the feedback status changes.
-	ProgressRollout(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error)
+	ProgressRollout(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
 	// ValidateRollout is called to validate the completion of the rollout.
 	// It is used to check if the rollout is completed successfully.
 	// If the validation is completed successfully, the plugin should return a OK result.
@@ -184,11 +185,11 @@ type RolloutPluginServiceServer interface {
 	ValidateRollout(context.Context, *RolloutPluginRequest) (*ValidateResponse, error)
 	// BeginRollback is called before the manifestwork resource is rolled back.
 	// It is used to prepare the rollback.
-	BeginRollback(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error)
+	BeginRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
 	// ProgressRollback is called after the manifestwork is rolled back.
 	// Whenever the feedbacks are updated, this method will be called.
 	// The plugin can execute the rollback logic based on the feedback status changes.
-	ProgressRollback(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error)
+	ProgressRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
 	// ValidateRollback is called to validate the completion of the rollback.
 	// It is used to check if the rollback is completed successfully.
 	// If the validation is completed successfully, the plugin should return a OK result.
@@ -212,19 +213,19 @@ type UnimplementedRolloutPluginServiceServer struct{}
 func (UnimplementedRolloutPluginServiceServer) Initialize(context.Context, *InitializeRequest) (*InitializeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Initialize not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) BeginRollout(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
+func (UnimplementedRolloutPluginServiceServer) BeginRollout(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginRollout not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) ProgressRollout(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
+func (UnimplementedRolloutPluginServiceServer) ProgressRollout(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ProgressRollout not implemented")
 }
 func (UnimplementedRolloutPluginServiceServer) ValidateRollout(context.Context, *RolloutPluginRequest) (*ValidateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateRollout not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) BeginRollback(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
+func (UnimplementedRolloutPluginServiceServer) BeginRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginRollback not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) ProgressRollback(context.Context, *RolloutPluginRequest) (*RolloutPluginResponse, error) {
+func (UnimplementedRolloutPluginServiceServer) ProgressRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ProgressRollback not implemented")
 }
 func (UnimplementedRolloutPluginServiceServer) ValidateRollback(context.Context, *RolloutPluginRequest) (*ValidateResponse, error) {
