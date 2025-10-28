@@ -22,7 +22,6 @@ The SDK includes comprehensive CloudEvents-based clients for implementing event-
 **Supported Protocols:**
 - MQTT Protocol/Driver
 - gRPC Protocol/Driver  
-- Kafka Protocol/Driver
 
 **Key Features:**
 - Generic CloudEvents clients for custom resources

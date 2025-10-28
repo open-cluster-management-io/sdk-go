@@ -30,7 +30,7 @@ integration: test-cloudevents-integration test-basecontroller-integration test-s
 .PHONY: integration
 
 test-cloudevents-integration:
-	go test -tags=kafka -c ./test/integration/cloudevents
+	go test -c ./test/integration/cloudevents
 	./cloudevents.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
 .PHONY: test-cloudevents-integration
 
