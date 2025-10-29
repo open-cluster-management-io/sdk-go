@@ -14,6 +14,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	optionsv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/v2/options"
 )
 
 // CloudEventAgentClient is a client for an agent to resync/send/receive its resources with cloud events.
@@ -21,7 +22,7 @@ import (
 // An agent is a component that handles the deployment of requested resources on the managed cluster and status report
 // to the source.
 type CloudEventAgentClient[T ResourceObject] struct {
-	*baseClient
+	baseClientInterface
 	lister           Lister[T]
 	codec            Codec[T]
 	statusHashGetter StatusHashGetter[T]
@@ -56,19 +57,48 @@ func NewCloudEventAgentClient[T ResourceObject](
 	}
 
 	return &CloudEventAgentClient[T]{
-		baseClient:       baseClient,
-		lister:           lister,
-		codec:            codec,
-		statusHashGetter: statusHashGetter,
-		agentID:          agentOptions.AgentID,
-		clusterName:      agentOptions.ClusterName,
+		baseClientInterface: baseClient,
+		lister:              lister,
+		codec:               codec,
+		statusHashGetter:    statusHashGetter,
+		agentID:             agentOptions.AgentID,
+		clusterName:         agentOptions.ClusterName,
+	}, nil
+}
+
+func NewCloudEventAgentClientV2[T ResourceObject](
+	ctx context.Context,
+	agentOptions *optionsv2.CloudEventsAgentOptions,
+	lister Lister[T],
+	statusHashGetter StatusHashGetter[T],
+	codec Codec[T],
+) (*CloudEventAgentClient[T], error) {
+	baseClient := &baseClientV2{
+		clientID:  agentOptions.AgentID,
+		transport: agentOptions.EventTransport,
+		// TODO move the ratelimiter to a package
+		cloudEventsRateLimiter: NewRateLimiter(options.EventRateLimit{}),
+		reconnectedChan:        make(chan struct{}),
+	}
+
+	if err := baseClient.connect(ctx); err != nil {
+		return nil, err
+	}
+
+	return &CloudEventAgentClient[T]{
+		baseClientInterface: baseClient,
+		lister:              lister,
+		codec:               codec,
+		statusHashGetter:    statusHashGetter,
+		agentID:             agentOptions.AgentID,
+		clusterName:         agentOptions.ClusterName,
 	}, nil
 }
 
 // ReconnectedChan returns a chan which indicates the source/agent client is reconnected.
 // The source/agent client callers should consider sending a resync request when receiving this signal.
 func (c *CloudEventAgentClient[T]) ReconnectedChan() <-chan struct{} {
-	return c.reconnectedChan
+	return c.getReconnectedChan()
 }
 
 // Resync the resources spec by sending a spec resync request from the current to the given source.

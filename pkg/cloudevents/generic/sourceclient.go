@@ -15,6 +15,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	optionsv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/v2/options"
 )
 
 // CloudEventSourceClient is a client for a source to resync/send/receive its resources with cloud events.
@@ -22,7 +23,7 @@ import (
 // A source is a component that runs on a server, it can be a controller on the hub cluster or a RESTful service
 // handling resource requests.
 type CloudEventSourceClient[T ResourceObject] struct {
-	*baseClient
+	baseClientInterface
 	lister           Lister[T]
 	codec            Codec[T]
 	statusHashGetter StatusHashGetter[T]
@@ -56,16 +57,44 @@ func NewCloudEventSourceClient[T ResourceObject](
 	}
 
 	return &CloudEventSourceClient[T]{
-		baseClient:       baseClient,
-		lister:           lister,
-		codec:            codec,
-		statusHashGetter: statusHashGetter,
-		sourceID:         sourceOptions.SourceID,
+		baseClientInterface: baseClient,
+		lister:              lister,
+		codec:               codec,
+		statusHashGetter:    statusHashGetter,
+		sourceID:            sourceOptions.SourceID,
+	}, nil
+}
+
+func NewCloudEventSourceClientV2[T ResourceObject](
+	ctx context.Context,
+	sourceOptions *optionsv2.CloudEventsSourceOptions,
+	lister Lister[T],
+	statusHashGetter StatusHashGetter[T],
+	codec Codec[T],
+) (*CloudEventSourceClient[T], error) {
+	baseClient := &baseClientV2{
+		clientID:  sourceOptions.SourceID,
+		transport: sourceOptions.EventTransport,
+		// TODO move the ratelimiter to a package
+		cloudEventsRateLimiter: NewRateLimiter(options.EventRateLimit{}),
+		reconnectedChan:        make(chan struct{}),
+	}
+
+	if err := baseClient.connect(ctx); err != nil {
+		return nil, err
+	}
+
+	return &CloudEventSourceClient[T]{
+		baseClientInterface: baseClient,
+		lister:              lister,
+		codec:               codec,
+		statusHashGetter:    statusHashGetter,
+		sourceID:            sourceOptions.SourceID,
 	}, nil
 }
 
 func (c *CloudEventSourceClient[T]) ReconnectedChan() <-chan struct{} {
-	return c.reconnectedChan
+	return c.getReconnectedChan()
 }
 
 // Resync the resources status by sending a status resync request from the current source to a specified cluster.

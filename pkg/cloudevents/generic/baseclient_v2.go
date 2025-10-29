@@ -12,53 +12,40 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/v2/options"
 )
 
-const (
-	restartReceiverSignal = iota
-	stopReceiverSignal
-)
+type baseClientInterface interface {
+	connect(ctx context.Context) error
+	publish(ctx context.Context, evt cloudevents.Event) error
+	subscribe(ctx context.Context, receive receiveFn)
+	getReconnectedChan() <-chan struct{}
+}
 
-// the reconnect backoff will stop at [1,5) min interval. If we don't backoff for 10min, we reset the backoff.
-var DelayFn = wait.Backoff{
-	Duration: 5 * time.Second,
-	Cap:      1 * time.Minute,
-	Steps:    12, // now a required argument
-	Factor:   5.0,
-	Jitter:   1.0,
-}.DelayWithReset(&clock.RealClock{}, 10*time.Minute)
-
-type receiveFn func(ctx context.Context, evt cloudevents.Event)
-
-type baseClient struct {
+type baseClientV2 struct {
 	sync.RWMutex
 	clientID               string // the client id is used to identify the client, either a source or an agent ID
-	cloudEventsOptions     options.CloudEventsOptions
-	cloudEventsProtocol    options.CloudEventsProtocol
-	cloudEventsClient      cloudevents.Client
+	transport              options.EventTransport
 	cloudEventsRateLimiter flowcontrol.RateLimiter
 	receiverChan           chan int
 	reconnectedChan        chan struct{}
 	clientReady            bool
-	dataType               types.CloudEventsDataType
 }
 
-func (c *baseClient) getReconnectedChan() <-chan struct{} {
+func (c *baseClientV2) getReconnectedChan() <-chan struct{} {
 	return c.reconnectedChan
 }
 
-func (c *baseClient) connect(ctx context.Context) error {
+func (c *baseClientV2) connect(ctx context.Context) error {
 	logger := klog.FromContext(ctx)
 
 	var err error
-	c.cloudEventsClient, err = c.newCloudEventsClient(ctx)
+	err = c.transport.Connect(ctx)
 	if err != nil {
 		return err
 	}
+	c.setClientReady(true)
 
 	// start a go routine to handle cloudevents client connection errors
 	go func() {
@@ -66,18 +53,18 @@ func (c *baseClient) connect(ctx context.Context) error {
 			if !c.isClientReady() {
 				logger.V(2).Info("reconnecting the cloudevents client")
 
-				c.cloudEventsClient, err = c.newCloudEventsClient(ctx)
+				err = c.transport.Connect(ctx)
 				// TODO enhance the cloudevents SKD to avoid wrapping the error type to distinguish the net connection
 				// errors
 				if err != nil {
-					// failed to reconnect, try agin
+					// failed to reconnect, try again
 					runtime.HandleError(fmt.Errorf("the cloudevents client reconnect failed, %v", err))
 					<-wait.RealTimer(DelayFn()).C()
 					continue
 				}
 				// the cloudevents network connection is back, mark the client ready and send the receiver restart signal
 				logger.V(2).Info("the cloudevents client is reconnected")
-				increaseClientReconnectedCounter(c.clientID)
+				//increaseClientReconnectedCounter(c.clientID)
 				c.setClientReady(true)
 				c.sendReceiverSignal(restartReceiverSignal)
 				c.sendReconnectedSignal()
@@ -89,7 +76,7 @@ func (c *baseClient) connect(ctx context.Context) error {
 					close(c.receiverChan)
 				}
 				return
-			case err, ok := <-c.cloudEventsOptions.ErrorChan():
+			case err, ok := <-c.transport.ErrorChan():
 				if !ok {
 					// error channel is closed, do nothing
 					return
@@ -101,7 +88,7 @@ func (c *baseClient) connect(ctx context.Context) error {
 				// and close the current client
 				c.sendReceiverSignal(stopReceiverSignal)
 				c.setClientReady(false)
-				if err := c.cloudEventsProtocol.Close(ctx); err != nil {
+				if err := c.transport.Close(ctx); err != nil {
 					runtime.HandleError(fmt.Errorf("failed to close the cloudevents protocol, %v", err))
 				}
 
@@ -113,7 +100,7 @@ func (c *baseClient) connect(ctx context.Context) error {
 	return nil
 }
 
-func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
+func (c *baseClientV2) publish(ctx context.Context, evt cloudevents.Event) error {
 	logger := klog.FromContext(ctx)
 	now := time.Now()
 
@@ -130,25 +117,20 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 		)
 	}
 
-	sendingCtx, err := c.cloudEventsOptions.WithContext(ctx, evt.Context)
-	if err != nil {
-		return err
-	}
-
 	if !c.isClientReady() {
 		return fmt.Errorf("the cloudevents client is not ready")
 	}
 
-	logger.V(2).Info("Sending event", "context", sendingCtx, "event", evt.Context)
+	logger.V(2).Info("Sending event", "event", evt.Context)
 	logger.V(5).Info("Sending event", "event", func() any { return evt.String() })
-	if err := c.cloudEventsClient.Send(sendingCtx, evt); cloudevents.IsUndelivered(err) {
+	if err := c.transport.Send(ctx, evt); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
+func (c *baseClientV2) subscribe(ctx context.Context, receive receiveFn) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -169,7 +151,7 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 		for {
 			if startReceiving {
 				go func() {
-					if err := c.cloudEventsClient.StartReceiver(receiverCtx, func(evt cloudevents.Event) {
+					if err := c.transport.Receive(receiverCtx, func(evt cloudevents.Event) {
 						logger.V(2).Info("Received event", "event", evt.Context)
 						logger.V(5).Info("Received event", "event", func() any { return evt.String() })
 
@@ -209,7 +191,7 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 	}()
 }
 
-func (c *baseClient) sendReceiverSignal(signal int) {
+func (c *baseClientV2) sendReceiverSignal(signal int) {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -218,37 +200,20 @@ func (c *baseClient) sendReceiverSignal(signal int) {
 	}
 }
 
-func (c *baseClient) sendReconnectedSignal() {
+func (c *baseClientV2) sendReconnectedSignal() {
 	c.RLock()
 	defer c.RUnlock()
 	c.reconnectedChan <- struct{}{}
 }
 
-func (c *baseClient) isClientReady() bool {
+func (c *baseClientV2) isClientReady() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.clientReady
 }
 
-func (c *baseClient) setClientReady(ready bool) {
+func (c *baseClientV2) setClientReady(ready bool) {
 	c.Lock()
 	defer c.Unlock()
 	c.clientReady = ready
-}
-
-func (c *baseClient) newCloudEventsClient(ctx context.Context) (cloudevents.Client, error) {
-	var err error
-	c.cloudEventsProtocol, err = c.cloudEventsOptions.Protocol(ctx, c.dataType)
-	if err != nil {
-		return nil, err
-	}
-
-	cloudEventsClient, err := cloudevents.NewClient(c.cloudEventsProtocol)
-	if err != nil {
-		return nil, err
-	}
-
-	c.setClientReady(true)
-
-	return cloudEventsClient, nil
 }

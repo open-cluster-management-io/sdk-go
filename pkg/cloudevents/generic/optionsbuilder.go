@@ -8,6 +8,9 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/kafka"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
+	optionsv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/v2/options"
+	grpcv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/v2/options/grpc"
+	mqttv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/v2/options/mqtt"
 )
 
 // ConfigLoader loads a configuration object with a configuration file.
@@ -89,6 +92,17 @@ func BuildCloudEventsAgentOptions(config any, clusterName, clientId string) (*op
 		return grpc.NewAgentOptions(config, clusterName, clientId), nil
 	case *kafka.KafkaOptions:
 		return kafka.NewAgentOptions(config, clusterName, clientId), nil
+	default:
+		return nil, fmt.Errorf("unsupported client configuration type %T", config)
+	}
+}
+
+func BuildCloudEventsAgentOptionsV2(config any, clusterName, clientId string) (*optionsv2.CloudEventsAgentOptions, error) {
+	switch config := config.(type) {
+	case *mqttv2.MQTTOptions:
+		return mqttv2.NewAgentOptions(config, clusterName, clientId), nil
+	case *grpcv2.GRPCOptions:
+		return grpcv2.NewAgentOptions(config, clusterName, clientId), nil
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}

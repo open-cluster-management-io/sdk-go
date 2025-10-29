@@ -55,7 +55,8 @@ func TestSourceResync(t *testing.T) {
 			eventChan := make(chan receiveEvent)
 			stop := make(chan bool)
 			go func() {
-				err = source.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+				baseClient := source.baseClientInterface.(*baseClient)
+				err = baseClient.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
 					eventChan <- receiveEvent{event: event}
 				})
 				if err != nil {
@@ -114,7 +115,8 @@ func TestSourcePublish(t *testing.T) {
 			eventChan := make(chan receiveEvent)
 			stop := make(chan bool)
 			go func() {
-				err = source.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+				baseClient := source.baseClientInterface.(*baseClient)
+				err = baseClient.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
 					eventChan <- receiveEvent{event: event}
 				})
 				if err != nil {
@@ -299,7 +301,8 @@ func TestSpecResyncResponse(t *testing.T) {
 			stop := make(chan bool)
 			mutex := &sync.Mutex{}
 			go func() {
-				_ = source.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+				baseClient := source.baseClientInterface.(*baseClient)
+				_ = baseClient.cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
 					mutex.Lock()
 					defer mutex.Unlock()
 					receivedEvents = append(receivedEvents, event)

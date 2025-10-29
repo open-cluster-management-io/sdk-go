@@ -21,6 +21,7 @@ type GenericClientOptions[T generic.ResourceObject] struct {
 	clusterName  string
 	subscription bool
 	resync       bool
+	v2           bool
 }
 
 // NewGenericClientOptions create a GenericClientOptions
@@ -86,6 +87,11 @@ func (o *GenericClientOptions[T]) WithResyncEnabled(resync bool) *GenericClientO
 	return o
 }
 
+func (o *GenericClientOptions[T]) V2(enabled bool) *GenericClientOptions[T] {
+	o.v2 = enabled
+	return o
+}
+
 func (o *GenericClientOptions[T]) ClusterName() string {
 	return o.clusterName
 }
@@ -111,20 +117,39 @@ func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (*generic.Clo
 		o.watcherStore = store.NewAgentInformerWatcherStore[T]()
 	}
 
-	options, err := generic.BuildCloudEventsAgentOptions(o.config, o.clusterName, o.clientID)
-	if err != nil {
-		return nil, err
-	}
+	var cloudEventsClient *generic.CloudEventAgentClient[T]
+	if o.v2 {
+		options, err := generic.BuildCloudEventsAgentOptionsV2(o.config, o.clusterName, o.clientID)
+		if err != nil {
+			return nil, err
+		}
 
-	cloudEventsClient, err := generic.NewCloudEventAgentClient(
-		ctx,
-		options,
-		store.NewAgentWatcherStoreLister(o.watcherStore),
-		statushash.StatusHash,
-		o.codec,
-	)
-	if err != nil {
-		return nil, err
+		cloudEventsClient, err = generic.NewCloudEventAgentClientV2(
+			ctx,
+			options,
+			store.NewAgentWatcherStoreLister(o.watcherStore),
+			statushash.StatusHash,
+			o.codec,
+		)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		options, err := generic.BuildCloudEventsAgentOptions(o.config, o.clusterName, o.clientID)
+		if err != nil {
+			return nil, err
+		}
+
+		cloudEventsClient, err = generic.NewCloudEventAgentClient(
+			ctx,
+			options,
+			store.NewAgentWatcherStoreLister(o.watcherStore),
+			statushash.StatusHash,
+			o.codec,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if o.subscription {
