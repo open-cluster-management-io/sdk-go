@@ -31,8 +31,6 @@ type GenericClientOptions[T generic.ResourceObject] struct {
 //
 //     GRPCOptions (*grpc.GRPCOptions): builds a generic cloudevents client with GRPC
 //
-//     KafkaOptions (*kafka.KafkaOptions): builds a generic cloudevents client with Kafka
-//
 //   - codec, the codec for resource
 //
 //   - clientID, the client ID for generic cloudevents client.

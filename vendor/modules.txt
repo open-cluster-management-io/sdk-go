@@ -19,9 +19,6 @@ github.com/bwmarrin/snowflake
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2 v2.0.0-20240413090539-7fef29478991
-## explicit; go 1.18
-github.com/cloudevents/sdk-go/protocol/kafka_confluent/v2
 # github.com/cloudevents/sdk-go/protocol/mqtt_paho/v2 v2.0.0-20250922144431-372892d7c84d
 ## explicit; go 1.23.0
 github.com/cloudevents/sdk-go/protocol/mqtt_paho/v2
@@ -44,10 +41,6 @@ github.com/cloudevents/sdk-go/v2/protocol/gochan
 github.com/cloudevents/sdk-go/v2/protocol/http
 github.com/cloudevents/sdk-go/v2/test
 github.com/cloudevents/sdk-go/v2/types
-# github.com/confluentinc/confluent-kafka-go/v2 v2.3.0
-## explicit; go 1.17
-github.com/confluentinc/confluent-kafka-go/v2/kafka
-github.com/confluentinc/confluent-kafka-go/v2/kafka/librdkafka_vendor
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
@@ -283,8 +276,6 @@ github.com/stretchr/testify/require
 # github.com/x448/float16 v0.8.4
 ## explicit; go 1.11
 github.com/x448/float16
-# go.opencensus.io v0.24.0
-## explicit; go 1.13
 # go.opentelemetry.io/otel v1.33.0
 ## explicit; go 1.22.0
 go.opentelemetry.io/otel/attribute

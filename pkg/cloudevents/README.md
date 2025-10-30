@@ -116,7 +116,6 @@ Currently, the CloudEvents options supports the following protocols/drivers:
 
 - [MQTT Protocol/Driver](./generic/options/mqtt)
 - [gRPC Protocol/Driver](./generic/options/grpc)
-- [Kafka Protocol/Driver](./generic/options/kafka)
 
 To create CloudEvents source/agent options for these supported protocols/drivers, developers need to provide configuration specific to the protocol/driver. The configuration format resembles the kubeconfig for the Kubernetes client-go but has a different schema.
 
@@ -147,31 +146,6 @@ clientKeyFile: /certs/client.key
 ```
 
 For detailed configuration options for the gRPC driver, refer to the [gRPC driver options package](https://github.com/open-cluster-management-io/sdk-go/blob/00a94671ced1c17d2ca2b5fad2f4baab282a7d3c/pkg/cloudevents/generic/options/grpc/options.go#L30-L40).
-
-### Kafka Protocol/Driver
-
-Kafka Protocol/Drive is not enabled by default. To enable it, add the `-tags=kafka` flag before the build.
-
-Here’s a sample configuration for Kafka in YAML:
-
-```yaml
-bootstrapServer: kafka.example.com:9092
-caFile: /certs/ca.crt
-clientCertFile: /certs/client.crt
-clientKeyFile: /certs/client.key
-```
-
-For detailed configuration options for the Kafka driver, refer to the [Kafka driver options package](./generic/options/kafka/options.go). You can also add advanced configurations supported by librdkafka. For instance, to set the maximum Kafka protocol request message size to 200,000 bytes, use the following configuration in YAML:
-
-```yaml
-bootstrapServer: kafka.example.com:9092
-caFile: /certs/ca.crt
-clientCertFile: /certs/client.crt
-clientKeyFile: /certs/client.key
-message.copy.max.bytes: 200000
-```
-
-For the complete list of supported configurations, refer to the [librdkafka documentation](https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md).
 
 ## Work Clients
 

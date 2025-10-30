@@ -16,7 +16,7 @@ The [`CloudEventsOptions`](../generic/options/options.go) interface defines an o
 For each event protocol, it needs to implement the `CloudEventsSourceOptions` and `CloudEventsAgentOptions`, the 
 `CloudEventsSourceOptions` will be used for building cloudevents source client and the `CloudEventsAgentOptions` will be used for building cloudevents agent client.
 
-Currently, the MQTT, Kafka and gRPC are implemented.
+Currently, the MQTT and gRPC are implemented.
 
 ```mermaid
 classDiagram
@@ -41,9 +41,6 @@ CloudEventsOptions <|-- CloudEventsAgentOptions
 
 CloudEventsSourceOptions <|.. mqttSourceOptions
 CloudEventsAgentOptions <|.. mqttAgentOptions
-
-CloudEventsSourceOptions <|.. kafkaSourceOptions
-CloudEventsAgentOptions <|.. kafkaAgentOptions
 
 CloudEventsSourceOptions <|.. grpcSourceOptions
 CloudEventsAgentOptions <|.. grpcAgentOptions
