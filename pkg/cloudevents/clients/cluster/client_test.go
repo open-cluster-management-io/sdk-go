@@ -18,7 +18,7 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/fake"
 )
 
@@ -58,7 +58,7 @@ func TestCreate(t *testing.T) {
 
 			watcherStore := store.NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
 			ceClientOpt := fake.NewAgentOptions(gochan.New(), nil, "cluster1", "cluster1-agent")
-			ceClient, err := generic.NewCloudEventAgentClient(
+			ceClient, err := clients.NewCloudEventAgentClient(
 				ctx,
 				ceClientOpt,
 				store.NewAgentWatcherStoreLister(watcherStore),
@@ -117,7 +117,7 @@ func TestPatch(t *testing.T) {
 
 			watcherStore := store.NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
 			ceClientOpt := fake.NewAgentOptions(gochan.New(), nil, "cluster1", "test-agent")
-			ceClient, err := generic.NewCloudEventAgentClient(
+			ceClient, err := clients.NewCloudEventAgentClient(
 				ctx,
 				ceClientOpt,
 				store.NewAgentWatcherStoreLister(watcherStore),

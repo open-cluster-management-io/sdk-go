@@ -12,7 +12,7 @@ import (
 	"github.com/onsi/gomega"
 
 	"k8s.io/utils/ptr"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
 	grpcprotocol "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/server"
@@ -208,7 +208,7 @@ var _ = ginkgo.Describe("Heartbeat Reconnection Integration Test", func() {
 		_, cancel = context.WithCancel(context.Background())
 
 		// Reduce reconnect delays for faster testing
-		generic.DelayFn = func() time.Duration { return 500 * time.Millisecond }
+		clients.DelayFn = func() time.Duration { return 500 * time.Millisecond }
 
 		// Get available ports
 		var err error
@@ -340,7 +340,6 @@ var _ = ginkgo.Describe("Heartbeat Reconnection Integration Test", func() {
 			case <-time.After(500 * time.Millisecond):
 				// No errors for 500ms, consider it stable
 				reconnectStabilized = true
-				break
 			}
 		}
 

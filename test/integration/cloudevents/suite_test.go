@@ -17,7 +17,7 @@ import (
 	sar "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authz/kube"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
@@ -70,7 +70,7 @@ func TestIntegration(t *testing.T) {
 
 var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	// crank up the connection reset speed
-	generic.DelayFn = func() time.Duration { return 2 * time.Second }
+	clients.DelayFn = func() time.Duration { return 2 * time.Second }
 	// crank up the cert check speed
 	cert.CertCallbackRefreshDuration = 2 * time.Second
 
