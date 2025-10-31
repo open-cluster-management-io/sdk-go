@@ -1,4 +1,4 @@
-package generic
+package metrics
 
 import (
 	"time"
@@ -26,7 +26,7 @@ const (
 	metricsWorkCodeLabel       = "code"
 )
 
-const noneOriginalSource = "none"
+const NoneOriginalSource = "none"
 
 // cloudeventsReceivedBySourceMetricsLabels - Array of labels added to cloudevents received by source metrics:
 var cloudeventsReceivedBySourceMetricsLabels = []string{
@@ -97,7 +97,7 @@ const (
 // another for resource update would result in the following metrics:
 // cloudevents_received_total{source="agent1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="create"} 1
 // cloudevents_received_total{source="agent1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="update"} 1
-var cloudeventsReceivedBySourceCounterMetric = prometheus.NewCounterVec(
+var CloudeventsReceivedBySourceCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
 		Name:      receivedCounterMetric,
@@ -112,7 +112,7 @@ var cloudeventsReceivedBySourceCounterMetric = prometheus.NewCounterVec(
 // another for resource update would result in the following metrics:
 // cloudevents_received_total{source="source1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="create"} 1
 // cloudevents_received_total{source="source1",type="io.open-cluster-management.works.v1alpha1.manifests",subresource="spec",action="update"} 1
-var cloudeventsReceivedByClientCounterMetric = prometheus.NewCounterVec(
+var CloudeventsReceivedByClientCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
 		Name:      receivedCounterMetric,
@@ -125,7 +125,7 @@ var cloudeventsReceivedByClientCounterMetric = prometheus.NewCounterVec(
 // and a help string of 'The total number of CloudEvents sent from source.'
 // For example, 1 cloudevent sent from source1 to consumer1 with data type manifestbundles for resource spec create would result in the following metrics:
 // cloudevents_sent_total{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="spec",action="create"} 1
-var cloudeventsSentFromSourceCounterMetric = prometheus.NewCounterVec(
+var CloudeventsSentFromSourceCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
 		Name:      sentCounterMetric,
@@ -138,7 +138,7 @@ var cloudeventsSentFromSourceCounterMetric = prometheus.NewCounterVec(
 // and a help string of 'The total number of CloudEvents sent from agent.'
 // For example, 2 CloudEvents sent from consumer1-work-agent back to source1 for resource status update would result in the following metrics:
 // cloudevents_sent_total{source="consumer1-work-agent",original_source="source1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",subresource="status",action="update"} 2
-var cloudeventsSentFromClientCounterMetric = prometheus.NewCounterVec(
+var CloudeventsSentFromClientCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
 		Name:      sentCounterMetric,
@@ -163,7 +163,7 @@ var cloudeventsSentFromClientCounterMetric = prometheus.NewCounterVec(
 // resource_spec_resync_duration_seconds_bucket{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests",le="+Inf"} 2
 // resource_spec_resync_duration_seconds_sum{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests"} 1.2
 // resource_spec_resync_duration_seconds_count{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifests"} 2
-var resourceSpecResyncDurationMetric = prometheus.NewHistogramVec(
+var ResourceSpecResyncDurationMetric = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Subsystem: resourcesMetricsSubsystem,
 		Name:      specResyncDurationMetric,
@@ -197,7 +197,7 @@ var resourceSpecResyncDurationMetric = prometheus.NewHistogramVec(
 // resource_status_resync_duration_seconds_bucket{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifestbundles",le="+Inf"} 2
 // resource_status_resync_duration_seconds_sum{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifestbundles"} 1.6
 // resource_status_resync_duration_seconds_count{source="source1",consumer="consumer1",type="io.open-cluster-management.works.v1alpha1.manifestbundles"} 2
-var resourceStatusResyncDurationMetric = prometheus.NewHistogramVec(
+var ResourceStatusResyncDurationMetric = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Subsystem: resourcesMetricsSubsystem,
 		Name:      statusResyncDurationMetric,
@@ -219,7 +219,7 @@ var resourceStatusResyncDurationMetric = prometheus.NewHistogramVec(
 // and a help string of 'The total number of reconnects for the CloudEvents client.'
 // For example, 2 reconnects for the CloudEvents client with client_id=client1 would result in the following metrics:
 // client_reconnected_total{client_id="client1"} 2
-var clientReconnectedCounterMetric = prometheus.NewCounterVec(
+var ClientReconnectedCounterMetric = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Subsystem: cloudeventsMetricsSubsystem,
 		Name:      clientReconnectedCounter,
@@ -239,38 +239,38 @@ var workProcessedCounterMetric = prometheus.NewCounterVec(
 
 // Register the metrics
 func RegisterClientCloudEventsMetrics(register prometheus.Registerer) {
-	register.MustRegister(cloudeventsReceivedByClientCounterMetric)
-	register.MustRegister(cloudeventsSentFromClientCounterMetric)
-	register.MustRegister(resourceStatusResyncDurationMetric)
+	register.MustRegister(CloudeventsReceivedByClientCounterMetric)
+	register.MustRegister(CloudeventsSentFromClientCounterMetric)
+	register.MustRegister(ResourceStatusResyncDurationMetric)
 	register.MustRegister(workProcessedCounterMetric)
 }
 
 // Register the metrics
 func RegisterSourceCloudEventsMetrics(register prometheus.Registerer) {
-	register.MustRegister(cloudeventsReceivedBySourceCounterMetric)
-	register.MustRegister(cloudeventsSentFromSourceCounterMetric)
-	register.MustRegister(resourceSpecResyncDurationMetric)
-	register.MustRegister(clientReconnectedCounterMetric)
+	register.MustRegister(CloudeventsReceivedBySourceCounterMetric)
+	register.MustRegister(CloudeventsSentFromSourceCounterMetric)
+	register.MustRegister(ResourceSpecResyncDurationMetric)
+	register.MustRegister(ClientReconnectedCounterMetric)
 }
 
 // ResetSourceCloudEventsMetrics resets all collectors from source
 func ResetSourceCloudEventsMetrics() {
-	cloudeventsReceivedBySourceCounterMetric.Reset()
-	cloudeventsSentFromSourceCounterMetric.Reset()
-	resourceSpecResyncDurationMetric.Reset()
-	clientReconnectedCounterMetric.Reset()
+	CloudeventsReceivedBySourceCounterMetric.Reset()
+	CloudeventsSentFromSourceCounterMetric.Reset()
+	ResourceSpecResyncDurationMetric.Reset()
+	ClientReconnectedCounterMetric.Reset()
 }
 
 // ResetClientCloudEventsMetrics resets all collectors from client
 func ResetClientCloudEventsMetrics() {
-	cloudeventsReceivedByClientCounterMetric.Reset()
-	cloudeventsSentFromClientCounterMetric.Reset()
-	resourceStatusResyncDurationMetric.Reset()
+	CloudeventsReceivedByClientCounterMetric.Reset()
+	CloudeventsSentFromClientCounterMetric.Reset()
+	ResourceStatusResyncDurationMetric.Reset()
 	workProcessedCounterMetric.Reset()
 }
 
-// increaseCloudEventsReceivedBySourceCounter increases the cloudevents received by source counter metric:
-func increaseCloudEventsReceivedBySourceCounter(source, consumer, dataType, subresource, action string) {
+// IncreaseCloudEventsReceivedBySourceCounter increases the cloudevents received by source counter metric:
+func IncreaseCloudEventsReceivedBySourceCounter(source, consumer, dataType, subresource, action string) {
 	labels := prometheus.Labels{
 		metricsSourceLabel:      source,
 		metricsConsumerLabel:    consumer,
@@ -278,22 +278,22 @@ func increaseCloudEventsReceivedBySourceCounter(source, consumer, dataType, subr
 		metricsSubResourceLabel: subresource,
 		metricsActionLabel:      action,
 	}
-	cloudeventsReceivedBySourceCounterMetric.With(labels).Inc()
+	CloudeventsReceivedBySourceCounterMetric.With(labels).Inc()
 }
 
-// increaseCloudEventsReceivedByAgentCounter increases the cloudevents received by agent counter metric:
-func increaseCloudEventsReceivedByAgentCounter(source, dataType, subresource, action string) {
+// IncreaseCloudEventsReceivedByAgentCounter increases the cloudevents received by agent counter metric:
+func IncreaseCloudEventsReceivedByAgentCounter(source, dataType, subresource, action string) {
 	labels := prometheus.Labels{
 		metricsSourceLabel:      source,
 		metricsDataTypeLabel:    dataType,
 		metricsSubResourceLabel: subresource,
 		metricsActionLabel:      action,
 	}
-	cloudeventsReceivedByClientCounterMetric.With(labels).Inc()
+	CloudeventsReceivedByClientCounterMetric.With(labels).Inc()
 }
 
-// increaseCloudEventsSentFromSourceCounter increases the cloudevents sent from source counter metric:
-func increaseCloudEventsSentFromSourceCounter(source, consumer, dataType, subresource, action string) {
+// IncreaseCloudEventsSentFromSourceCounter increases the cloudevents sent from source counter metric:
+func IncreaseCloudEventsSentFromSourceCounter(source, consumer, dataType, subresource, action string) {
 	labels := prometheus.Labels{
 		metricsSourceLabel:      source,
 		metricsConsumerLabel:    consumer,
@@ -301,13 +301,13 @@ func increaseCloudEventsSentFromSourceCounter(source, consumer, dataType, subres
 		metricsSubResourceLabel: subresource,
 		metricsActionLabel:      action,
 	}
-	cloudeventsSentFromSourceCounterMetric.With(labels).Inc()
+	CloudeventsSentFromSourceCounterMetric.With(labels).Inc()
 }
 
-// increaseCloudEventsSentFromAgentCounter increases the cloudevents sent from agent counter metric:
-func increaseCloudEventsSentFromAgentCounter(source, originalSource, dataType, subresource, action string) {
+// IncreaseCloudEventsSentFromAgentCounter increases the cloudevents sent from agent counter metric:
+func IncreaseCloudEventsSentFromAgentCounter(source, originalSource, dataType, subresource, action string) {
 	if originalSource == "" {
-		originalSource = noneOriginalSource
+		originalSource = NoneOriginalSource
 	}
 	labels := prometheus.Labels{
 		metricsSourceLabel:         source,
@@ -316,37 +316,37 @@ func increaseCloudEventsSentFromAgentCounter(source, originalSource, dataType, s
 		metricsSubResourceLabel:    subresource,
 		metricsActionLabel:         action,
 	}
-	cloudeventsSentFromClientCounterMetric.With(labels).Inc()
+	CloudeventsSentFromClientCounterMetric.With(labels).Inc()
 }
 
-// updateResourceSpecResyncDurationMetric updates the resource spec resync duration metric:
-func updateResourceSpecResyncDurationMetric(source, consumer, dataType string, startTime time.Time) {
+// UpdateResourceSpecResyncDurationMetric updates the resource spec resync duration metric:
+func UpdateResourceSpecResyncDurationMetric(source, consumer, dataType string, startTime time.Time) {
 	labels := prometheus.Labels{
 		metricsSourceLabel:   source,
 		metricsConsumerLabel: consumer,
 		metricsDataTypeLabel: dataType,
 	}
 	duration := time.Since(startTime)
-	resourceSpecResyncDurationMetric.With(labels).Observe(duration.Seconds())
+	ResourceSpecResyncDurationMetric.With(labels).Observe(duration.Seconds())
 }
 
-// updateResourceStatusResyncDurationMetric updates the resource status resync duration metric:
-func updateResourceStatusResyncDurationMetric(source, consumer, dataType string, startTime time.Time) {
+// UpdateResourceStatusResyncDurationMetric updates the resource status resync duration metric:
+func UpdateResourceStatusResyncDurationMetric(source, consumer, dataType string, startTime time.Time) {
 	labels := prometheus.Labels{
 		metricsSourceLabel:   source,
 		metricsConsumerLabel: consumer,
 		metricsDataTypeLabel: dataType,
 	}
 	duration := time.Since(startTime)
-	resourceStatusResyncDurationMetric.With(labels).Observe(duration.Seconds())
+	ResourceStatusResyncDurationMetric.With(labels).Observe(duration.Seconds())
 }
 
-// increaseClientReconnectedCounter increases the client reconnected counter metric:
-func increaseClientReconnectedCounter(clientID string) {
+// IncreaseClientReconnectedCounter increases the client reconnected counter metric:
+func IncreaseClientReconnectedCounter(clientID string) {
 	labels := prometheus.Labels{
 		metricsClientIDLabel: clientID,
 	}
-	clientReconnectedCounterMetric.With(labels).Inc()
+	ClientReconnectedCounterMetric.With(labels).Inc()
 }
 
 // IncreaseWorkProcessedCounter increases the work processed counter metric:

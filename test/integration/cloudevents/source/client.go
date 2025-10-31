@@ -14,6 +14,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/source/codec"
 	workstore "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
@@ -25,7 +26,7 @@ func StartResourceSourceClient(
 	sourceID string,
 	lister *ResourceLister,
 ) (generic.CloudEventsClient[*store.Resource], error) {
-	client, err := generic.NewCloudEventSourceClient(
+	client, err := clients.NewCloudEventSourceClient(
 		ctx,
 		options,
 		lister,

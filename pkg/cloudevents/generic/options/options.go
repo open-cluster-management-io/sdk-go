@@ -6,6 +6,7 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/protocol"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/utils"
 )
 
 // CloudEventsOptions provides cloudevents clients to send/receive cloudevents based on different event protocol.
@@ -35,17 +36,6 @@ type CloudEventsProtocol interface {
 	protocol.Closer
 }
 
-// EventRateLimit for limiting the event sending rate.
-type EventRateLimit struct {
-	// QPS indicates the maximum QPS to send the event.
-	// If it's less than or equal to zero, the DefaultQPS (50) will be used.
-	QPS float32
-
-	// Maximum burst for throttle.
-	// If it's less than or equal to zero, the DefaultBurst (100) will be used.
-	Burst int
-}
-
 // CloudEventsSourceOptions provides the required options to build a source CloudEventsClient
 type CloudEventsSourceOptions struct {
 	// CloudEventsOptions provides cloudevents clients to send/receive cloudevents based on different event protocol.
@@ -57,7 +47,7 @@ type CloudEventsSourceOptions struct {
 	SourceID string
 
 	// EventRateLimit limits the event sending rate.
-	EventRateLimit EventRateLimit
+	EventRateLimit utils.EventRateLimit
 }
 
 // CloudEventsAgentOptions provides the required options to build an agent CloudEventsClient
@@ -73,5 +63,5 @@ type CloudEventsAgentOptions struct {
 	ClusterName string
 
 	// EventRateLimit limits the event sending rate.
-	EventRateLimit EventRateLimit
+	EventRateLimit utils.EventRateLimit
 }

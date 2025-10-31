@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/fake"
 )
 
@@ -34,7 +34,7 @@ func TestCreate(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ceClient, err := generic.NewCloudEventAgentClient(
+			ceClient, err := clients.NewCloudEventAgentClient(
 				context.Background(),
 				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
 				nil,
@@ -89,7 +89,7 @@ func TestPatch(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ceClient, err := generic.NewCloudEventAgentClient(
+			ceClient, err := clients.NewCloudEventAgentClient(
 				context.Background(),
 				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
 				nil,

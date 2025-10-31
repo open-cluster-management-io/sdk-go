@@ -1,4 +1,4 @@
-package generic
+package clients
 
 import (
 	"context"
@@ -12,20 +12,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/metrics"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/utils"
 )
 
 // CloudEventSourceClient is a client for a source to resync/send/receive its resources with cloud events.
 //
 // A source is a component that runs on a server, it can be a controller on the hub cluster or a RESTful service
 // handling resource requests.
-type CloudEventSourceClient[T ResourceObject] struct {
+type CloudEventSourceClient[T generic.ResourceObject] struct {
 	*baseClient
-	lister           Lister[T]
-	codec            Codec[T]
-	statusHashGetter StatusHashGetter[T]
+	lister           generic.Lister[T]
+	codec            generic.Codec[T]
+	statusHashGetter generic.StatusHashGetter[T]
 	sourceID         string
 }
 
@@ -36,17 +39,17 @@ type CloudEventSourceClient[T ResourceObject] struct {
 //   - lister gets the resources from a cache/store of a source.
 //   - statusHashGetter calculates the resource status hash.
 //   - codec is used to encode/decode a resource objet/cloudevent to/from a cloudevent/resource objet.
-func NewCloudEventSourceClient[T ResourceObject](
+func NewCloudEventSourceClient[T generic.ResourceObject](
 	ctx context.Context,
 	sourceOptions *options.CloudEventsSourceOptions,
-	lister Lister[T],
-	statusHashGetter StatusHashGetter[T],
-	codec Codec[T],
+	lister generic.Lister[T],
+	statusHashGetter generic.StatusHashGetter[T],
+	codec generic.Codec[T],
 ) (*CloudEventSourceClient[T], error) {
 	baseClient := &baseClient{
 		clientID:               sourceOptions.SourceID,
 		cloudEventsOptions:     sourceOptions.CloudEventsOptions,
-		cloudEventsRateLimiter: NewRateLimiter(sourceOptions.EventRateLimit),
+		cloudEventsRateLimiter: utils.NewRateLimiter(sourceOptions.EventRateLimit),
 		reconnectedChan:        make(chan struct{}),
 		dataType:               codec.EventDataType(),
 	}
@@ -105,7 +108,7 @@ func (c *CloudEventSourceClient[T]) Resync(ctx context.Context, clusterName stri
 		return err
 	}
 
-	increaseCloudEventsSentFromSourceCounter(evt.Source(), clusterName, c.codec.EventDataType().String(), string(eventType.SubResource), string(eventType.Action))
+	metrics.IncreaseCloudEventsSentFromSourceCounter(evt.Source(), clusterName, c.codec.EventDataType().String(), string(eventType.SubResource), string(eventType.Action))
 
 	return nil
 }
@@ -130,7 +133,7 @@ func (c *CloudEventSourceClient[T]) Publish(ctx context.Context, eventType types
 	}
 
 	clusterName := evt.Context.GetExtensions()[types.ExtensionClusterName].(string)
-	increaseCloudEventsSentFromSourceCounter(evt.Source(), clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
+	metrics.IncreaseCloudEventsSentFromSourceCounter(evt.Source(), clusterName, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 
 	return nil
 }
@@ -138,13 +141,13 @@ func (c *CloudEventSourceClient[T]) Publish(ctx context.Context, eventType types
 // Subscribe the events that are from the agent spec resync request or agent resource status request.
 // For spec resync request, source publish the current resources spec back as response.
 // For resource status request, source receives resource status and handles the status with resource handlers.
-func (c *CloudEventSourceClient[T]) Subscribe(ctx context.Context, handlers ...ResourceHandler[T]) {
+func (c *CloudEventSourceClient[T]) Subscribe(ctx context.Context, handlers ...generic.ResourceHandler[T]) {
 	c.subscribe(ctx, func(ctx context.Context, evt cloudevents.Event) {
 		c.receive(ctx, evt, handlers...)
 	})
 }
 
-func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents.Event, handlers ...ResourceHandler[T]) {
+func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents.Event, handlers ...generic.ResourceHandler[T]) {
 	eventType, err := types.ParseCloudEventsType(evt.Type())
 	if err != nil {
 		klog.Errorf("failed to parse cloud event type, %v", err)
@@ -158,7 +161,7 @@ func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents
 		cn = ""
 	}
 
-	increaseCloudEventsReceivedBySourceCounter(evt.Source(), cn, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
+	metrics.IncreaseCloudEventsReceivedBySourceCounter(evt.Source(), cn, eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 
 	if eventType.Action == types.ResyncRequestAction {
 		if eventType.SubResource != types.SubResourceSpec {
@@ -176,7 +179,7 @@ func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents
 		if err := c.respondResyncSpecRequest(ctx, eventType.CloudEventsDataType, evt); err != nil {
 			klog.Errorf("failed to resync resources spec, %v", err)
 		}
-		updateResourceSpecResyncDurationMetric(c.sourceID, fmt.Sprintf("%s", clusterName), eventType.CloudEventsDataType.String(), startTime)
+		metrics.UpdateResourceSpecResyncDurationMetric(c.sourceID, fmt.Sprintf("%s", clusterName), eventType.CloudEventsDataType.String(), startTime)
 
 		return
 	}
@@ -290,7 +293,7 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 		if err := c.publish(ctx, evt); err != nil {
 			return err
 		}
-		increaseCloudEventsSentFromSourceCounter(evt.Source(), fmt.Sprintf("%s", clusterName), evtDataType.String(), string(eventType.SubResource), string(eventType.Action))
+		metrics.IncreaseCloudEventsSentFromSourceCounter(evt.Source(), fmt.Sprintf("%s", clusterName), evtDataType.String(), string(eventType.SubResource), string(eventType.Action))
 	}
 
 	return nil

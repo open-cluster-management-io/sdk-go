@@ -11,7 +11,7 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/fake"
 )
 
@@ -36,7 +36,7 @@ func TestUpdate(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			leaseWatchStore := store.NewSimpleStore[*coordv1.Lease]()
-			ceClient, err := generic.NewCloudEventAgentClient(
+			ceClient, err := clients.NewCloudEventAgentClient(
 				context.Background(),
 				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
 				store.NewAgentWatcherStoreLister(leaseWatchStore),
@@ -88,7 +88,7 @@ func TestGet(t *testing.T) {
 				}
 			}
 
-			ceClient, err := generic.NewCloudEventAgentClient(
+			ceClient, err := clients.NewCloudEventAgentClient(
 				context.Background(),
 				fake.NewAgentOptions(gochan.New(), nil, "cluster1", "cluster1-agent"),
 				store.NewAgentWatcherStoreLister(leaseWatchStore),

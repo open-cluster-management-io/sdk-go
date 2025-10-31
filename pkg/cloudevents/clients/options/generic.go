@@ -9,6 +9,8 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/builder"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
@@ -96,7 +98,7 @@ func (o *GenericClientOptions[T]) WatcherStore() store.ClientWatcherStore[T] {
 	return o.watcherStore
 }
 
-func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (*generic.CloudEventAgentClient[T], error) {
+func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (generic.CloudEventsClient[T], error) {
 	if len(o.clientID) == 0 {
 		return nil, fmt.Errorf("client id is required")
 	}
@@ -109,12 +111,12 @@ func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (*generic.Clo
 		o.watcherStore = store.NewAgentInformerWatcherStore[T]()
 	}
 
-	options, err := generic.BuildCloudEventsAgentOptions(o.config, o.clusterName, o.clientID)
+	options, err := builder.BuildCloudEventsAgentOptions(o.config, o.clusterName, o.clientID)
 	if err != nil {
 		return nil, err
 	}
 
-	cloudEventsClient, err := generic.NewCloudEventAgentClient(
+	cloudEventsClient, err := clients.NewCloudEventAgentClient(
 		ctx,
 		options,
 		store.NewAgentWatcherStoreLister(o.watcherStore),
@@ -167,7 +169,7 @@ func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (*generic.Clo
 	return cloudEventsClient, nil
 }
 
-func (o *GenericClientOptions[T]) SourceClient(ctx context.Context) (*generic.CloudEventSourceClient[T], error) {
+func (o *GenericClientOptions[T]) SourceClient(ctx context.Context) (generic.CloudEventsClient[T], error) {
 	if len(o.clientID) == 0 {
 		return nil, fmt.Errorf("client id is required")
 	}
@@ -180,12 +182,12 @@ func (o *GenericClientOptions[T]) SourceClient(ctx context.Context) (*generic.Cl
 		return nil, fmt.Errorf("a watcher store is required")
 	}
 
-	options, err := generic.BuildCloudEventsSourceOptions(o.config, o.clientID, o.sourceID)
+	options, err := builder.BuildCloudEventsSourceOptions(o.config, o.clientID, o.sourceID)
 	if err != nil {
 		return nil, err
 	}
 
-	cloudEventsClient, err := generic.NewCloudEventSourceClient(
+	cloudEventsClient, err := clients.NewCloudEventSourceClient(
 		ctx,
 		options,
 		store.NewSourceWatcherStoreLister(o.watcherStore),

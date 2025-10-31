@@ -1,4 +1,4 @@
-package generic
+package builder
 
 import (
 	"fmt"

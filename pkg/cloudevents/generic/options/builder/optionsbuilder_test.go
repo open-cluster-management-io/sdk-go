@@ -1,4 +1,4 @@
-package generic
+package builder
 
 import (
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"

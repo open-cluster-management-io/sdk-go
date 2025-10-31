@@ -1,4 +1,4 @@
-package generic
+package clients
 
 import (
 	"context"
@@ -14,8 +14,10 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/metrics"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/utils"
 )
 
 const (
@@ -73,7 +75,7 @@ func (c *baseClient) connect(ctx context.Context) error {
 				}
 				// the cloudevents network connection is back, mark the client ready and send the receiver restart signal
 				logger.V(2).Info("the cloudevents client is reconnected")
-				increaseClientReconnectedCounter(c.clientID)
+				metrics.IncreaseClientReconnectedCounter(c.clientID)
 				c.setClientReady(true)
 				c.sendReceiverSignal(restartReceiverSignal)
 				c.sendReconnectedSignal()
@@ -118,7 +120,7 @@ func (c *baseClient) publish(ctx context.Context, evt cloudevents.Event) error {
 	}
 
 	latency := time.Since(now)
-	if latency > longThrottleLatency {
+	if latency > utils.LongThrottleLatency {
 		logger.V(3).Info(
 			"Client-side throttling delay (not priority and fairness)",
 			"latency", latency,

@@ -1,4 +1,4 @@
-package generic
+package clients
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/fake"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/payload"
+	generictesting "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/testing"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
@@ -22,19 +23,19 @@ const testSourceName = "mock-source"
 func TestSourceResync(t *testing.T) {
 	cases := []struct {
 		name          string
-		resources     []*mockResource
+		resources     []*generictesting.MockResource
 		eventType     types.CloudEventsType
 		expectedItems int
 	}{
 		{
 			name:          "no cached resources",
-			resources:     []*mockResource{},
+			resources:     []*generictesting.MockResource{},
 			eventType:     types.CloudEventsType{SubResource: types.SubResourceStatus},
 			expectedItems: 0,
 		},
 		{
 			name: "has cached resources",
-			resources: []*mockResource{
+			resources: []*generictesting.MockResource{
 				{UID: kubetypes.UID("test1"), ResourceVersion: "2", Status: "test1"},
 				{UID: kubetypes.UID("test2"), ResourceVersion: "3", Status: "test2"},
 			},
@@ -48,8 +49,14 @@ func TestSourceResync(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
-			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			lister := generictesting.NewMockResourceLister(c.resources...)
+			source, err := NewCloudEventSourceClient(
+				ctx,
+				sourceOptions,
+				lister,
+				generictesting.StatusHash,
+				generictesting.NewMockResourceCodec(),
+			)
 			require.NoError(t, err)
 
 			eventChan := make(chan receiveEvent)
@@ -84,18 +91,18 @@ func TestSourceResync(t *testing.T) {
 func TestSourcePublish(t *testing.T) {
 	cases := []struct {
 		name      string
-		resources *mockResource
+		resources *generictesting.MockResource
 		eventType types.CloudEventsType
 	}{
 		{
 			name: "publish specs",
-			resources: &mockResource{
+			resources: &generictesting.MockResource{
 				UID:             kubetypes.UID("1234"),
 				ResourceVersion: "2",
 				Spec:            "test-spec",
 			},
 			eventType: types.CloudEventsType{
-				CloudEventsDataType: mockEventDataType,
+				CloudEventsDataType: generictesting.MockEventDataType,
 				SubResource:         types.SubResourceSpec,
 				Action:              "test_create_request",
 			},
@@ -107,8 +114,14 @@ func TestSourcePublish(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
-			lister := newMockResourceLister()
-			source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			lister := generictesting.NewMockResourceLister()
+			source, err := NewCloudEventSourceClient(
+				ctx,
+				sourceOptions,
+				lister,
+				generictesting.StatusHash,
+				generictesting.NewMockResourceCodec(),
+			)
 			require.NoError(t, err)
 
 			eventChan := make(chan receiveEvent)
@@ -150,7 +163,7 @@ func TestSpecResyncResponse(t *testing.T) {
 	cases := []struct {
 		name         string
 		requestEvent cloudevents.Event
-		resources    []*mockResource
+		resources    []*generictesting.MockResource
 		validate     func([]cloudevents.Event)
 	}{
 		{
@@ -170,7 +183,7 @@ func TestSpecResyncResponse(t *testing.T) {
 			name: "unsupported resync event type",
 			requestEvent: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
+					CloudEventsDataType: generictesting.MockEventDataType,
 					SubResource:         types.SubResourceStatus,
 					Action:              types.ResyncRequestAction,
 				}
@@ -189,7 +202,7 @@ func TestSpecResyncResponse(t *testing.T) {
 			name: "resync all specs",
 			requestEvent: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
+					CloudEventsDataType: generictesting.MockEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              types.ResyncRequestAction,
 				}
@@ -202,7 +215,7 @@ func TestSpecResyncResponse(t *testing.T) {
 				}
 				return evt
 			}(),
-			resources: []*mockResource{
+			resources: []*generictesting.MockResource{
 				{UID: kubetypes.UID("test1"), ResourceVersion: "2", Spec: "test1"},
 				{UID: kubetypes.UID("test2"), ResourceVersion: "3", Spec: "test2"},
 			},
@@ -216,7 +229,7 @@ func TestSpecResyncResponse(t *testing.T) {
 			name: "resync specs",
 			requestEvent: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
+					CloudEventsDataType: generictesting.MockEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              types.ResyncRequestAction,
 				}
@@ -236,7 +249,7 @@ func TestSpecResyncResponse(t *testing.T) {
 				}
 				return evt
 			}(),
-			resources: []*mockResource{
+			resources: []*generictesting.MockResource{
 				{UID: kubetypes.UID("test1"), ResourceVersion: "2", Spec: "test1-updated"},
 				{UID: kubetypes.UID("test2"), ResourceVersion: "2", Spec: "test2"},
 			},
@@ -250,7 +263,7 @@ func TestSpecResyncResponse(t *testing.T) {
 			name: "resync specs - deletion",
 			requestEvent: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
+					CloudEventsDataType: generictesting.MockEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              types.ResyncRequestAction,
 				}
@@ -270,7 +283,7 @@ func TestSpecResyncResponse(t *testing.T) {
 				}
 				return evt
 			}(),
-			resources: []*mockResource{
+			resources: []*generictesting.MockResource{
 				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Spec: "test1"},
 			},
 			validate: func(pubEvents []cloudevents.Event) {
@@ -290,8 +303,14 @@ func TestSpecResyncResponse(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
-			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient(ctx, sourceOptions, lister, statusHash, newMockResourceCodec())
+			lister := generictesting.NewMockResourceLister(c.resources...)
+			source, err := NewCloudEventSourceClient(
+				ctx,
+				sourceOptions,
+				lister,
+				generictesting.StatusHash,
+				generictesting.NewMockResourceCodec(),
+			)
 			require.NoError(t, err)
 
 			// start receiver
@@ -326,14 +345,14 @@ func TestReceiveResourceStatus(t *testing.T) {
 	cases := []struct {
 		name         string
 		requestEvent cloudevents.Event
-		resources    []*mockResource
-		validate     func(event types.ResourceAction, resource *mockResource)
+		resources    []*generictesting.MockResource
+		validate     func(event types.ResourceAction, resource *generictesting.MockResource)
 	}{
 		{
 			name: "unsupported sub resource",
 			requestEvent: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
+					CloudEventsDataType: generictesting.MockEventDataType,
 					SubResource:         types.SubResourceSpec,
 					Action:              "test_create_request",
 				}
@@ -342,7 +361,7 @@ func TestReceiveResourceStatus(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			validate: func(event types.ResourceAction, resource *mockResource) {
+			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
 				if len(event) != 0 {
 					t.Errorf("should not be invoked")
 				}
@@ -360,7 +379,7 @@ func TestReceiveResourceStatus(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			validate: func(event types.ResourceAction, resource *mockResource) {
+			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
 				if len(event) != 0 {
 					t.Errorf("should not be invoked")
 				}
@@ -370,20 +389,27 @@ func TestReceiveResourceStatus(t *testing.T) {
 			name: "update status",
 			requestEvent: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
-					CloudEventsDataType: mockEventDataType,
+					CloudEventsDataType: generictesting.MockEventDataType,
 					SubResource:         types.SubResourceStatus,
 					Action:              "test_update_request",
 				}
 
-				evt, _ := newMockResourceCodec().Encode(testAgentName, eventType, &mockResource{UID: kubetypes.UID("test1"), ResourceVersion: "1", Status: "update-test1"})
+				evt, _ := generictesting.NewMockResourceCodec().Encode(
+					testAgentName,
+					eventType,
+					&generictesting.MockResource{
+						UID:             kubetypes.UID("test1"),
+						ResourceVersion: "1",
+						Status:          "update-test1",
+					})
 				evt.SetExtension("clustername", "cluster1")
 				return *evt
 			}(),
-			resources: []*mockResource{
+			resources: []*generictesting.MockResource{
 				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Status: "test1"},
 				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Status: "test2"},
 			},
-			validate: func(event types.ResourceAction, resource *mockResource) {
+			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
 				if event != types.StatusModified {
 					t.Errorf("expected modified, but get %s", event)
 				}
@@ -397,17 +423,27 @@ func TestReceiveResourceStatus(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			sourceOptions := fake.NewSourceOptions(gochan.New(), testSourceName)
-			lister := newMockResourceLister(c.resources...)
-			source, err := NewCloudEventSourceClient(context.TODO(), sourceOptions, lister, statusHash, newMockResourceCodec())
+			lister := generictesting.NewMockResourceLister(c.resources...)
+			source, err := NewCloudEventSourceClient(
+				context.TODO(),
+				sourceOptions,
+				lister,
+				generictesting.StatusHash,
+				generictesting.NewMockResourceCodec(),
+			)
 			require.NoError(t, err)
 
 			var actualEvent types.ResourceAction
-			var actualRes *mockResource
-			source.receive(context.TODO(), c.requestEvent, func(event types.ResourceAction, resource *mockResource) error {
-				actualEvent = event
-				actualRes = resource
-				return nil
-			})
+			var actualRes *generictesting.MockResource
+			source.receive(
+				context.TODO(),
+				c.requestEvent,
+				func(event types.ResourceAction, resource *generictesting.MockResource) error {
+					actualEvent = event
+					actualRes = resource
+					return nil
+				},
+			)
 
 			c.validate(actualEvent, actualRes)
 		})
