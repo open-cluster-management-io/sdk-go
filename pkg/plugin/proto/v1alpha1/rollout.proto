@@ -32,7 +32,7 @@ service RolloutPluginService {
   // If the validation is completed successfully, the plugin should return a SUCCEEDED result.
   // If the validation is still in progress, the plugin should return a INPROGRESS result.
   // If the validation is failed, the plugin should return a FAILED result.
-  rpc ValidateRolloutCompletion(RolloutPluginRequest) returns (ValidateResponse);
+  rpc ValidateRolloutCompletion(ValidateCompletionRequest) returns (ValidateResponse);
 
   // BeginRollback is called before the manifestwork resource is rolled back.
   // It is used to prepare the rollback.
@@ -48,7 +48,7 @@ service RolloutPluginService {
   // If the validation is completed successfully, the plugin should return a SUCCEEDED result.
   // If the validation is still in progress, the plugin should return a INPROGRESS result.
   // If the validation is failed, the plugin should return a FAILED result.
-  rpc ValidateRollbackCompletion(RolloutPluginRequest) returns (ValidateResponse);
+  rpc ValidateRollbackCompletion(ValidateCompletionRequest) returns (ValidateResponse);
 
   // MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
   // MWRS controller provides the current rollout status to the plugin.
@@ -87,20 +87,20 @@ message InitializeResponse {
 
 // ClusterRolloutStatus is the status of the cluster rollout.
 message ClusterRolloutStatus {
-  // name is the name of the cluster.
-  string name = 1;
+  // cluster_name is the name of the cluster.
+  string cluster_name = 1;
 
   // rollout_status is the status of the cluster rollout.
   string rollout_status = 2;
 }
 
-// RolloutDetails is the details of the rollout.
-message RolloutDetails {
-  // completed is the clusters that have been completed.
-  repeated ClusterRolloutStatus completed = 1;
+// RolloutResult is the the current result of clusters.
+message RolloutResult {
+  // applied is the clusters that have been completed.
+  repeated ClusterRolloutStatus applied = 1;
 
-  // in_progress is the clusters that are currently being rolled out.
-  repeated ClusterRolloutStatus in_progress = 2;
+  // to_rollout is the clusters that are currently being rolled out.
+  repeated ClusterRolloutStatus to_rollout = 2;
   
   // timed_out is the clusters that have timed out.
   repeated ClusterRolloutStatus timed_out = 3;
@@ -132,8 +132,14 @@ message RolloutPluginRequest {
   // metadata is the metadata of the rollout.
   RolloutMeta metadata = 1;
 
-  // rollout_details is the details of the rollout.
-  optional RolloutDetails rollout_details = 7;
+  // rollout_result is the result of the rollout.
+  optional RolloutResult rollout_result = 7;
+}
+
+// ValidateCompletionRequest is the request to validate the completion of the rollout.
+message ValidateCompletionRequest {
+  // metadata is the metadata of the rollout.
+  RolloutMeta metadata = 1;
 }
 
 // ValidateResponse is the response from the plugin for the validation of the rollout.
@@ -186,8 +192,8 @@ message MutateManifestWorkRequest {
   // metadata is the metadata of the rollout.
   RolloutMeta metadata = 2;
 
-  // rollout_details is the details of the rollout.
-  optional RolloutDetails rollout_details = 3;
+  // rollout_result is the result of the rollout.
+  optional RolloutResult rollout_result = 3;
   
   // manifestwork is the unstructured manifestwork resource.
   k8s.io.apimachinery.pkg.runtime.Unknown manifestwork = 4;
