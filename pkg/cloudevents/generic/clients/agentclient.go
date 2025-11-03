@@ -84,9 +84,14 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 
 	resources := &payload.ResourceVersionList{Versions: make([]payload.ResourceVersion, len(objs))}
 	for i, obj := range objs {
-		resourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
-		if err != nil {
-			return err
+		var resourceVersion int64
+		// If resource version is empty, use 0 as default
+		if obj.GetResourceVersion() != "" {
+			var err error
+			resourceVersion, err = strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
+			if err != nil {
+				return err
+			}
 		}
 
 		resources.Versions[i] = payload.ResourceVersion{
@@ -303,9 +308,15 @@ func (c *CloudEventAgentClient[T]) specAction(
 		return types.Deleted, nil
 	}
 
-	// if both the current and the last object have the resource version "0", then object
+	// if both the current and the last object have the resource version "0" or empty, then object
 	// is considered as modified, the message broker guarantees the order of the messages
-	if obj.GetResourceVersion() == "0" && lastObj.GetResourceVersion() == "0" {
+	if (obj.GetResourceVersion() == "0" || obj.GetResourceVersion() == "") &&
+		(lastObj.GetResourceVersion() == "0" || lastObj.GetResourceVersion() == "") {
+		return types.Modified, nil
+	}
+
+	// If resource version is empty, treat as modified (cannot compare versions)
+	if obj.GetResourceVersion() == "" || lastObj.GetResourceVersion() == "" {
 		return types.Modified, nil
 	}
 
