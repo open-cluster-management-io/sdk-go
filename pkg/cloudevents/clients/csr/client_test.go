@@ -7,8 +7,6 @@ import (
 
 	v1 "open-cluster-management.io/api/cluster/v1"
 
-	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
-
 	certificatev1 "k8s.io/api/certificates/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -61,7 +59,7 @@ func TestCreate(t *testing.T) {
 			defer cancel()
 
 			watcherStore := store.NewAgentInformerWatcherStore[*certificatev1.CertificateSigningRequest]()
-			ceClientOpt := fake.NewAgentOptions(gochan.New(), nil, "cluster1", "cluster1-agent")
+			ceClientOpt := fake.NewAgentOptions(fake.NewEventChan(), "cluster1", "cluster1-agent")
 			ceClient, err := clients.NewCloudEventAgentClient(
 				ctx,
 				ceClientOpt,

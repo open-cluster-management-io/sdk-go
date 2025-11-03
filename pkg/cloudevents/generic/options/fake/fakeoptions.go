@@ -2,41 +2,80 @@ package fake
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
-type CloudEventsFakeOptions struct {
-	protocol options.CloudEventsProtocol
-	errChan  chan error
+type EventChan struct {
+	ErrChan chan error
+
+	evtChan chan cloudevents.Event
+	once    sync.Once
 }
 
-func NewAgentOptions(protocol options.CloudEventsProtocol, errChan chan error, clusterName, agentID string) *options.CloudEventsAgentOptions {
+func NewAgentOptions(eventChan options.CloudEventTransport, clusterName, agentID string) *options.CloudEventsAgentOptions {
 	return &options.CloudEventsAgentOptions{
-		CloudEventsOptions: &CloudEventsFakeOptions{protocol: protocol, errChan: errChan},
-		AgentID:            agentID,
-		ClusterName:        clusterName,
+		CloudEventsTransport: eventChan,
+		AgentID:              agentID,
+		ClusterName:          clusterName,
 	}
 }
 
-func NewSourceOptions(protocol options.CloudEventsProtocol, sourceID string) *options.CloudEventsSourceOptions {
+func NewSourceOptions(eventChan options.CloudEventTransport, sourceID string) *options.CloudEventsSourceOptions {
 	return &options.CloudEventsSourceOptions{
-		CloudEventsOptions: &CloudEventsFakeOptions{protocol: protocol},
-		SourceID:           sourceID,
+		CloudEventsTransport: eventChan,
+		SourceID:             sourceID,
 	}
 }
 
-func (o *CloudEventsFakeOptions) WithContext(ctx context.Context, evtCtx cloudevents.EventContext) (context.Context, error) {
-	return ctx, nil
+func NewEventChan() *EventChan {
+	return &EventChan{
+		evtChan: make(chan cloudevents.Event, 5),
+		ErrChan: make(chan error),
+	}
 }
 
-func (o *CloudEventsFakeOptions) Protocol(ctx context.Context, dataType types.CloudEventsDataType) (options.CloudEventsProtocol, error) {
-	return o.protocol, nil
+func (c *EventChan) Connect(ctx context.Context) error {
+	return nil
 }
 
-func (o *CloudEventsFakeOptions) ErrorChan() <-chan error {
-	return o.errChan
+func (c *EventChan) Send(ctx context.Context, evt cloudevents.Event) error {
+	select {
+	case c.evtChan <- evt:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return fmt.Errorf("event channel is full")
+	}
+}
+
+func (c *EventChan) Receive(ctx context.Context, fn options.ReceiveHandlerFn) error {
+	for {
+		select {
+		case e, ok := <-c.evtChan:
+			if !ok {
+				return nil
+			}
+			fn(e)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (c *EventChan) Close(ctx context.Context) error {
+	c.once.Do(func() {
+		close(c.evtChan)
+		close(c.ErrChan)
+	})
+	return nil
+}
+
+func (c *EventChan) ErrorChan() <-chan error {
+	return c.ErrChan
 }

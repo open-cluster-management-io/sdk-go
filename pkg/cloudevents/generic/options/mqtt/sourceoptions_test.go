@@ -142,7 +142,7 @@ func TestSourceContext(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			sourceOptions := &mqttSourceOptions{
+			sourceOptions := &mqttSourceTransport{
 				MQTTOptions: *options,
 				sourceID:    "hub1",
 			}

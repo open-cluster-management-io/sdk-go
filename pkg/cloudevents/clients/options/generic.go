@@ -111,7 +111,7 @@ func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (generic.Clou
 		o.watcherStore = store.NewAgentInformerWatcherStore[T]()
 	}
 
-	options, err := builder.BuildCloudEventsAgentOptions(o.config, o.clusterName, o.clientID)
+	options, err := builder.BuildCloudEventsAgentOptions(o.config, o.clusterName, o.clientID, o.codec.EventDataType())
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (o *GenericClientOptions[T]) SourceClient(ctx context.Context) (generic.Clo
 		return nil, fmt.Errorf("a watcher store is required")
 	}
 
-	options, err := builder.BuildCloudEventsSourceOptions(o.config, o.clientID, o.sourceID)
+	options, err := builder.BuildCloudEventsSourceOptions(o.config, o.clientID, o.sourceID, o.codec.EventDataType())
 	if err != nil {
 		return nil, err
 	}

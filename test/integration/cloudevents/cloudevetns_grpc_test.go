@@ -5,6 +5,7 @@ import (
 
 	"github.com/onsi/ginkgo"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/constants"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	grpcoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
@@ -16,5 +17,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - GRPC", runCloudeventsClientP
 // The GRPC test simulates there is a server between the source and agent, the GRPC source client
 // sends/receives events to/from server, then server forward the events to agent via GRPC broker.
 func GetGRPCSourceOptions(ctx context.Context, sourceID string) (*options.CloudEventsSourceOptions, string) {
-	return grpcoptions.NewSourceOptions(util.NewGRPCSourceOptions(grpcServerHost), sourceID), constants.ConfigTypeGRPC
+	return grpcoptions.NewSourceOptions(
+			util.NewGRPCSourceOptions(grpcServerHost), sourceID, payload.ManifestBundleEventDataType),
+		constants.ConfigTypeGRPC
 }

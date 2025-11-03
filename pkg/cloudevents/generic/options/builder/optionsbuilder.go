@@ -7,6 +7,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 // ConfigLoader loads a configuration object with a configuration file.
@@ -50,24 +51,26 @@ func (l *ConfigLoader) LoadConfig() (string, any, error) {
 }
 
 // BuildCloudEventsSourceOptions builds the cloudevents source options based on the broker type
-func BuildCloudEventsSourceOptions(config any, clientId, sourceId string) (*options.CloudEventsSourceOptions, error) {
+func BuildCloudEventsSourceOptions(config any,
+	clientId, sourceId string, dataType types.CloudEventsDataType) (*options.CloudEventsSourceOptions, error) {
 	switch config := config.(type) {
 	case *mqtt.MQTTOptions:
 		return mqtt.NewSourceOptions(config, clientId, sourceId), nil
 	case *grpc.GRPCOptions:
-		return grpc.NewSourceOptions(config, sourceId), nil
+		return grpc.NewSourceOptions(config, sourceId, dataType), nil
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}
 }
 
 // BuildCloudEventsAgentOptions builds the cloudevents agent options based on the broker type
-func BuildCloudEventsAgentOptions(config any, clusterName, clientId string) (*options.CloudEventsAgentOptions, error) {
+func BuildCloudEventsAgentOptions(config any,
+	clusterName, clientId string, dataType types.CloudEventsDataType) (*options.CloudEventsAgentOptions, error) {
 	switch config := config.(type) {
 	case *mqtt.MQTTOptions:
 		return mqtt.NewAgentOptions(config, clusterName, clientId), nil
 	case *grpc.GRPCOptions:
-		return grpc.NewAgentOptions(config, clusterName, clientId), nil
+		return grpc.NewAgentOptions(config, clusterName, clientId, dataType), nil
 	default:
 		return nil, fmt.Errorf("unsupported client configuration type %T", config)
 	}

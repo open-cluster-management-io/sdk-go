@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
-
 	coordv1 "k8s.io/api/coordination/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -35,10 +33,13 @@ func TestUpdate(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			leaseWatchStore := store.NewSimpleStore[*coordv1.Lease]()
 			ceClient, err := clients.NewCloudEventAgentClient(
-				context.Background(),
-				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
+				ctx,
+				fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, c.clusterName+"agent"),
 				store.NewAgentWatcherStoreLister(leaseWatchStore),
 				statushash.StatusHash,
 				NewLeaseCodec())
@@ -81,6 +82,9 @@ func TestGet(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			leaseWatchStore := store.NewSimpleStore[*coordv1.Lease]()
 			for _, lease := range c.leases {
 				if err := leaseWatchStore.Add(lease); err != nil {
@@ -89,8 +93,8 @@ func TestGet(t *testing.T) {
 			}
 
 			ceClient, err := clients.NewCloudEventAgentClient(
-				context.Background(),
-				fake.NewAgentOptions(gochan.New(), nil, "cluster1", "cluster1-agent"),
+				ctx,
+				fake.NewAgentOptions(fake.NewEventChan(), "cluster1", "cluster1-agent"),
 				store.NewAgentWatcherStoreLister(leaseWatchStore),
 				statushash.StatusHash,
 				NewLeaseCodec())

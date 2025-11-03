@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,11 +63,14 @@ func TestPatch(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			watcherStore := store.NewAgentInformerWatcherStore[*addonapiv1alpha1.ManagedClusterAddOn]()
 
-			ceClientOpt := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent")
+			ceClientOpt := fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, c.clusterName+"agent")
 			ceClient, err := clients.NewCloudEventAgentClient(
-				context.Background(),
+				ctx,
 				ceClientOpt,
 				store.NewAgentWatcherStoreLister(watcherStore),
 				statushash.StatusHash,
@@ -89,7 +91,7 @@ func TestPatch(t *testing.T) {
 			watcherStore.SetInformer(informer)
 
 			if _, err = addonClientSet.AddonV1alpha1().ManagedClusterAddOns(c.clusterName).Patch(
-				context.Background(),
+				ctx,
 				c.addon.Name,
 				types.MergePatchType,
 				c.patch,

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
-
 	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,9 +32,12 @@ func TestCreate(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			ceClient, err := clients.NewCloudEventAgentClient(
-				context.Background(),
-				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
+				ctx,
+				fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, c.clusterName+"agent"),
 				nil,
 				statushash.StatusHash,
 				NewEventCodec())
@@ -89,9 +90,12 @@ func TestPatch(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			ceClient, err := clients.NewCloudEventAgentClient(
-				context.Background(),
-				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, c.clusterName+"agent"),
+				ctx,
+				fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, c.clusterName+"agent"),
 				nil,
 				statushash.StatusHash,
 				NewEventCodec())
@@ -101,7 +105,7 @@ func TestPatch(t *testing.T) {
 
 			evtClient := NewEventClient(ceClient).WithNamespace(c.clusterName)
 
-			if _, err := evtClient.Patch(context.Background(),
+			if _, err := evtClient.Patch(ctx,
 				c.event.Name,
 				types.StrategicMergePatchType,
 				c.patch,
