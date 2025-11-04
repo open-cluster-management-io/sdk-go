@@ -37,11 +37,8 @@ func (c *ManagedClusterAddOnCodec) Encode(source string, eventType types.CloudEv
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(addon.Name).
 		WithClusterName(addon.Namespace).
+		WithResourceVersion(addon.Generation).
 		NewEvent()
-
-	if addon.ResourceVersion != "" {
-		evt.SetExtension(types.ExtensionResourceVersion, addon.ResourceVersion)
-	}
 
 	newAddon := addon.DeepCopy()
 	newAddon.TypeMeta = metav1.TypeMeta{

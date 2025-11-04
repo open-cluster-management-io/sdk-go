@@ -3,7 +3,6 @@ package clients
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -261,15 +260,10 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 		}
 
 		lastResourceVersion := findResourceVersion(string(obj.GetUID()), resourceVersions.Versions)
-		currentResourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
-		if err != nil {
-			klog.V(4).Infof("ignore the obj %v since it has a invalid resourceVersion, %v", obj, err)
-			continue
-		}
 
 		// the version of the work is not maintained on source or the source's work is newer than agent, send
 		// the newer work to agent
-		if currentResourceVersion == 0 || currentResourceVersion > lastResourceVersion {
+		if obj.GetGeneration() == 0 || obj.GetGeneration() > lastResourceVersion {
 			if err := c.Publish(ctx, eventType, obj); err != nil {
 				return err
 			}

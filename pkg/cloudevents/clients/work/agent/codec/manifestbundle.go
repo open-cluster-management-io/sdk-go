@@ -3,7 +3,6 @@ package codec
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/bwmarrin/snowflake"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -50,11 +49,6 @@ func (c *ManifestBundleCodec) Encode(source string, eventType types.CloudEventsT
 		return nil, fmt.Errorf("unsupported cloudevents data type %s", eventType.CloudEventsDataType)
 	}
 
-	resourceVersion, err := strconv.ParseInt(work.ResourceVersion, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse the resourceversion of the work %s, %v", work.UID, err)
-	}
-
 	originalSource, ok := work.Labels[common.CloudEventsOriginalSourceLabelKey]
 	if !ok {
 		return nil, fmt.Errorf("failed to find originalsource from the work %s", work.UID)
@@ -63,7 +57,7 @@ func (c *ManifestBundleCodec) Encode(source string, eventType types.CloudEventsT
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(string(work.UID)).
 		WithStatusUpdateSequenceID(sequenceGenerator.Generate().String()).
-		WithResourceVersion(resourceVersion).
+		WithResourceVersion(work.Generation).
 		WithClusterName(work.Namespace).
 		WithOriginalSource(originalSource).
 		NewEvent()

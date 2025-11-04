@@ -54,6 +54,10 @@ func (r *Resource) GetResourceVersion() string {
 	return fmt.Sprintf("%d", r.ResourceVersion)
 }
 
+func (r *Resource) GetGeneration() int64 {
+	return r.ResourceVersion
+}
+
 func (r *Resource) GetDeletionTimestamp() *metav1.Time {
 	return r.DeletionTimestamp
 }

@@ -2,6 +2,7 @@ package testing
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -9,6 +10,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/runtime"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
@@ -34,6 +36,14 @@ func (r *MockResource) GetUID() kubetypes.UID {
 
 func (r *MockResource) GetResourceVersion() string {
 	return r.ResourceVersion
+}
+
+func (r *MockResource) GetGeneration() int64 {
+	generation, err := strconv.ParseInt(r.ResourceVersion, 10, 64)
+	if err != nil {
+		runtime.HandleError(fmt.Errorf("failed to part resource version, %v", err))
+	}
+	return generation
 }
 
 func (r *MockResource) GetDeletionTimestamp() *metav1.Time {

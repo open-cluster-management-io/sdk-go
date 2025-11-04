@@ -37,11 +37,8 @@ func (c *EventCodec) Encode(source string, eventType types.CloudEventsType, even
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(event.Name).
 		WithClusterName(event.Namespace).
+		WithResourceVersion(event.Generation).
 		NewEvent()
-
-	if event.ResourceVersion != "" {
-		evt.SetExtension(types.ExtensionResourceVersion, event.ResourceVersion)
-	}
 
 	newEvent := event.DeepCopy()
 	newEvent.TypeMeta = metav1.TypeMeta{

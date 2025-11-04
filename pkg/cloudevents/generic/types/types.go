@@ -60,7 +60,7 @@ const (
 	// ExtensionResourceID is the cloud event extension key of the resource ID.
 	ExtensionResourceID = "resourceid"
 
-	// ExtensionResourceVersion is the cloud event extension key of the resource version.
+	// ExtensionResourceVersion is the cloud event extension key of the resource spec version.
 	ExtensionResourceVersion = "resourceversion"
 
 	// ExtensionStatusUpdateSequenceID is the cloud event extension key of the status update event sequence ID.

@@ -38,11 +38,8 @@ func (c *LeaseCodec) Encode(source string, eventType types.CloudEventsType, leas
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(lease.Name).
 		WithClusterName(lease.Namespace).
+		WithResourceVersion(lease.Generation).
 		NewEvent()
-
-	if lease.ResourceVersion != "" {
-		evt.SetExtension(types.ExtensionResourceVersion, lease.ResourceVersion)
-	}
 
 	newLease := lease.DeepCopy()
 	newLease.TypeMeta = metav1.TypeMeta{

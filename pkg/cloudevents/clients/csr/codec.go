@@ -49,11 +49,8 @@ func (c *CSRCodec) Encode(source string, eventType types.CloudEventsType, csr *c
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(csr.Name).
 		WithClusterName(cluster).
+		WithResourceVersion(csr.Generation).
 		NewEvent()
-
-	if csr.ResourceVersion != "" {
-		evt.SetExtension(types.ExtensionResourceVersion, csr.ResourceVersion)
-	}
 
 	newCSR := csr.DeepCopy()
 	newCSR.TypeMeta = metav1.TypeMeta{

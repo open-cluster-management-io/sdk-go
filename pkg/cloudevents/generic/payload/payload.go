@@ -7,11 +7,13 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 )
 
+// ResourceVersion contains the resource ID and its corresponding spec version.
 type ResourceVersion struct {
 	ResourceID      string `json:"resourceID"`
 	ResourceVersion int64  `json:"resourceVersion"`
 }
 
+// ResourceStatusHash contains the resource ID and its corresponding status hash.
 type ResourceStatusHash struct {
 	ResourceID string `json:"resourceID"`
 	StatusHash string `json:"statusHash"`

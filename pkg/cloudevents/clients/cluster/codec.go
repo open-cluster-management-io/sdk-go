@@ -38,11 +38,8 @@ func (c *ManagedClusterCodec) Encode(source string, eventType types.CloudEventsT
 	evt := types.NewEventBuilder(source, eventType).
 		WithResourceID(cluster.Name).
 		WithClusterName(cluster.Name).
+		WithResourceVersion(cluster.Generation).
 		NewEvent()
-
-	if cluster.ResourceVersion != "" {
-		evt.SetExtension(types.ExtensionResourceVersion, cluster.ResourceVersion)
-	}
 
 	newCluster := cluster.DeepCopy()
 	newCluster.TypeMeta = metav1.TypeMeta{

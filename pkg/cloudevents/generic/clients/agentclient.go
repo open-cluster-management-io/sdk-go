@@ -3,7 +3,6 @@ package clients
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -85,14 +84,9 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 
 	resources := &payload.ResourceVersionList{Versions: make([]payload.ResourceVersion, len(objs))}
 	for i, obj := range objs {
-		resourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
-		if err != nil {
-			return err
-		}
-
 		resources.Versions[i] = payload.ResourceVersion{
 			ResourceID:      string(obj.GetUID()),
-			ResourceVersion: resourceVersion,
+			ResourceVersion: obj.GetGeneration(),
 		}
 	}
 
@@ -298,23 +292,13 @@ func (c *CloudEventAgentClient[T]) specAction(
 		return types.Deleted, nil
 	}
 
-	// if both the current and the last object have the resource version "0", then object
-	// is considered as modified, the message broker guarantees the order of the messages
-	if obj.GetResourceVersion() == "0" && lastObj.GetResourceVersion() == "0" {
+	// Treat the resource with generation 0 as modified.
+	// The resource spec update order is guaranteed by the message broker.
+	if obj.GetGeneration() == 0 && lastObj.GetGeneration() == 0 {
 		return types.Modified, nil
 	}
 
-	resourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
-	if err != nil {
-		return evt, err
-	}
-
-	lastResourceVersion, err := strconv.ParseInt(lastObj.GetResourceVersion(), 10, 64)
-	if err != nil {
-		return evt, err
-	}
-
-	if resourceVersion <= lastResourceVersion {
+	if obj.GetGeneration() <= lastObj.GetGeneration() {
 		return evt, nil
 	}
 
