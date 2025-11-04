@@ -38,17 +38,17 @@ func NewAgentInformerWatcherStore[T generic.ResourceObject]() *AgentInformerWatc
 
 func (s *AgentInformerWatcherStore[T]) Add(resource runtime.Object) error {
 	s.Watcher.Receive(watch.Event{Type: watch.Added, Object: resource})
-	return nil
+	return s.Store.Add(resource)
 }
 
 func (s *AgentInformerWatcherStore[T]) Update(resource runtime.Object) error {
 	s.Watcher.Receive(watch.Event{Type: watch.Modified, Object: resource})
-	return nil
+	return s.Store.Update(resource)
 }
 
 func (s *AgentInformerWatcherStore[T]) Delete(resource runtime.Object) error {
 	s.Watcher.Receive(watch.Event{Type: watch.Deleted, Object: resource})
-	return nil
+	return s.Store.Delete(resource)
 }
 
 func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Context, action types.ResourceAction, resource T) error {

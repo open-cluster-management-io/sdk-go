@@ -185,9 +185,17 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Watch Only", func() {
 				gomega.Eventually(func() error {
 					workClient := agentClient.ManifestWorks(clusterName)
 
+					work, err := workClient.Get(ctx, workName, metav1.GetOptions{})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+					ginkgo.By(fmt.Sprintf("resourceVersion is %s", work.ResourceVersion))
+
 					if err := util.AddWorkFinalizer(ctx, workClient, workName); err != nil {
 						return err
 					}
+
+					work, err = workClient.Get(ctx, workName, metav1.GetOptions{})
+					gomega.Expect(err).ToNot(gomega.HaveOccurred())
+					ginkgo.By(fmt.Sprintf("resourceVersion is %s after patch", work.ResourceVersion))
 
 					return util.UpdateWorkStatus(ctx, workClient, workName, util.WorkCreatedCondition)
 				}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())

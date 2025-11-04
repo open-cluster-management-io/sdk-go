@@ -3,7 +3,6 @@ package clients
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -84,19 +83,10 @@ func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) er
 
 	resources := &payload.ResourceVersionList{Versions: make([]payload.ResourceVersion, len(objs))}
 	for i, obj := range objs {
-		var resourceVersion int64
-		// If resource version is empty, use 0 as default
-		if obj.GetResourceVersion() != "" {
-			var err error
-			resourceVersion, err = strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
-			if err != nil {
-				return err
-			}
-		}
-
 		resources.Versions[i] = payload.ResourceVersion{
-			ResourceID:      string(obj.GetUID()),
-			ResourceVersion: resourceVersion,
+			ResourceID: string(obj.GetUID()),
+			// this should be set as generation, since the resource version of the object is local version.
+			ResourceVersion: obj.GetGeneration(),
 		}
 	}
 
@@ -310,27 +300,11 @@ func (c *CloudEventAgentClient[T]) specAction(
 
 	// if both the current and the last object have the resource version "0" or empty, then object
 	// is considered as modified, the message broker guarantees the order of the messages
-	if (obj.GetResourceVersion() == "0" || obj.GetResourceVersion() == "") &&
-		(lastObj.GetResourceVersion() == "0" || lastObj.GetResourceVersion() == "") {
+	if lastObj.GetGeneration() == 0 && obj.GetGeneration() == 0 {
 		return types.Modified, nil
 	}
 
-	// If resource version is empty, treat as modified (cannot compare versions)
-	if obj.GetResourceVersion() == "" || lastObj.GetResourceVersion() == "" {
-		return types.Modified, nil
-	}
-
-	resourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
-	if err != nil {
-		return evt, err
-	}
-
-	lastResourceVersion, err := strconv.ParseInt(lastObj.GetResourceVersion(), 10, 64)
-	if err != nil {
-		return evt, err
-	}
-
-	if resourceVersion <= lastResourceVersion {
+	if obj.GetGeneration() <= lastObj.GetGeneration() {
 		return evt, nil
 	}
 

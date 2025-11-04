@@ -180,8 +180,7 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 		Action:              types.UpdateRequestAction,
 	}
 
-	// we first compare local resource version
-	if returnErr = versoinCompare(patchedWork, lastWork); returnErr != nil {
+	if returnErr = versionCompare(patchedWork, lastWork); returnErr != nil {
 		return nil, returnErr
 	}
 
@@ -237,7 +236,8 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 		returnErr = errors.NewNotFound(common.ManifestWorkGR, name)
 		return nil, returnErr
 	}
-	if returnErr = versoinCompare(patchedWork, latestWork); returnErr != nil {
+
+	if returnErr = versionCompare(patchedWork, latestWork); returnErr != nil {
 		return nil, returnErr
 	}
 	if err := c.watcherStore.Update(newWork); err != nil {
@@ -247,7 +247,7 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 	return newWork, nil
 }
 
-func versoinCompare(new, old *workv1.ManifestWork) *errors.StatusError {
+func versionCompare(new, old *workv1.ManifestWork) *errors.StatusError {
 	// If resource version is empty or 0, skip the comparison (e.g., when publishing status updates)
 	if new.GetResourceVersion() == "" || new.GetResourceVersion() == "0" {
 		return nil
@@ -261,6 +261,7 @@ func versoinCompare(new, old *workv1.ManifestWork) *errors.StatusError {
 	if err != nil {
 		return errors.NewInternalError(err)
 	}
+
 	// ensure the resource version of the work is not outdated
 	if newResourceVersion < lastResourceVersion {
 		// It's safe to return a conflict error here, even if the status update event

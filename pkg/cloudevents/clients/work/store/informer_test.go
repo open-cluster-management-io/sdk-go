@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"k8s.io/client-go/tools/cache"
 	"testing"
 	"time"
 
@@ -20,8 +21,8 @@ func TestVersioner(t *testing.T) {
 	t.Run("increment version for new resource", func(t *testing.T) {
 		v := newVersioner()
 		version := v.increment("test-work")
-		if version != 0 {
-			t.Errorf("expected version 0 for new resource, got %d", version)
+		if version != 1 {
+			t.Errorf("expected version 1 for new resource, got %d", version)
 		}
 	})
 
@@ -29,14 +30,14 @@ func TestVersioner(t *testing.T) {
 		v := newVersioner()
 		v.increment("test-work")
 		version := v.increment("test-work")
-		if version != 1 {
-			t.Errorf("expected version 1 for existing resource, got %d", version)
+		if version != 2 {
+			t.Errorf("expected version 2 for existing resource, got %d", version)
 		}
 	})
 
 	t.Run("increment multiple times", func(t *testing.T) {
 		v := newVersioner()
-		for i := 0; i < 5; i++ {
+		for i := 1; i <= 5; i++ {
 			version := v.increment("test-work")
 			if version != int64(i) {
 				t.Errorf("expected version %d, got %d", i, version)
@@ -49,8 +50,8 @@ func TestVersioner(t *testing.T) {
 		v.increment("test-work")
 		v.delete("test-work")
 		version := v.increment("test-work")
-		if version != 0 {
-			t.Errorf("expected version 0 after delete, got %d", version)
+		if version != 1 {
+			t.Errorf("expected version 1 after delete, got %d", version)
 		}
 	})
 
@@ -70,14 +71,15 @@ func TestVersioner(t *testing.T) {
 		}
 
 		finalVersion := v.increment("test-work")
-		if finalVersion != 10 {
-			t.Errorf("expected version 10 after 10 concurrent increments, got %d", finalVersion)
+		if finalVersion != 11 {
+			t.Errorf("expected version 11 after 10 concurrent increments, got %d", finalVersion)
 		}
 	})
 }
 
 func TestAgentInformerWatcherStore_Add(t *testing.T) {
 	store := NewAgentInformerWatcherStore()
+	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
 	watcher, err := store.GetWatcher("", metav1.ListOptions{})
@@ -118,8 +120,8 @@ func TestAgentInformerWatcherStore_Add(t *testing.T) {
 		t.Fatalf("unexpected error adding work: %v", err)
 	}
 
-	if work.ResourceVersion != "0" {
-		t.Errorf("expected resource version 0, got %s", work.ResourceVersion)
+	if work.ResourceVersion != "1" {
+		t.Errorf("expected resource version 1, got %s", work.ResourceVersion)
 	}
 
 	// Add another work
@@ -135,13 +137,14 @@ func TestAgentInformerWatcherStore_Add(t *testing.T) {
 		t.Fatalf("unexpected error adding work: %v", err)
 	}
 
-	if work2.ResourceVersion != "1" {
-		t.Errorf("expected resource version 1 for second add, got %s", work2.ResourceVersion)
+	if work2.ResourceVersion != "2" {
+		t.Errorf("expected resource version 2 for second add, got %s", work2.ResourceVersion)
 	}
 }
 
 func TestAgentInformerWatcherStore_Update(t *testing.T) {
 	store := NewAgentInformerWatcherStore()
+	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
 	watcher, err := store.GetWatcher("", metav1.ListOptions{})
@@ -198,8 +201,8 @@ func TestAgentInformerWatcherStore_Update(t *testing.T) {
 		t.Fatalf("unexpected error updating work: %v", err)
 	}
 
-	if updatedWork.ResourceVersion != "1" {
-		t.Errorf("expected resource version 1 after update, got %s", updatedWork.ResourceVersion)
+	if updatedWork.ResourceVersion != "2" {
+		t.Errorf("expected resource version 2 after update, got %s", updatedWork.ResourceVersion)
 	}
 
 	// Update again
@@ -208,13 +211,14 @@ func TestAgentInformerWatcherStore_Update(t *testing.T) {
 		t.Fatalf("unexpected error updating work: %v", err)
 	}
 
-	if updatedWork.ResourceVersion != "2" {
-		t.Errorf("expected resource version 2 after second update, got %s", updatedWork.ResourceVersion)
+	if updatedWork.ResourceVersion != "3" {
+		t.Errorf("expected resource version 3 after second update, got %s", updatedWork.ResourceVersion)
 	}
 }
 
 func TestAgentInformerWatcherStore_Delete(t *testing.T) {
 	store := NewAgentInformerWatcherStore()
+	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
 	watcher, err := store.GetWatcher("", metav1.ListOptions{})
@@ -267,7 +271,7 @@ func TestAgentInformerWatcherStore_Delete(t *testing.T) {
 		t.Fatalf("unexpected error deleting work: %v", err)
 	}
 
-	// Add the same work again, version should be reset to 0
+	// Add the same work again, version should be reset to 1
 	newWork := &workv1.ManifestWork{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-work",
@@ -280,13 +284,14 @@ func TestAgentInformerWatcherStore_Delete(t *testing.T) {
 		t.Fatalf("unexpected error adding work after delete: %v", err)
 	}
 
-	if newWork.ResourceVersion != "0" {
-		t.Errorf("expected resource version 0 after delete and re-add, got %s", newWork.ResourceVersion)
+	if newWork.ResourceVersion != "1" {
+		t.Errorf("expected resource version 1 after delete and re-add, got %s", newWork.ResourceVersion)
 	}
 }
 
 func TestAgentInformerWatcherStore_ResourceVersionIncrement(t *testing.T) {
 	store := NewAgentInformerWatcherStore()
+	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
 	watcher, err := store.GetWatcher("", metav1.ListOptions{})
@@ -323,7 +328,7 @@ func TestAgentInformerWatcherStore_ResourceVersionIncrement(t *testing.T) {
 	}
 
 	// Verify resource versions increment properly
-	expectedVersions := []string{"0", "1", "2", "3"}
+	expectedVersions := []string{"1", "2", "3", "4"}
 
 	// Add
 	err = store.Add(work)

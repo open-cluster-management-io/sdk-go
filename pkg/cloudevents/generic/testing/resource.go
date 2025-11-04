@@ -2,6 +2,7 @@ package testing
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -22,6 +23,7 @@ var MockEventDataType = types.CloudEventsDataType{
 type MockResource struct {
 	UID               kubetypes.UID `json:"uid"`
 	ResourceVersion   string        `json:"resourceVersion"`
+	Generation        int64         `json:"generation"`
 	DeletionTimestamp *metav1.Time  `json:"deletionTimestamp,omitempty"`
 	Namespace         string
 	Spec              string `json:"spec"`
@@ -34,6 +36,10 @@ func (r *MockResource) GetUID() kubetypes.UID {
 
 func (r *MockResource) GetResourceVersion() string {
 	return r.ResourceVersion
+}
+
+func (r *MockResource) GetGeneration() int64 {
+	return r.Generation
 }
 
 func (r *MockResource) GetDeletionTimestamp() *metav1.Time {
@@ -75,7 +81,7 @@ func (c *MockResourceCodec) Encode(source string, eventType types.CloudEventsTyp
 	evt.SetType(eventType.String())
 	evt.SetTime(time.Now())
 	evt.SetExtension("resourceid", string(obj.UID))
-	evt.SetExtension("resourceversion", obj.ResourceVersion)
+	evt.SetExtension("resourceversion", strconv.FormatInt(obj.Generation, 10))
 	evt.SetExtension("clustername", obj.Namespace)
 	if obj.GetDeletionTimestamp() != nil {
 		evt.SetExtension("deletiontimestamp", obj.DeletionTimestamp.Time)
@@ -102,10 +108,16 @@ func (c *MockResourceCodec) Decode(evt *cloudevents.Event) (*MockResource, error
 		return nil, fmt.Errorf("failed to get cluster name: %v", err)
 	}
 
+	generation, err := strconv.ParseInt(fmt.Sprintf("%s", resourceVersion), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse resource generation: %v", err)
+	}
+
 	res := &MockResource{
 		UID:             kubetypes.UID(fmt.Sprintf("%s", resourceID)),
 		ResourceVersion: fmt.Sprintf("%s", resourceVersion),
 		Namespace:       fmt.Sprintf("%s", clusterName),
+		Generation:      generation,
 		Status:          string(evt.Data()),
 	}
 

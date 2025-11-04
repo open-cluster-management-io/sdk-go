@@ -111,7 +111,7 @@ func TestVersionCompare(t *testing.T) {
 				},
 			}
 
-			err := versoinCompare(newWork, oldWork)
+			err := versionCompare(newWork, oldWork)
 
 			if tt.expectError {
 				if err == nil {
@@ -415,7 +415,7 @@ func TestManifestWorkAgentClient_Patch_ResourceVersionConflict(t *testing.T) {
 	// Create a patch that sets an older resource version
 	patchData, err := json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
-			"resourceVersion": "0", // older version
+			"resourceVersion": "1", // older version
 			"labels": map[string]string{
 				"test": "label",
 			},
@@ -427,7 +427,7 @@ func TestManifestWorkAgentClient_Patch_ResourceVersionConflict(t *testing.T) {
 	require.Error(t, err)
 	// The test uses the watcherStore directly (not the informer store),
 	// so the work doesn't actually exist in the informer store backing the client
-	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), "the resource version of the work is outdated")
 }
 
 func TestManifestWorkAgentClient_Patch_InvalidPatch(t *testing.T) {

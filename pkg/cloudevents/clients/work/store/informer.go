@@ -111,7 +111,7 @@ func (v *versioner) increment(name string) int64 {
 	defer v.lock.Unlock()
 
 	if _, ok := v.versions[name]; !ok {
-		v.versions[name] = 0
+		v.versions[name] = 1
 	} else {
 		v.versions[name] = v.versions[name] + 1
 	}
@@ -186,9 +186,7 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 
 		updatedWork := work.DeepCopy()
 
-		// restore the fields that are maintained by local agent
-		updatedWork.Labels = lastWork.Labels
-		updatedWork.Annotations = lastWork.Annotations
+		// restore the fields that are maintained by local agent.
 		updatedWork.Finalizers = lastWork.Finalizers
 		updatedWork.Status = lastWork.Status
 
@@ -203,9 +201,8 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 			return nil
 		}
 
+		// we should only update the deletionTimestamp or the local work
 		updatedWork := lastWork.DeepCopy()
-		updatedWork.Generation = work.Generation
-		updatedWork.ResourceVersion = work.ResourceVersion
 		updatedWork.DeletionTimestamp = work.DeletionTimestamp
 		return s.Update(updatedWork)
 	default:
