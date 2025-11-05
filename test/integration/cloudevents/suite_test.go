@@ -4,15 +4,18 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 
+	"cloud.google.com/go/pubsub/v2/pstest"
 	mochimqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/klog/v2"
 	sar "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/authz/kube"
 
@@ -43,8 +46,10 @@ const (
 )
 
 var (
-	mqttBroker     *mochimqtt.Server
-	resourceServer *server.GRPCServer
+	pubsubServer    *pstest.Server
+	pubsubProjectID string
+	mqttBroker      *mochimqtt.Server
+	resourceServer  *server.GRPCServer
 
 	serverCertPairs *util.ServerCertPairs
 	clientCertPairs *util.ClientCertPairs
@@ -75,6 +80,10 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	cert.CertCallbackRefreshDuration = 2 * time.Second
 
 	ginkgo.By("bootstrapping test environment")
+
+	// start a test PubSub server
+	pubsubServer = pstest.NewServer()
+	pubsubProjectID = fmt.Sprintf("test-project-%s", rand.String(5))
 
 	// start a MQTT broker
 	mqttBroker = mochimqtt.New(&mochimqtt.Options{})

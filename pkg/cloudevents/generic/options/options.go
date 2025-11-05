@@ -17,6 +17,7 @@ type ReceiveHandlerFn func(evt cloudevents.Event)
 // Available implementations:
 //   - MQTT
 //   - gRPC
+//   - PubSub
 type CloudEventTransport interface {
 	// Connect establishes a connection to the event transport.
 	// This method should be called before Send or Receive.
