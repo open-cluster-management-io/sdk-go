@@ -116,6 +116,7 @@ Currently, the CloudEvents options supports the following protocols/drivers:
 
 - [MQTT Protocol/Driver](./generic/options/mqtt)
 - [gRPC Protocol/Driver](./generic/options/grpc)
+- [Pub/Sub Protocol/Driver](./generic/options/pubsub)
 
 To create CloudEvents source/agent options for these supported protocols/drivers, developers need to provide configuration specific to the protocol/driver. The configuration format resembles the kubeconfig for the Kubernetes client-go but has a different schema.
 
@@ -146,6 +147,47 @@ clientKeyFile: /certs/client.key
 ```
 
 For detailed configuration options for the gRPC driver, refer to the [gRPC driver options package](https://github.com/open-cluster-management-io/sdk-go/blob/00a94671ced1c17d2ca2b5fad2f4baab282a7d3c/pkg/cloudevents/generic/options/grpc/options.go#L30-L40).
+
+### Pub/Sub Protocol/Driver
+
+Here's an example of a YAML configuration for the Google Cloud Pub/Sub protocol for a source:
+
+```yaml
+projectID: my-project
+endpoint: https://pubsub.us-east1.googleapis.com # optional, leave empty for global, or set a regional URL.
+credentialsFile: /path/to/credentials.json
+topics:
+  sourceEvents: projects/my-project/topics/sourceevents
+  sourceBroadcast: projects/my-project/topics/sourcebroadcast
+subscriptions:
+  agentEvents: projects/my-project/subscriptions/agentevents-source1
+  agentBroadcast: projects/my-project/subscriptions/agentbroadcast-source1
+```
+
+And here's an example configuration for an agent:
+
+```yaml
+projectID: my-project
+endpoint: https://pubsub.us-east1.googleapis.com # optional, leave empty for global, or set a regional URL.
+credentialsFile: /path/to/credentials.json
+topics:
+  agentEvents: projects/my-project/topics/agentevents
+  agentBroadcast: projects/my-project/topics/agentbroadcast
+subscriptions:
+  sourceEvents: projects/my-project/subscriptions/sourceevents-cluster1
+  sourceBroadcast: projects/my-project/subscriptions/sourcebroadcast-cluster1
+```
+
+**Note**: The Pub/Sub protocol uses separate topics and subscriptions for different event types:
+- **Source** uses `sourceEvents`/`sourceBroadcast` topics to publish events and `agentEvents`/`agentBroadcast` subscriptions to receive events from agents
+- **Agent** uses `agentEvents`/`agentBroadcast` topics to publish events and `sourceEvents`/`sourceBroadcast` subscriptions to receive events from sources
+- Both `sourceBroadcast` and `agentBroadcast` channels are used for resync requests
+- **All topics and subscriptions must be created before running the source and agent**
+- The subscription for `agentEvents` is a filtered subscription with filter `attributes."ce-clustername"="<clustername>"`
+- The subscription for `sourceEvents` is a filtered subscription with filter `attributes."ce-originalsource"="<sourceID>"`
+- The subscriptions for `agentBroadcast` and `sourceBroadcast` are subscriptions without filters, allowing broadcast messages to reach all subscribers for resync events.
+
+For detailed configuration options for the Pub/Sub driver, refer to the [Pub/Sub driver options package](./generic/options/pubsub).
 
 ## Work Clients
 
