@@ -97,9 +97,15 @@ func (c *MockResourceCodec) Decode(evt *cloudevents.Event) (*MockResource, error
 		return nil, fmt.Errorf("failed to get resource version: %v", err)
 	}
 
+	clusterName, err := evt.Context.GetExtension("clustername")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster name: %v", err)
+	}
+
 	res := &MockResource{
 		UID:             kubetypes.UID(fmt.Sprintf("%s", resourceID)),
 		ResourceVersion: fmt.Sprintf("%s", resourceVersion),
+		Namespace:       fmt.Sprintf("%s", clusterName),
 		Status:          string(evt.Data()),
 	}
 

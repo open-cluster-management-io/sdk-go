@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
@@ -17,7 +18,7 @@ var _ = ginkgo.Describe("CloudEvents Certificate Rotation Test - GRPC", runCloud
 
 func GetGRPCAgentOptions(_ context.Context, agentID, clusterName, clientCertFile, clientKeyFile string) *options.CloudEventsAgentOptions {
 	grpcOptions := newTLSGRPCOptions(certPool, grpcBrokerHost, clientCertFile, clientKeyFile)
-	return grpc.NewAgentOptions(grpcOptions, clusterName, agentID)
+	return grpc.NewAgentOptions(grpcOptions, clusterName, agentID, payload.ManifestBundleEventDataType)
 }
 
 func newTLSGRPCOptions(certPool *x509.CertPool, brokerHost, clientCertFile, clientKeyFile string) *grpc.GRPCOptions {

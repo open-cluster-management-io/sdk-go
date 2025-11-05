@@ -338,11 +338,11 @@ func TestConnectionTimeout(t *testing.T) {
 	}
 	options.Dialer.Timeout = 10 * time.Millisecond
 
-	agentOptions := &mqttAgentOptions{
+	agentOptions := &mqttAgentTransport{
 		MQTTOptions: *options,
 		clusterName: "cluster1",
 	}
-	_, err = agentOptions.Protocol(context.TODO(), types.CloudEventsDataType{})
+	err = agentOptions.Connect(context.TODO())
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("%T, %v", err, err)
 	}

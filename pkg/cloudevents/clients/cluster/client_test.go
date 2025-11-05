@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,7 +56,7 @@ func TestCreate(t *testing.T) {
 			defer cancel()
 
 			watcherStore := store.NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
-			ceClientOpt := fake.NewAgentOptions(gochan.New(), nil, "cluster1", "cluster1-agent")
+			ceClientOpt := fake.NewAgentOptions(fake.NewEventChan(), "cluster1", "cluster1-agent")
 			ceClient, err := clients.NewCloudEventAgentClient(
 				ctx,
 				ceClientOpt,
@@ -116,7 +115,7 @@ func TestPatch(t *testing.T) {
 			defer cancel()
 
 			watcherStore := store.NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
-			ceClientOpt := fake.NewAgentOptions(gochan.New(), nil, "cluster1", "test-agent")
+			ceClientOpt := fake.NewAgentOptions(fake.NewEventChan(), "cluster1", "test-agent")
 			ceClient, err := clients.NewCloudEventAgentClient(
 				ctx,
 				ceClientOpt,

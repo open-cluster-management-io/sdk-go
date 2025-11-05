@@ -8,7 +8,6 @@ import (
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
-	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
 	"github.com/stretchr/testify/require"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,7 +60,7 @@ func TestAgentResync(t *testing.T) {
 			lister := generictesting.NewMockResourceLister(c.resources...)
 			agent, err := NewCloudEventAgentClient(
 				ctx,
-				fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName),
+				fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, testAgentName),
 				lister, generictesting.StatusHash,
 				generictesting.NewMockResourceCodec(),
 			)
@@ -72,12 +71,19 @@ func TestAgentResync(t *testing.T) {
 			stop := make(chan bool)
 
 			go func() {
-				cloudEventsClient := agent.(*CloudEventAgentClient[*generictesting.MockResource]).cloudEventsClient
-				err = cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
-					eventChan <- receiveEvent{event: event}
+				transport := agent.(*CloudEventAgentClient[*generictesting.MockResource]).transport
+				err = transport.Receive(ctx, func(event cloudevents.Event) {
+					select {
+					case eventChan <- receiveEvent{event: event}:
+					case <-ctx.Done():
+						return
+					}
 				})
-				if err != nil {
-					eventChan <- receiveEvent{err: err}
+				if err != nil && err != context.Canceled {
+					select {
+					case eventChan <- receiveEvent{err: err}:
+					case <-ctx.Done():
+					}
 				}
 				stop <- true
 			}()
@@ -132,10 +138,10 @@ func TestAgentPublish(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
-			agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, testAgentName)
 			lister := generictesting.NewMockResourceLister()
 			agent, err := NewCloudEventAgentClient(
-				context.TODO(),
+				ctx,
 				agentOptions,
 				lister,
 				generictesting.StatusHash,
@@ -147,12 +153,19 @@ func TestAgentPublish(t *testing.T) {
 			eventChan := make(chan receiveEvent)
 			stop := make(chan bool)
 			go func() {
-				cloudEventsClient := agent.(*CloudEventAgentClient[*generictesting.MockResource]).cloudEventsClient
-				err = cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
-					eventChan <- receiveEvent{event: event}
+				cloudEventsClient := agent.(*CloudEventAgentClient[*generictesting.MockResource]).transport
+				err = cloudEventsClient.Receive(ctx, func(event cloudevents.Event) {
+					select {
+					case eventChan <- receiveEvent{event: event}:
+					case <-ctx.Done():
+						return
+					}
 				})
-				if err != nil {
-					eventChan <- receiveEvent{err: err}
+				if err != nil && err != context.Canceled {
+					select {
+					case eventChan <- receiveEvent{err: err}:
+					case <-ctx.Done():
+					}
 				}
 				stop <- true
 			}()
@@ -293,7 +306,7 @@ func TestStatusResyncResponse(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, testAgentName)
 			lister := generictesting.NewMockResourceLister(c.resources...)
 			agent, err := NewCloudEventAgentClient(
 				ctx,
@@ -310,8 +323,8 @@ func TestStatusResyncResponse(t *testing.T) {
 			mutex := &sync.Mutex{}
 
 			go func() {
-				cloudEventsClient := agent.(*CloudEventAgentClient[*generictesting.MockResource]).cloudEventsClient
-				_ = cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+				cloudEventsClient := agent.(*CloudEventAgentClient[*generictesting.MockResource]).transport
+				_ = cloudEventsClient.Receive(ctx, func(event cloudevents.Event) {
 					mutex.Lock()
 					defer mutex.Unlock()
 					receivedEvents = append(receivedEvents, event)
@@ -511,7 +524,7 @@ func TestReceiveResourceSpec(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, testAgentName)
 			lister := generictesting.NewMockResourceLister(c.resources...)
 			agent, err := NewCloudEventAgentClient(
 				context.TODO(),

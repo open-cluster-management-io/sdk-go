@@ -89,14 +89,8 @@ func TestServer(t *testing.T) {
 
 	grpcClientOptions := grpccli.NewGRPCOptions()
 	grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
-	agentOption := grpccli.NewAgentOptions(grpcClientOptions, "cluster1", "agent1")
-	protocol, err := agentOption.CloudEventsOptions.Protocol(ctx, dataType)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cloudEventsClient, err := cloudevents.NewClient(protocol)
-	if err != nil {
+	agentOption := grpccli.NewAgentOptions(grpcClientOptions, "cluster1", "agent1", dataType)
+	if err := agentOption.CloudEventsTransport.Connect(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,14 +105,14 @@ func TestServer(t *testing.T) {
 
 	receivedEventCh := make(chan cloudevents.Event)
 	go func() {
-		if err := cloudEventsClient.StartReceiver(ctx, func(event cloudevents.Event) {
+		if err := agentOption.CloudEventsTransport.Receive(ctx, func(event cloudevents.Event) {
 			receivedEventCh <- event
 		}); err != nil {
 			t.Error(err)
 		}
 	}()
 
-	if result := cloudEventsClient.Send(ctx, evt); result != nil {
+	if result := agentOption.CloudEventsTransport.Send(ctx, evt); result != nil {
 		t.Error(result)
 	}
 

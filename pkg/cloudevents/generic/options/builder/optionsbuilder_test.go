@@ -102,7 +102,7 @@ func assertOptions(t *testing.T, c buildingCloudEventsOptionTestCase) {
 		t.Errorf("unexpected config %v, %v", config, c.expectedOptions)
 	}
 
-	options, err := BuildCloudEventsSourceOptions(config, "client", sourceId)
+	options, err := BuildCloudEventsSourceOptions(config, "client", sourceId, types.CloudEventsDataType{})
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/codec"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
@@ -40,7 +41,8 @@ var _ = ginkgo.Describe("CloudEvents Options Racing Test - GRPC", func() {
 			agentOptions = util.NewGRPCAgentOptions(certPool, grpcBrokerHost, tokenFile)
 			sourceStore = store.NewMemoryStore()
 
-			sourceOptions := grpc.NewSourceOptions(util.NewGRPCSourceOptions(grpcServerHost), sourceID)
+			sourceOptions := grpc.NewSourceOptions(util.NewGRPCSourceOptions(grpcServerHost),
+				sourceID, payload.ManifestBundleEventDataType)
 			sourceCloudEventsClient, err = source.StartResourceSourceClient(
 				ctx,
 				sourceOptions,

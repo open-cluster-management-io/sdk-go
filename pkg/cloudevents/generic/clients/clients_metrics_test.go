@@ -7,7 +7,6 @@ import (
 	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
-	"github.com/cloudevents/sdk-go/v2/protocol/gochan"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -71,10 +70,12 @@ func TestCloudEventsMetrics(t *testing.T) {
 		// run test
 		t.Run(c.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			sendReceiver := gochan.New()
+			defer cancel()
+
+			evtChan := fake.NewEventChan()
 
 			// initialize source client
-			sourceOptions := fake.NewSourceOptions(sendReceiver, c.sourceID)
+			sourceOptions := fake.NewSourceOptions(evtChan, c.sourceID)
 			lister := generictesting.NewMockResourceLister([]*generictesting.MockResource{}...)
 			source, err := NewCloudEventSourceClient(
 				ctx,
@@ -86,7 +87,7 @@ func TestCloudEventsMetrics(t *testing.T) {
 			require.NoError(t, err)
 
 			// initialize agent client
-			agentOptions := fake.NewAgentOptions(sendReceiver, nil, c.clusterName, testAgentName)
+			agentOptions := fake.NewAgentOptions(evtChan, c.clusterName, testAgentName)
 			agentLister := generictesting.NewMockResourceLister([]*generictesting.MockResource{}...)
 			agent, err := NewCloudEventAgentClient(
 				ctx,
@@ -98,12 +99,10 @@ func TestCloudEventsMetrics(t *testing.T) {
 			require.NoError(t, err)
 
 			// start agent subscription
-			agent.(*CloudEventAgentClient[*generictesting.MockResource]).subscribe(
-				ctx,
-				func(ctx context.Context, evt cloudevents.Event) {
-					agent.(*CloudEventAgentClient[*generictesting.MockResource]).receive(ctx, evt)
-				},
-			)
+			agent.Subscribe(ctx, func(action types.ResourceAction, obj *generictesting.MockResource) error {
+				// do nothing
+				return nil
+			})
 
 			eventType := types.CloudEventsType{
 				CloudEventsDataType: c.dataType,
@@ -127,8 +126,6 @@ func TestCloudEventsMetrics(t *testing.T) {
 			receivedTotal := metrics.CloudeventsReceivedByClientCounterMetric.WithLabelValues(
 				c.sourceID, c.dataType.String(), string(c.subresource), string(c.action))
 			require.Equal(t, len(c.resources), int(toFloat64Counter(receivedTotal)))
-
-			cancel()
 		})
 	}
 }
@@ -146,8 +143,9 @@ func TestReconnectMetrics(t *testing.T) {
 		DelayFn = originalDelayFn
 	}()
 
-	errChan := make(chan error)
-	agentOptions := fake.NewAgentOptions(gochan.New(), errChan, "cluster1", testAgentName)
+	evtChan := fake.NewEventChan()
+
+	agentOptions := fake.NewAgentOptions(evtChan, "cluster1", testAgentName)
 	agentLister := generictesting.NewMockResourceLister([]*generictesting.MockResource{}...)
 	_, err := NewCloudEventAgentClient(
 		ctx,
@@ -159,7 +157,7 @@ func TestReconnectMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	// mimic agent disconnection by sending an error
-	errChan <- fmt.Errorf("test error")
+	evtChan.ErrChan <- fmt.Errorf("test error")
 	// sleep second to wait for the agent to reconnect
 	time.Sleep(time.Second)
 
@@ -234,7 +232,7 @@ func TestResyncSpecMetrics(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			if c.resyncType == testSpecResync {
-				sourceOptions := fake.NewSourceOptions(gochan.New(), c.sourceID)
+				sourceOptions := fake.NewSourceOptions(fake.NewEventChan(), c.sourceID)
 				lister := generictesting.NewMockResourceLister(c.resources...)
 				source, err := NewCloudEventSourceClient(
 					ctx,
@@ -317,7 +315,7 @@ func TestResyncStatusMetrics(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			if c.resyncType == testStatusResync {
-				agentOptions := fake.NewAgentOptions(gochan.New(), nil, c.clusterName, testAgentName)
+				agentOptions := fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, testAgentName)
 				lister := generictesting.NewMockResourceLister(c.resources...)
 				agent, err := NewCloudEventAgentClient(
 					ctx,
