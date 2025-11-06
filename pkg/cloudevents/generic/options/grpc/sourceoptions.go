@@ -34,6 +34,7 @@ func NewSourceOptions(gRPCOptions *GRPCOptions,
 }
 
 func (o *gRPCSourceTransport) Connect(ctx context.Context) error {
+	logger := klog.FromContext(ctx)
 	opts := []protocol.Option{
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
 			Source:   o.sourceID,
@@ -52,7 +53,7 @@ func (o *gRPCSourceTransport) Connect(ctx context.Context) error {
 			select {
 			case o.errorChan <- err:
 			default:
-				klog.Errorf("no error channel available to report error: %v", err)
+				logger.Error(err, "no error channel available to report error")
 			}
 		},
 		opts...,

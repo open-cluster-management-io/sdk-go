@@ -35,6 +35,7 @@ func NewAgentOptions(grpcOptions *GRPCOptions,
 }
 
 func (o *grpcAgentTransport) Connect(ctx context.Context) error {
+	logger := klog.FromContext(ctx)
 	opts := []protocol.Option{
 		protocol.WithSubscribeOption(&protocol.SubscribeOption{
 			// TODO: Update this code to determine the subscription source for the agent client.
@@ -57,7 +58,7 @@ func (o *grpcAgentTransport) Connect(ctx context.Context) error {
 			select {
 			case o.errorChan <- err:
 			default:
-				klog.Errorf("no error channel available to report error: %v", err)
+				logger.Error(err, "no error channel available to report error")
 			}
 		},
 		opts...,

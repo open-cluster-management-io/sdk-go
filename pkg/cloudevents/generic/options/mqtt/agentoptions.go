@@ -40,6 +40,8 @@ func NewAgentOptions(mqttOptions *MQTTOptions, clusterName, agentID string) *opt
 }
 
 func (o *mqttAgentTransport) WithContext(ctx context.Context, evtCtx cloudevents.EventContext) (context.Context, error) {
+	logger := klog.FromContext(ctx)
+
 	topic, err := getAgentPubTopic(ctx)
 	if err != nil {
 		return nil, err
@@ -62,7 +64,7 @@ func (o *mqttAgentTransport) WithContext(ctx context.Context, evtCtx cloudevents
 	// agent request to sync resource spec from all sources
 	if eventType.Action == types.ResyncRequestAction && originalSource == types.SourceAll {
 		if len(o.Topics.AgentBroadcast) == 0 {
-			klog.Warningf("the agent broadcast topic not set, fall back to the agent events topic")
+			logger.Info("the agent broadcast topic not set, fall back to the agent events topic")
 
 			// TODO after supporting multiple sources, we should list each source
 			eventsTopic := replaceLast(o.Topics.AgentEvents, "+", o.clusterName)

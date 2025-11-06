@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -108,7 +109,7 @@ func TestHandleReceivedResource(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := store.HandleReceivedResource(c.action, c.received)
+			err := store.HandleReceivedResource(context.Background(), c.action, c.received)
 			if err != nil {
 				t.Error(err)
 			}

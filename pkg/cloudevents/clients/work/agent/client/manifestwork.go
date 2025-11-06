@@ -76,7 +76,9 @@ func (c *ManifestWorkAgentClient) DeleteCollection(ctx context.Context, opts met
 }
 
 func (c *ManifestWorkAgentClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*workv1.ManifestWork, error) {
-	klog.V(4).Infof("getting manifestwork %s/%s", c.namespace, name)
+	logger := klog.FromContext(ctx)
+
+	logger.V(4).Info("getting manifestwork", "manifestWorkNamespace", c.namespace, "manifestWorkName", name)
 	work, exists, err := c.watcherStore.Get(c.namespace, name)
 	if err != nil {
 		returnErr := errors.NewInternalError(err)
@@ -94,7 +96,8 @@ func (c *ManifestWorkAgentClient) Get(ctx context.Context, name string, opts met
 }
 
 func (c *ManifestWorkAgentClient) List(ctx context.Context, opts metav1.ListOptions) (*workv1.ManifestWorkList, error) {
-	klog.V(4).Infof("list manifestworks from cluster %s", c.namespace)
+	logger := klog.FromContext(ctx)
+	logger.V(4).Info("list manifestworks from cluster", "cluster", c.namespace)
 	works, err := c.watcherStore.List(c.namespace, opts)
 	if err != nil {
 		returnErr := errors.NewInternalError(err)
@@ -112,7 +115,8 @@ func (c *ManifestWorkAgentClient) List(ctx context.Context, opts metav1.ListOpti
 }
 
 func (c *ManifestWorkAgentClient) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	klog.V(4).Infof("watch manifestworks from cluster %s", c.namespace)
+	logger := klog.FromContext(ctx)
+	logger.V(4).Info("watch manifestworks from cluster", "cluster", c.namespace)
 	watcher, err := c.watcherStore.GetWatcher(c.namespace, opts)
 	if err != nil {
 		returnErr := errors.NewInternalError(err)
@@ -125,7 +129,8 @@ func (c *ManifestWorkAgentClient) Watch(ctx context.Context, opts metav1.ListOpt
 }
 
 func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kubetypes.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *workv1.ManifestWork, err error) {
-	klog.V(4).Infof("patching manifestwork %s/%s", c.namespace, name)
+	logger := klog.FromContext(ctx)
+	logger.V(4).Info("patching manifestwork", "manifestWorkNamespace", c.namespace, "manifestWorkName", name)
 	lastWork, exists, err := c.watcherStore.Get(c.namespace, name)
 	if err != nil {
 		returnErr := errors.NewInternalError(err)
