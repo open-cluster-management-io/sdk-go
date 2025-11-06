@@ -85,69 +85,8 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 				agentOptions = util.NewGRPCAgentOptions(certPool, grpcBrokerHost, tokenFile)
 			case constants.ConfigTypePubSub:
 				agentOptions = util.NewPubSubAgentOptions(pubsubServer.Addr, pubsubProjectID, clusterName)
-				// prepare topics and subscriptions
-				pubsubConn, err := grpc.NewClient(pubsubServer.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				defer pubsubConn.Close()
-
-				pubsubClient, err := pubsubv2.NewClient(ctx, pubsubProjectID, option.WithGRPCConn(pubsubConn))
-				gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				defer pubsubClient.Close()
-
-				sourceEventsTopic := fmt.Sprintf("projects/%s/topics/sourceevents", pubsubProjectID)
-				if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: sourceEventsTopic}); err != nil {
-					_, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: sourceEventsTopic})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
-				sourceEventsSubscription := fmt.Sprintf("projects/%s/subscriptions/sourceevents-%s", pubsubProjectID, clusterName)
-				if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: sourceEventsSubscription}); err != nil {
-					_, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
-						Name:   sourceEventsSubscription,
-						Topic:  sourceEventsTopic,
-						Filter: fmt.Sprintf("attributes.\"ce-clustername\"=\"%s\"", clusterName),
-					})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
-				sourceBroadcastTopic := fmt.Sprintf("projects/%s/topics/sourcebroadcast", pubsubProjectID)
-				if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: sourceBroadcastTopic}); err != nil {
-					_, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: sourceBroadcastTopic})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
-				sourceBroadcastSubscription := fmt.Sprintf("projects/%s/subscriptions/sourcebroadcast-%s", pubsubProjectID, clusterName)
-				if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: sourceBroadcastSubscription}); err != nil {
-					_, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
-						Name:  sourceBroadcastSubscription,
-						Topic: sourceBroadcastTopic,
-					})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
-				agentEventsTopic := fmt.Sprintf("projects/%s/topics/agentevents", pubsubProjectID)
-				if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: agentEventsTopic}); err != nil {
-					_, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: agentEventsTopic})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
-				agentEventsSubscription := fmt.Sprintf("projects/%s/subscriptions/agentevents-%s", pubsubProjectID, sourceID)
-				if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: agentEventsSubscription}); err != nil {
-					_, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
-						Name:   agentEventsSubscription,
-						Topic:  agentEventsTopic,
-						Filter: fmt.Sprintf("attributes.\"ce-originalsource\"=\"%s\"", sourceID),
-					})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
-				agentBroadcastTopic := fmt.Sprintf("projects/%s/topics/agentbroadcast", pubsubProjectID)
-				if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: agentBroadcastTopic}); err != nil {
-					_, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: agentBroadcastTopic})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
-				agentBroadcastSubscription := fmt.Sprintf("projects/%s/subscriptions/agentbroadcast-%s", pubsubProjectID, sourceID)
-				if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: agentBroadcastSubscription}); err != nil {
-					_, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
-						Name:  agentBroadcastSubscription,
-						Topic: agentBroadcastTopic,
-					})
-					gomega.Expect(err).ToNot(gomega.HaveOccurred())
-				}
+				// setup topics and subscriptions
+				gomega.Expect(setupTopicsAndSubscriptions(ctx, clusterName, sourceID)).ToNot(gomega.HaveOccurred())
 			}
 
 			sourceCloudEventsClient, err = source.StartResourceSourceClient(
@@ -315,4 +254,84 @@ func crudResource(
 
 		return nil
 	}, 10*time.Second, 1*time.Second).Should(gomega.Succeed())
+}
+
+func setupTopicsAndSubscriptions(ctx context.Context, clusterName, sourceID string) error {
+	// prepare topics and subscriptions
+	pubsubConn, err := grpc.NewClient(pubsubServer.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return err
+	}
+	defer pubsubConn.Close()
+
+	pubsubClient, err := pubsubv2.NewClient(ctx, pubsubProjectID, option.WithGRPCConn(pubsubConn))
+	if err != nil {
+		return err
+	}
+	defer pubsubClient.Close()
+
+	sourceEventsTopic := fmt.Sprintf("projects/%s/topics/sourceevents", pubsubProjectID)
+	if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: sourceEventsTopic}); err != nil {
+		if _, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: sourceEventsTopic}); err != nil {
+			return err
+		}
+	}
+	sourceEventsSubscription := fmt.Sprintf("projects/%s/subscriptions/sourceevents-%s", pubsubProjectID, clusterName)
+	if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: sourceEventsSubscription}); err != nil {
+		if _, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
+			Name:   sourceEventsSubscription,
+			Topic:  sourceEventsTopic,
+			Filter: fmt.Sprintf("attributes.\"ce-clustername\"=\"%s\"", clusterName),
+		}); err != nil {
+			return err
+		}
+	}
+	sourceBroadcastTopic := fmt.Sprintf("projects/%s/topics/sourcebroadcast", pubsubProjectID)
+	if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: sourceBroadcastTopic}); err != nil {
+		if _, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: sourceBroadcastTopic}); err != nil {
+			return err
+		}
+	}
+	sourceBroadcastSubscription := fmt.Sprintf("projects/%s/subscriptions/sourcebroadcast-%s", pubsubProjectID, clusterName)
+	if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: sourceBroadcastSubscription}); err != nil {
+		if _, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
+			Name:  sourceBroadcastSubscription,
+			Topic: sourceBroadcastTopic,
+		}); err != nil {
+			return err
+		}
+	}
+	agentEventsTopic := fmt.Sprintf("projects/%s/topics/agentevents", pubsubProjectID)
+	if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: agentEventsTopic}); err != nil {
+		if _, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: agentEventsTopic}); err != nil {
+			return err
+		}
+	}
+	agentEventsSubscription := fmt.Sprintf("projects/%s/subscriptions/agentevents-%s", pubsubProjectID, sourceID)
+	if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: agentEventsSubscription}); err != nil {
+		if _, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
+			Name:   agentEventsSubscription,
+			Topic:  agentEventsTopic,
+			Filter: fmt.Sprintf("attributes.\"ce-originalsource\"=\"%s\"", sourceID),
+		}); err != nil {
+			return err
+		}
+	}
+	agentBroadcastTopic := fmt.Sprintf("projects/%s/topics/agentbroadcast", pubsubProjectID)
+	if _, err = pubsubClient.TopicAdminClient.GetTopic(ctx, &pubsubpb.GetTopicRequest{Topic: agentBroadcastTopic}); err != nil {
+		if _, err = pubsubClient.TopicAdminClient.CreateTopic(ctx, &pubsubpb.Topic{Name: agentBroadcastTopic}); err != nil {
+			return err
+		}
+	}
+	agentBroadcastSubscription := fmt.Sprintf("projects/%s/subscriptions/agentbroadcast-%s", pubsubProjectID, sourceID)
+	if _, err = pubsubClient.SubscriptionAdminClient.GetSubscription(ctx, &pubsubpb.GetSubscriptionRequest{Subscription: agentBroadcastSubscription}); err != nil {
+		if _, err = pubsubClient.SubscriptionAdminClient.CreateSubscription(ctx, &pubsubpb.Subscription{
+			Name:  agentBroadcastSubscription,
+			Topic: agentBroadcastTopic,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

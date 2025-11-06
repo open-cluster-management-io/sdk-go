@@ -63,9 +63,9 @@ func TestNewSourceOptions(t *testing.T) {
 				t.Fatal("expected CloudEventsTransport to be set, got nil")
 			}
 
-			transport, ok := opts.CloudEventsTransport.(*pubsubSourceTransport)
+			transport, ok := opts.CloudEventsTransport.(*pubsubTransport)
 			if !ok {
-				t.Fatalf("expected transport to be *pubsubSourceTransport, got %T", opts.CloudEventsTransport)
+				t.Fatalf("expected transport to be *pubsubTransport, got %T", opts.CloudEventsTransport)
 			}
 
 			if transport.sourceID != c.sourceID {
@@ -105,7 +105,7 @@ func TestPubsubSourceTransport_Structure(t *testing.T) {
 	}
 
 	opts := NewSourceOptions(pubsubOpts, "test-source")
-	transport := opts.CloudEventsTransport.(*pubsubSourceTransport)
+	transport := opts.CloudEventsTransport.(*pubsubTransport)
 
 	// Verify topics are set correctly for source
 	if transport.Topics.SourceEvents != pubsubOpts.Topics.SourceEvents {

@@ -7,9 +7,9 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/pubsub"
 	grpcv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/grpc"
 	mqttv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/mqtt"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/pubsub"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 

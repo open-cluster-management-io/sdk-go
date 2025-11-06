@@ -11,7 +11,7 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/pubsub"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/pubsub"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
@@ -108,7 +108,13 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 					AgentEvents:    "projects/test-project/subscriptions/agentevents-source1",
 					AgentBroadcast: "projects/test-project/subscriptions/agentbroadcast-source1",
 				},
+				KeepaliveSettings: &pubsub.KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
+			expectedTransportType: "*pubsub.pubsubTransport",
 		},
 	}
 
@@ -138,6 +144,7 @@ func TestBuildCloudEventsAgentOptions(t *testing.T) {
 					Timeout:    60 * time.Second,
 				},
 			},
+			expectedTransportType: "*mqtt.mqttAgentTransport",
 		},
 		{
 			name:       "grpc config",
@@ -154,6 +161,7 @@ func TestBuildCloudEventsAgentOptions(t *testing.T) {
 					},
 				},
 			},
+			expectedTransportType: "*grpc.grpcTransport",
 		},
 		{
 			name:       "pubsub config",
@@ -169,7 +177,13 @@ func TestBuildCloudEventsAgentOptions(t *testing.T) {
 					SourceEvents:    "projects/test-project/subscriptions/sourceevents-cluster1",
 					SourceBroadcast: "projects/test-project/subscriptions/sourcebroadcast-cluster1",
 				},
+				KeepaliveSettings: &pubsub.KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
+			expectedTransportType: "*pubsub.pubsubTransport",
 		},
 	}
 
@@ -200,16 +214,15 @@ func assertSourceOptions(t *testing.T, c buildingCloudEventsOptionTestCase) {
 		t.Errorf("unexpected config %v, %v", config, c.expectedOptions)
 	}
 
-	options, err := BuildCloudEventsSourceOptions(config, "agent1", sourceId, types.CloudEventsDataType{})
+	options, err := BuildCloudEventsSourceOptions(config, "client", sourceId, types.CloudEventsDataType{})
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	optionsRaw, _ := json.Marshal(options)
-	expectedRaw, _ := json.Marshal(c.expectedOptions)
+	tt := reflect.TypeOf(options.CloudEventsTransport)
 
-	if !strings.Contains(string(optionsRaw), string(expectedRaw)) {
-		t.Errorf("the results %v\n does not contain the original options %v\n", string(optionsRaw), string(expectedRaw))
+	if tt.String() != c.expectedTransportType {
+		t.Errorf("expected %s, but got %s", c.expectedTransportType, tt)
 	}
 }
 
@@ -224,7 +237,7 @@ func assertAgentOptions(t *testing.T, c buildingCloudEventsOptionTestCase) {
 		t.Errorf("unexpected config %v, %v", config, c.expectedOptions)
 	}
 
-	options, err := BuildCloudEventsAgentOptions(config, "cluster1", "agent1", types.CloudEventsDataType{})
+	options, err := BuildCloudEventsAgentOptions(config, "cluster1", "client", types.CloudEventsDataType{})
 	if err != nil {
 		t.Errorf("unexpected error %v", err)
 	}

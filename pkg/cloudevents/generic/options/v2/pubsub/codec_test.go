@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -34,10 +35,10 @@ func TestEncode(t *testing.T) {
 			expectedData: []byte(`{"key":"value"}`),
 			validateAttrs: func(t *testing.T, attrs map[string]string) {
 				if attrs["ce-id"] != "7a756974-a661-41b8-88d6-dc29b458a970" {
-					t.Errorf("expected ce-id to be 'test-id', got %q", attrs["ce-id"])
+					t.Errorf("expected ce-id to be '7a756974-a661-41b8-88d6-dc29b458a970', got %q", attrs["ce-id"])
 				}
 				if attrs["ce-type"] != "io.open-cluster-management.works.v1alpha1.manifestbundles.spec.create_request" {
-					t.Errorf("expected ce-type to be 'test.type', got %q", attrs["ce-type"])
+					t.Errorf("expected ce-type to be 'io.open-cluster-management.works.v1alpha1.manifestbundles.spec.create_request', got %q", attrs["ce-type"])
 				}
 				if attrs["ce-source"] != "test-source" {
 					t.Errorf("expected ce-source to be 'test-source', got %q", attrs["ce-source"])
@@ -100,10 +101,10 @@ func TestEncode(t *testing.T) {
 			expectedData: []byte(`"test data"`),
 			validateAttrs: func(t *testing.T, attrs map[string]string) {
 				if attrs["ce-clustername"] != "cluster1" {
-					t.Errorf("expected ce-clustername to be 'cluster1', got %q", attrs["ce-customext"])
+					t.Errorf("expected ce-clustername to be 'cluster1', got %q", attrs["ce-clustername"])
 				}
 				if attrs["ce-resourceid"] != "c15786fe-daeb-568d-9a66-3edba2305c7a" {
-					t.Errorf("expected ce-resourceid to be '123', got %q", attrs["ce-resourceid"])
+					t.Errorf("expected ce-resourceid to be 'c15786fe-daeb-568d-9a66-3edba2305c7a', got %q", attrs["ce-resourceid"])
 				}
 				if attrs["ce-resourceversion"] != "2" {
 					t.Errorf("expected ce-resourceversion to be '2', got %q", attrs["ce-resourceversion"])
@@ -341,7 +342,7 @@ func TestDecode(t *testing.T) {
 			if c.expectedErr {
 				if err == nil {
 					t.Errorf("expected error, but got none")
-				} else if c.errorContains != "" && !contains(err.Error(), c.errorContains) {
+				} else if c.errorContains != "" && !strings.Contains(err.Error(), c.errorContains) {
 					t.Errorf("expected error to contain %q, got %q", c.errorContains, err.Error())
 				}
 				return

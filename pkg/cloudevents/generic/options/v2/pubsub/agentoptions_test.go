@@ -70,9 +70,9 @@ func TestNewAgentOptions(t *testing.T) {
 				t.Fatal("expected CloudEventsTransport to be set, got nil")
 			}
 
-			transport, ok := opts.CloudEventsTransport.(*pubsubAgentTransport)
+			transport, ok := opts.CloudEventsTransport.(*pubsubTransport)
 			if !ok {
-				t.Fatalf("expected transport to be *pubsubAgentTransport, got %T", opts.CloudEventsTransport)
+				t.Fatalf("expected transport to be *pubsubTransport, got %T", opts.CloudEventsTransport)
 			}
 
 			if transport.clusterName != c.clusterName {
@@ -112,7 +112,7 @@ func TestPubsubAgentTransport_Structure(t *testing.T) {
 	}
 
 	opts := NewAgentOptions(pubsubOpts, "test-cluster", "test-agent")
-	transport := opts.CloudEventsTransport.(*pubsubAgentTransport)
+	transport := opts.CloudEventsTransport.(*pubsubTransport)
 
 	// Verify topics are set correctly for agent
 	if transport.Topics.AgentEvents != pubsubOpts.Topics.AgentEvents {

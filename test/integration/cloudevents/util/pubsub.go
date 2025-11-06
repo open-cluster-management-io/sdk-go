@@ -3,7 +3,7 @@ package util
 import (
 	"fmt"
 
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/pubsub"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/pubsub"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 

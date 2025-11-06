@@ -177,6 +177,10 @@ var _ = ginkgo.AfterSuite(func() {
 	err := mqttBroker.Close()
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
+	// close the pubsub test server
+	err = pubsubServer.Close()
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
 	// remove the temp files
 	err = clienttesting.RemoveTempFile(caFile)
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())

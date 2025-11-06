@@ -7,7 +7,7 @@ import (
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/constants"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/pubsub"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/pubsub"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
 

@@ -112,6 +112,7 @@ func Decode(msg *pubsub.Message) (cloudevents.Event, error) {
 	// Get the spec version to access attributes
 	version := specs.Version(specVersion)
 
+	var dataContentType string
 	// Set all CloudEvent context attributes from message attributes
 	for _, attr := range version.Attributes() {
 		var value string
@@ -120,6 +121,7 @@ func Decode(msg *pubsub.Message) (cloudevents.Event, error) {
 		// Special handling for datacontenttype - use "Content-Type" without "ce-" prefix
 		if attr.Kind() == spec.DataContentType {
 			value, ok = msg.Attributes[contentType]
+			dataContentType = value
 		} else {
 			value, ok = msg.Attributes[attr.PrefixedName()]
 		}
@@ -152,8 +154,12 @@ func Decode(msg *pubsub.Message) (cloudevents.Event, error) {
 		}
 	}
 
+	if dataContentType == "" {
+		// default data content type be "application/JSON"
+		dataContentType = cloudevents.ApplicationJSON
+	}
 	// Set the data from the message
-	if err := evt.SetData(cloudevents.ApplicationJSON, msg.Data); err != nil {
+	if err := evt.SetData(dataContentType, msg.Data); err != nil {
 		return cloudevents.Event{}, fmt.Errorf("failed to set event data: %v", err)
 	}
 
