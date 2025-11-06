@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -341,7 +342,7 @@ func TestDecode(t *testing.T) {
 			if c.expectedErr {
 				if err == nil {
 					t.Errorf("expected error, but got none")
-				} else if c.errorContains != "" && !contains(err.Error(), c.errorContains) {
+				} else if c.errorContains != "" && !strings.Contains(err.Error(), c.errorContains) {
 					t.Errorf("expected error to contain %q, got %q", c.errorContains, err.Error())
 				}
 				return

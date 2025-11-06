@@ -106,6 +106,11 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 					AgentEvents:    "projects/test-project/subscriptions/agentevents-source1",
 					AgentBroadcast: "projects/test-project/subscriptions/agentbroadcast-source1",
 				},
+				KeepaliveSettings: &pubsub.KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
 		},
 	}
@@ -166,6 +171,11 @@ func TestBuildCloudEventsAgentOptions(t *testing.T) {
 				Subscriptions: types.Subscriptions{
 					SourceEvents:    "projects/test-project/subscriptions/sourceevents-cluster1",
 					SourceBroadcast: "projects/test-project/subscriptions/sourcebroadcast-cluster1",
+				},
+				KeepaliveSettings: &pubsub.KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
 				},
 			},
 		},

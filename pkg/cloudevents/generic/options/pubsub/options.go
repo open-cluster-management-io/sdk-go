@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v2"
 
@@ -14,11 +15,13 @@ import (
 
 // PubSubOptions holds the options that are used to build Pub/Sub client.
 type PubSubOptions struct {
-	Endpoint        string
-	ProjectID       string
-	CredentialsFile string
-	Topics          types.Topics
-	Subscriptions   types.Subscriptions
+	Endpoint          string
+	ProjectID         string
+	CredentialsFile   string
+	Topics            types.Topics
+	Subscriptions     types.Subscriptions
+	KeepaliveSettings *KeepaliveSettings
+	ReceiveSettings   *ReceiveSettings
 }
 
 // PubSubConfig holds the information needed to connect to Google Cloud Pub/Sub.
@@ -44,7 +47,45 @@ type PubSubConfig struct {
 	// Required: must be provided to specify the subscriptions to receive events from.
 	Subscriptions *types.Subscriptions `json:"subscriptions,omitempty" yaml:"subscriptions,omitempty"`
 
-	// TODO: Add support for additional Pub/Sub settings (e.g., message ordering, receive options).
+	// (Optional) KeepaliveSettings configures the keepalive parameters for Pub/Sub client.
+	KeepaliveSettings *KeepaliveSettings `json:"keepaliveSettings,omitempty" yaml:"keepaliveSettings,omitempty"`
+
+	// (Optional) ReceiveSettings configures the pubsub subscriber's receive settings.
+	ReceiveSettings *ReceiveSettings `json:"receiveSettings,omitempty" yaml:"receiveSettings,omitempty"`
+}
+
+// KeepaliveSettings defines gRPC keepalive options for the Pub/Sub client.
+type KeepaliveSettings struct {
+	// Time between pings when there’s no activity, minimum is 10s, default: 5m.
+	Time time.Duration `json:"time,omitempty" yaml:"time,omitempty"`
+
+	// Wait time for a ping response before closing the connection, default: 20s.
+	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+
+	// If true, send pings even when no RPCs are active, default: false.
+	PermitWithoutStream bool `json:"permitWithoutStream,omitempty" yaml:"permitWithoutStream,omitempty"`
+}
+
+// ReceiveSettings defines how the Pub/Sub subscriber receives and processes messages.
+type ReceiveSettings struct {
+	// MaxExtension is the maximum period for which the Subscriber should
+	// automatically extend the ack deadline for each message.
+	MaxExtension time.Duration `json:"maxExtension,omitempty" yaml:"maxExtension,omitempty"`
+
+	// MaxDurationPerAckExtension is the maximum duration per lease extension.
+	MaxDurationPerAckExtension time.Duration `json:"maxDurationPerAckExtension,omitempty" yaml:"maxDurationPerAckExtension,omitempty"`
+
+	// MinDurationPerAckExtension is the minimum duration per lease extension.
+	MinDurationPerAckExtension time.Duration `json:"minDurationPerAckExtension,omitempty" yaml:"minDurationPerAckExtension,omitempty"`
+
+	// MaxOutstandingMessages is the maximum number of unprocessed messages.
+	MaxOutstandingMessages int `json:"maxOutstandingMessages,omitempty" yaml:"maxOutstandingMessages,omitempty"`
+
+	// MaxOutstandingBytes is the maximum size of unprocessed messages.
+	MaxOutstandingBytes int `json:"maxOutstandingBytes,omitempty" yaml:"maxOutstandingBytes,omitempty"`
+
+	// NumGoroutines is the number of StreamingPull streams to pull messages from the subscription.
+	NumGoroutines int `json:"numGoroutines,omitempty" yaml:"numGoroutines,omitempty"`
 }
 
 // LoadConfig loads the Pub/Sub configuration from a file.
@@ -79,13 +120,29 @@ func BuildPubSubOptionsFromFlags(configPath string) (*PubSubOptions, error) {
 		return nil, err
 	}
 
-	return &PubSubOptions{
+	options := &PubSubOptions{
 		Endpoint:        config.Endpoint,
 		ProjectID:       config.ProjectID,
 		CredentialsFile: config.CredentialsFile,
 		Topics:          *config.Topics,
 		Subscriptions:   *config.Subscriptions,
-	}, nil
+		// enable keepalive by default
+		KeepaliveSettings: &KeepaliveSettings{
+			Time:                5 * time.Minute,
+			Timeout:             20 * time.Second,
+			PermitWithoutStream: false,
+		},
+	}
+
+	if config.KeepaliveSettings != nil {
+		options.KeepaliveSettings = config.KeepaliveSettings
+	}
+
+	if config.ReceiveSettings != nil {
+		options.ReceiveSettings = config.ReceiveSettings
+	}
+
+	return options, nil
 }
 
 func validateTopicsAndSubscriptions(topics *types.Topics, subscriptions *types.Subscriptions, projectID string) error {

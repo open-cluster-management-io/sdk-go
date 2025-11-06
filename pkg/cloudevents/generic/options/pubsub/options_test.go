@@ -2,7 +2,9 @@ package pubsub
 
 import (
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 
@@ -41,6 +43,26 @@ topics:
 subscriptions:
   agentEvents: projects/test-project/subscriptions/agentevents-source1
   agentBroadcast: projects/test-project/subscriptions/agentbroadcast-source1
+`
+	testSourceYamlConfigWithKeepaliveAndReceiveSettings = `
+projectID: test-project
+topics:
+  sourceEvents: projects/test-project/topics/sourceevents
+  sourceBroadcast: projects/test-project/topics/sourcebroadcast
+subscriptions:
+  agentEvents: projects/test-project/subscriptions/agentevents-source1
+  agentBroadcast: projects/test-project/subscriptions/agentbroadcast-source1
+keepaliveSettings:
+  time: 10m
+  timeout: 30s
+  permitWithoutStream: true
+receiveSettings:
+  maxExtension: 600s
+  maxDurationPerAckExtension: 10s
+  minDurationPerAckExtension: 1s
+  maxOutstandingMessages: 1000
+  maxOutstandingBytes: 1000000000
+  numGoroutines: 10
 `
 	testSourceJSONConfig = `
 {
@@ -117,6 +139,11 @@ func TestBuildPubSubOptionsFromFlags(t *testing.T) {
 					AgentEvents:    "projects/test-project/subscriptions/agentevents-source1",
 					AgentBroadcast: "projects/test-project/subscriptions/agentbroadcast-source1",
 				},
+				KeepaliveSettings: &KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
 		},
 		{
@@ -131,6 +158,11 @@ func TestBuildPubSubOptionsFromFlags(t *testing.T) {
 				Subscriptions: types.Subscriptions{
 					AgentEvents:    "projects/test-project/subscriptions/agentevents-source1",
 					AgentBroadcast: "projects/test-project/subscriptions/agentbroadcast-source1",
+				},
+				KeepaliveSettings: &KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
 				},
 			},
 		},
@@ -149,6 +181,11 @@ func TestBuildPubSubOptionsFromFlags(t *testing.T) {
 					AgentEvents:    "projects/test-project/subscriptions/agentevents-source1",
 					AgentBroadcast: "projects/test-project/subscriptions/agentbroadcast-source1",
 				},
+				KeepaliveSettings: &KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
+				},
 			},
 		},
 		{
@@ -163,6 +200,39 @@ func TestBuildPubSubOptionsFromFlags(t *testing.T) {
 				Subscriptions: types.Subscriptions{
 					SourceEvents:    "projects/test-project/subscriptions/sourceevents-cluster1",
 					SourceBroadcast: "projects/test-project/subscriptions/sourcebroadcast-cluster1",
+				},
+				KeepaliveSettings: &KeepaliveSettings{
+					Time:                5 * time.Minute,
+					Timeout:             20 * time.Second,
+					PermitWithoutStream: false,
+				},
+			},
+		},
+		{
+			name:   "valid config with keepalive and receive settings",
+			config: testSourceYamlConfigWithKeepaliveAndReceiveSettings,
+			expectedOptions: &PubSubOptions{
+				ProjectID: "test-project",
+				Topics: types.Topics{
+					SourceEvents:    "projects/test-project/topics/sourceevents",
+					SourceBroadcast: "projects/test-project/topics/sourcebroadcast",
+				},
+				Subscriptions: types.Subscriptions{
+					AgentEvents:    "projects/test-project/subscriptions/agentevents-source1",
+					AgentBroadcast: "projects/test-project/subscriptions/agentbroadcast-source1",
+				},
+				KeepaliveSettings: &KeepaliveSettings{
+					Time:                10 * time.Minute,
+					Timeout:             30 * time.Second,
+					PermitWithoutStream: true,
+				},
+				ReceiveSettings: &ReceiveSettings{
+					MaxExtension:               600 * time.Second,
+					MaxDurationPerAckExtension: 10 * time.Second,
+					MinDurationPerAckExtension: 1 * time.Second,
+					MaxOutstandingMessages:     1000,
+					MaxOutstandingBytes:        1000000000,
+					NumGoroutines:              10,
 				},
 			},
 		},
@@ -180,7 +250,7 @@ func TestBuildPubSubOptionsFromFlags(t *testing.T) {
 			if err != nil {
 				if c.expectedErrorMsg == "" {
 					t.Errorf("unexpected error: %v", err)
-				} else if !contains(err.Error(), c.expectedErrorMsg) {
+				} else if !strings.Contains(err.Error(), c.expectedErrorMsg) {
 					t.Errorf("expected error to contain %q, got %q", c.expectedErrorMsg, err.Error())
 				}
 				return
@@ -261,7 +331,7 @@ func TestLoadConfig(t *testing.T) {
 			if err != nil {
 				if c.expectedErrorMsg == "" {
 					t.Errorf("unexpected error: %v", err)
-				} else if !contains(err.Error(), c.expectedErrorMsg) {
+				} else if !strings.Contains(err.Error(), c.expectedErrorMsg) {
 					t.Errorf("expected error to contain %q, got %q", c.expectedErrorMsg, err.Error())
 				}
 				return
@@ -459,15 +529,84 @@ func TestValidateTopicsAndSubscriptions(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0 && stringContains(s, substr)))
+func TestKeepaliveSettingsDefaults(t *testing.T) {
+	// Test that default keepalive settings are applied when not provided
+	config := `
+projectID: test-project
+topics:
+  sourceEvents: projects/test-project/topics/sourceevents
+  sourceBroadcast: projects/test-project/topics/sourcebroadcast
+subscriptions:
+  agentEvents: projects/test-project/subscriptions/agentevents-source1
+  agentBroadcast: projects/test-project/subscriptions/agentbroadcast-source1
+`
+	file, err := clienttesting.WriteToTempFile("pubsub-config-test-", []byte(config))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(file.Name())
+
+	options, err := BuildPubSubOptionsFromFlags(file.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if options.KeepaliveSettings == nil {
+		t.Fatal("expected KeepaliveSettings to be set with defaults, got nil")
+	}
+
+	if options.KeepaliveSettings.Time != 5*time.Minute {
+		t.Errorf("expected default Time to be 5m, got %v", options.KeepaliveSettings.Time)
+	}
+
+	if options.KeepaliveSettings.Timeout != 20*time.Second {
+		t.Errorf("expected default Timeout to be 20s, got %v", options.KeepaliveSettings.Timeout)
+	}
+
+	if options.KeepaliveSettings.PermitWithoutStream != false {
+		t.Errorf("expected default PermitWithoutStream to be false, got %v", options.KeepaliveSettings.PermitWithoutStream)
+	}
 }
 
-func stringContains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+func TestKeepaliveSettingsOverride(t *testing.T) {
+	// Test that custom keepalive settings override defaults
+	config := `
+projectID: test-project
+topics:
+  sourceEvents: projects/test-project/topics/sourceevents
+  sourceBroadcast: projects/test-project/topics/sourcebroadcast
+subscriptions:
+  agentEvents: projects/test-project/subscriptions/agentevents-source1
+  agentBroadcast: projects/test-project/subscriptions/agentbroadcast-source1
+keepaliveSettings:
+  time: 1m
+  timeout: 10s
+  permitWithoutStream: true
+`
+	file, err := clienttesting.WriteToTempFile("pubsub-config-test-", []byte(config))
+	if err != nil {
+		t.Fatal(err)
 	}
-	return false
+	defer os.Remove(file.Name())
+
+	options, err := BuildPubSubOptionsFromFlags(file.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if options.KeepaliveSettings == nil {
+		t.Fatal("expected KeepaliveSettings to be set, got nil")
+	}
+
+	if options.KeepaliveSettings.Time != 1*time.Minute {
+		t.Errorf("expected Time to be 1m, got %v", options.KeepaliveSettings.Time)
+	}
+
+	if options.KeepaliveSettings.Timeout != 10*time.Second {
+		t.Errorf("expected Timeout to be 10s, got %v", options.KeepaliveSettings.Timeout)
+	}
+
+	if options.KeepaliveSettings.PermitWithoutStream != true {
+		t.Errorf("expected PermitWithoutStream to be true, got %v", options.KeepaliveSettings.PermitWithoutStream)
+	}
 }
