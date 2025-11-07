@@ -80,7 +80,7 @@ func (c *baseClient) connect(ctx context.Context) error {
 				// errors
 				if err != nil {
 					// failed to reconnect, try agin
-					runtime.HandleError(fmt.Errorf("the cloudevents client reconnect failed, %v", err))
+					runtime.HandleErrorWithContext(ctx, err, "the cloudevents client reconnect failed")
 					<-wait.RealTimer(DelayFn()).C()
 					continue
 				}
@@ -103,15 +103,14 @@ func (c *baseClient) connect(ctx context.Context) error {
 					// error channel is closed, do nothing
 					return
 				}
-
-				runtime.HandleError(fmt.Errorf("the cloudevents client is disconnected, %v", err))
+				runtime.HandleErrorWithContext(ctx, err, "the cloudevents client is disconnected")
 
 				// the cloudevents client network connection is closed, send the receiver stop signal, set the current client not ready
 				// and close the current client
 				c.sendReceiverSignal(stopReceiverSignal)
 				c.setClientReady(false)
 				if err := c.transport.Close(ctx); err != nil {
-					runtime.HandleError(fmt.Errorf("failed to close the cloudevents protocol, %v", err))
+					runtime.HandleErrorWithContext(ctx, err, "failed to close the cloudevents protocol")
 				}
 
 				<-wait.RealTimer(DelayFn()).C()
@@ -206,7 +205,7 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 					logger.V(2).Info("stop the cloudevents receiver")
 					receiverCancel()
 				default:
-					runtime.HandleError(fmt.Errorf("unknown receiver signal %d", signal))
+					runtime.HandleErrorWithContext(ctx, fmt.Errorf("unknown receiver signal"), "", "signal", signal)
 				}
 			}
 		}

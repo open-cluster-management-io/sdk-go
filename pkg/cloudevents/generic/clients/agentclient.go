@@ -149,23 +149,26 @@ func (c *CloudEventAgentClient[T]) Subscribe(ctx context.Context, handlers ...ge
 }
 
 func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.Event, handlers ...generic.ResourceHandler[T]) {
+	logger := klog.FromContext(ctx)
+
 	eventType, err := types.ParseCloudEventsType(evt.Type())
 	if err != nil {
-		klog.Errorf("failed to parse cloud event type %s, %v", evt.Type(), err)
+		logger.Error(err, "failed to parse cloud event type", "eventType", evt.Type())
 		return
 	}
+	logger = logger.WithValues("eventType", evt.Type())
 
 	metrics.IncreaseCloudEventsReceivedByAgentCounter(evt.Source(), eventType.CloudEventsDataType.String(), string(eventType.SubResource), string(eventType.Action))
 
 	if eventType.Action == types.ResyncRequestAction {
 		if eventType.SubResource != types.SubResourceStatus {
-			klog.Warningf("unsupported resync event type %s, ignore", eventType)
+			logger.Info("ignore unsupported resync event type")
 			return
 		}
 
 		startTime := time.Now()
 		if err := c.respondResyncStatusRequest(ctx, eventType.CloudEventsDataType, evt); err != nil {
-			klog.Errorf("failed to resync manifestsstatus, %v", err)
+			logger.Error(err, "failed to resync manifestsstatus.")
 		}
 		metrics.UpdateResourceStatusResyncDurationMetric(evt.Source(), c.clusterName, eventType.CloudEventsDataType.String(), startTime)
 
@@ -173,35 +176,36 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 	}
 
 	if eventType.SubResource != types.SubResourceSpec {
-		klog.Warningf("unsupported event type %s, ignore", eventType)
+		logger.Info("ignore unsupported event type")
 		return
 	}
 
 	evtExtensions := evt.Context.GetExtensions()
 	clusterName, err := cloudeventstypes.ToString(evtExtensions[types.ExtensionClusterName])
 	if err != nil {
-		klog.Errorf("failed to get clustername extension: %v", err)
+		logger.Error(err, "failed to get clustername extension")
 		return
 	}
 	if clusterName != c.clusterName {
-		klog.V(4).Infof("event clustername %s and agent clustername %s do not match, ignore", clusterName, c.clusterName)
+		logger.V(4).Info("event clustername and agent clustername do not match, ignore",
+			"eventClusterName", clusterName, "agentClusterName", c.clusterName)
 		return
 	}
 
 	if eventType.CloudEventsDataType != c.codec.EventDataType() {
-		klog.Warningf("unsupported event data type %s, ignore", eventType.CloudEventsDataType)
+		logger.Info("unsupported event data type, ignore", "eventDataType", eventType.CloudEventsDataType)
 		return
 	}
 
 	obj, err := c.codec.Decode(&evt)
 	if err != nil {
-		klog.Errorf("failed to decode spec, %v", err)
+		logger.Error(err, "failed to decode spec")
 		return
 	}
 
 	action, err := c.specAction(evt.Source(), eventType.CloudEventsDataType, obj)
 	if err != nil {
-		klog.Errorf("failed to generate spec action %s, %v", evt, err)
+		logger.Error(err, "failed to generate spec action", "event", evt)
 		return
 	}
 
@@ -211,8 +215,8 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 	}
 
 	for _, handler := range handlers {
-		if err := handler(action, obj); err != nil {
-			klog.Errorf("failed to handle spec event %s, %v", evt, err)
+		if err := handler(ctx, action, obj); err != nil {
+			logger.Error(err, "failed to handle spec event", "event", evt)
 		}
 	}
 }
@@ -226,6 +230,8 @@ func (c *CloudEventAgentClient[T]) receive(ctx context.Context, evt cloudevents.
 func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 	ctx context.Context, eventDataType types.CloudEventsDataType, evt cloudevents.Event,
 ) error {
+	logger := klog.FromContext(ctx).WithValues("eventDataType", eventDataType.String())
+
 	options := types.ListOptions{ClusterName: c.clusterName, Source: evt.Source(), CloudEventsDataType: eventDataType}
 	objs, err := c.lister.List(options)
 	if err != nil {
@@ -258,7 +264,7 @@ func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 		lastHash, ok := findStatusHash(string(obj.GetUID()), statusHashes.Hashes)
 		if !ok {
 			// ignore the resource that is not on the source, but exists on the agent, wait for the source deleting it
-			klog.Infof("The resource %s is not found from the source, ignore", obj.GetUID())
+			logger.Info("The resource is not found from the source, ignore", "uid", obj.GetUID())
 			continue
 		}
 

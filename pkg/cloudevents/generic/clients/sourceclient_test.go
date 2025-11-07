@@ -451,7 +451,7 @@ func TestReceiveResourceStatus(t *testing.T) {
 			source.receive(
 				context.TODO(),
 				c.requestEvent,
-				func(event types.ResourceAction, resource *generictesting.MockResource) error {
+				func(_ context.Context, event types.ResourceAction, resource *generictesting.MockResource) error {
 					actualEvent = event
 					actualRes = resource
 					return nil

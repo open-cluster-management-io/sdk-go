@@ -99,6 +99,8 @@ func (o *GenericClientOptions[T]) WatcherStore() store.ClientWatcherStore[T] {
 }
 
 func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (generic.CloudEventsClient[T], error) {
+	logger := klog.FromContext(ctx)
+
 	if len(o.clientID) == 0 {
 		return nil, fmt.Errorf("client id is required")
 	}
@@ -140,14 +142,14 @@ func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (generic.Clou
 				return
 			case <-cloudEventsClient.ReconnectedChan():
 				if !o.resync {
-					klog.V(4).Infof("resync is disabled, do nothing")
+					logger.Info("resync is disabled, do nothing")
 					continue
 				}
 
 				// when receiving a client reconnected signal, we resync all sources for this agent
 				// TODO after supporting multiple sources, we should only resync agent known sources
 				if err := cloudEventsClient.Resync(ctx, types.SourceAll); err != nil {
-					klog.Errorf("failed to send resync request, %v", err)
+					logger.Error(err, "failed to send resync request")
 				}
 			}
 		}
@@ -161,7 +163,7 @@ func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (generic.Clou
 	go func() {
 		if store.WaitForStoreInit(ctx, o.watcherStore.HasInitiated) {
 			if err := cloudEventsClient.Resync(ctx, types.SourceAll); err != nil {
-				klog.Errorf("failed to send resync request, %v", err)
+				logger.Error(err, "failed to send resync request")
 			}
 		}
 	}()
@@ -170,6 +172,8 @@ func (o *GenericClientOptions[T]) AgentClient(ctx context.Context) (generic.Clou
 }
 
 func (o *GenericClientOptions[T]) SourceClient(ctx context.Context) (generic.CloudEventsClient[T], error) {
+	logger := klog.FromContext(ctx)
+
 	if len(o.clientID) == 0 {
 		return nil, fmt.Errorf("client id is required")
 	}
@@ -211,13 +215,13 @@ func (o *GenericClientOptions[T]) SourceClient(ctx context.Context) (generic.Clo
 				return
 			case <-cloudEventsClient.ReconnectedChan():
 				if !o.resync {
-					klog.V(4).Infof("resync is disabled, do nothing")
+					logger.Info("resync is disabled, do nothing")
 					continue
 				}
 
 				// when receiving a client reconnected signal, we resync all clusters for this source
 				if err := cloudEventsClient.Resync(ctx, types.ClusterAll); err != nil {
-					klog.Errorf("failed to send resync request, %v", err)
+					logger.Error(err, "failed to send resync request")
 				}
 			}
 		}
@@ -231,7 +235,7 @@ func (o *GenericClientOptions[T]) SourceClient(ctx context.Context) (generic.Clo
 	go func() {
 		if store.WaitForStoreInit(ctx, o.watcherStore.HasInitiated) {
 			if err := cloudEventsClient.Resync(ctx, types.ClusterAll); err != nil {
-				klog.Errorf("failed to send resync request, %v", err)
+				logger.Error(err, "failed to send resync request")
 			}
 		}
 	}()

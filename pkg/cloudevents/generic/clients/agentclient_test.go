@@ -539,7 +539,7 @@ func TestReceiveResourceSpec(t *testing.T) {
 			agent.(*CloudEventAgentClient[*generictesting.MockResource]).receive(
 				context.TODO(),
 				c.requestEvent,
-				func(event types.ResourceAction, resource *generictesting.MockResource) error {
+				func(_ context.Context, event types.ResourceAction, resource *generictesting.MockResource) error {
 					actualEvent = event
 					actualRes = resource
 					return nil

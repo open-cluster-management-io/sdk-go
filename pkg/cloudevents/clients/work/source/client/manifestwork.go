@@ -185,7 +185,8 @@ func (c *ManifestWorkSourceClient) DeleteCollection(ctx context.Context, opts me
 }
 
 func (c *ManifestWorkSourceClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*workv1.ManifestWork, error) {
-	klog.V(4).Infof("getting manifestwork %s", name)
+	logger := klog.FromContext(ctx)
+	logger.V(4).Info("getting manifestwork", "manifestWorkName", name)
 	work, exists, err := c.watcherStore.Get(c.namespace, name)
 	if err != nil {
 		returnErr := errors.NewInternalError(err)
@@ -203,7 +204,8 @@ func (c *ManifestWorkSourceClient) Get(ctx context.Context, name string, opts me
 }
 
 func (c *ManifestWorkSourceClient) List(ctx context.Context, opts metav1.ListOptions) (*workv1.ManifestWorkList, error) {
-	klog.V(4).Infof("list manifestworks")
+	logger := klog.FromContext(ctx)
+	logger.V(4).Info("list manifestworks")
 	works, err := c.watcherStore.List(c.namespace, opts)
 	if err != nil {
 		returnErr := errors.NewInternalError(err)
@@ -233,7 +235,8 @@ func (c *ManifestWorkSourceClient) Watch(ctx context.Context, opts metav1.ListOp
 }
 
 func (c *ManifestWorkSourceClient) Patch(ctx context.Context, name string, pt kubetypes.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *workv1.ManifestWork, err error) {
-	klog.V(4).Infof("patching manifestwork %s", name)
+	logger := klog.FromContext(ctx)
+	logger.V(4).Info("patching manifestwork", "manifestWorkName", name)
 
 	if len(subresources) != 0 {
 		msg := fmt.Sprintf("unsupported to update subresources %v", subresources)

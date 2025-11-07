@@ -189,10 +189,10 @@ func TestWatch(t *testing.T) {
 		}
 	}()
 
-	if err := watchStore.HandleReceivedResource(types.Added, &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test0"}}); err != nil {
+	if err := watchStore.HandleReceivedResource(ctx, types.Added, &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test0"}}); err != nil {
 		t.Error(err)
 	}
-	if err := watchStore.HandleReceivedResource(types.Modified, &clusterv1.ManagedCluster{
+	if err := watchStore.HandleReceivedResource(ctx, types.Modified, &clusterv1.ManagedCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test1",
 		},
@@ -201,7 +201,7 @@ func TestWatch(t *testing.T) {
 		}}); err != nil {
 		t.Error(err)
 	}
-	if err := watchStore.HandleReceivedResource(types.Deleted, &clusterv1.ManagedCluster{
+	if err := watchStore.HandleReceivedResource(ctx, types.Deleted, &clusterv1.ManagedCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "test1",
 			DeletionTimestamp: &metav1.Time{Time: time.Now()},

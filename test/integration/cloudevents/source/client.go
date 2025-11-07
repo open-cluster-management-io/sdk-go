@@ -37,7 +37,7 @@ func StartResourceSourceClient(
 		return nil, err
 	}
 
-	client.Subscribe(ctx, func(action types.ResourceAction, resource *store.Resource) error {
+	client.Subscribe(ctx, func(_ context.Context, action types.ResourceAction, resource *store.Resource) error {
 		return lister.Store.UpdateStatus(resource)
 	})
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"k8s.io/klog/v2"
 	"net"
 	"os"
 	"regexp"
@@ -219,6 +220,8 @@ func (o *MQTTOptions) GetCloudEventsProtocol(
 	errorHandler func(error),
 	clientOpts ...cloudeventsmqtt.Option,
 ) (*cloudeventsmqtt.Protocol, error) {
+	logger := klog.FromContext(ctx)
+
 	netConn, err := o.Dialer.Dial()
 	if err != nil {
 		return nil, err
@@ -232,8 +235,8 @@ func (o *MQTTOptions) GetCloudEventsProtocol(
 
 	opts := []cloudeventsmqtt.Option{
 		cloudeventsmqtt.WithConnect(o.GetMQTTConnectOption(clientID)),
-		cloudeventsmqtt.WithDebugLogger(&PahoDebugLogger{}),
-		cloudeventsmqtt.WithErrorLogger(&PahoErrorLogger{}),
+		cloudeventsmqtt.WithDebugLogger(&PahoDebugLogger{logger: logger}),
+		cloudeventsmqtt.WithErrorLogger(&PahoErrorLogger{logger: logger}),
 	}
 	opts = append(opts, clientOpts...)
 	return cloudeventsmqtt.New(ctx, config, opts...)

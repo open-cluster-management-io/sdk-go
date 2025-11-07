@@ -147,11 +147,14 @@ func (c *CloudEventSourceClient[T]) Subscribe(ctx context.Context, handlers ...g
 }
 
 func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents.Event, handlers ...generic.ResourceHandler[T]) {
+	logger := klog.FromContext(ctx)
+
 	eventType, err := types.ParseCloudEventsType(evt.Type())
 	if err != nil {
-		klog.Errorf("failed to parse cloud event type, %v", err)
+		logger.Error(err, "failed to parse cloud event type")
 		return
 	}
+	logger = logger.WithValues("eventType", evt.Type())
 
 	// clusterName is not required for agent to send the request, in case of missing clusterName, set it to
 	// empty string, as the source is sufficient to infer the event's originating cluster.
@@ -164,19 +167,19 @@ func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents
 
 	if eventType.Action == types.ResyncRequestAction {
 		if eventType.SubResource != types.SubResourceSpec {
-			klog.Warningf("unsupported event type %s, ignore", eventType)
+			logger.Info("unsupported event type, ignore")
 			return
 		}
 
 		clusterName, err := evt.Context.GetExtension(types.ExtensionClusterName)
 		if err != nil {
-			klog.Errorf("failed to get cluster name extension, %v", err)
+			logger.Error(err, "failed to get cluster name extension")
 			return
 		}
 
 		startTime := time.Now()
 		if err := c.respondResyncSpecRequest(ctx, eventType.CloudEventsDataType, evt); err != nil {
-			klog.Errorf("failed to resync resources spec, %v", err)
+			logger.Error(err, "failed to resync resources spec")
 		}
 		metrics.UpdateResourceSpecResyncDurationMetric(c.sourceID, fmt.Sprintf("%s", clusterName), eventType.CloudEventsDataType.String(), startTime)
 
@@ -184,24 +187,24 @@ func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents
 	}
 
 	if eventType.CloudEventsDataType != c.codec.EventDataType() {
-		klog.Warningf("unsupported event data type %s, ignore", eventType.CloudEventsDataType)
+		logger.Info("unsupported event data type, ignore", "eventDataType", eventType.CloudEventsDataType)
 		return
 	}
 
 	if eventType.SubResource != types.SubResourceStatus {
-		klog.Warningf("unsupported event type %s, ignore", eventType)
+		logger.Info("unsupported event type, ignore")
 		return
 	}
 
 	obj, err := c.codec.Decode(&evt)
 	if err != nil {
-		klog.Errorf("failed to decode status, %v", err)
+		logger.Error(err, "failed to decode status")
 		return
 	}
 
 	for _, handler := range handlers {
-		if err := handler(types.StatusModified, obj); err != nil {
-			klog.Errorf("failed to handle status event %s, %v", evt, err)
+		if err := handler(ctx, types.StatusModified, obj); err != nil {
+			logger.Error(err, "failed to handle status event", "event", evt)
 		}
 	}
 }
@@ -217,6 +220,8 @@ func (c *CloudEventSourceClient[T]) receive(ctx context.Context, evt cloudevents
 func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 	ctx context.Context, evtDataType types.CloudEventsDataType, evt cloudevents.Event,
 ) error {
+	logger := klog.FromContext(ctx)
+
 	resourceVersions, err := payload.DecodeSpecResyncRequest(evt)
 	if err != nil {
 		return err
@@ -246,7 +251,7 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 	// TODO we cannot list objs now, the lister may be not ready, we may need to add HasSynced
 	// for the lister
 	if len(objs) == 0 {
-		klog.V(4).Infof("there are is no objs from the list, do nothing")
+		logger.V(4).Info("there are is no objs from the list, do nothing")
 		return nil
 	}
 
@@ -262,7 +267,7 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 		lastResourceVersion := findResourceVersion(string(obj.GetUID()), resourceVersions.Versions)
 		currentResourceVersion, err := strconv.ParseInt(obj.GetResourceVersion(), 10, 64)
 		if err != nil {
-			klog.V(4).Infof("ignore the obj %v since it has a invalid resourceVersion, %v", obj, err)
+			logger.V(4).Info("ignore the obj since it has a invalid resourceVersion", "object", obj, "error", err)
 			continue
 		}
 
