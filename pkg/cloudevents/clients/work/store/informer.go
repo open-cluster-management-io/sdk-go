@@ -130,8 +130,10 @@ var _ store.ClientWatcherStore[*workv1.ManifestWork] = &AgentInformerWatcherStor
 func NewAgentInformerWatcherStore() *AgentInformerWatcherStore {
 	return &AgentInformerWatcherStore{
 		AgentInformerWatcherStore: store.AgentInformerWatcherStore[*workv1.ManifestWork]{
-			BaseClientWatchStore: store.BaseClientWatchStore[*workv1.ManifestWork]{},
-			Watcher:              store.NewWatcher(),
+			BaseClientWatchStore: store.BaseClientWatchStore[*workv1.ManifestWork]{
+				Store: cache.NewStore(cache.MetaNamespaceKeyFunc),
+			},
+			Watcher: store.NewWatcher(),
 		},
 		versions: newVersioner(),
 	}

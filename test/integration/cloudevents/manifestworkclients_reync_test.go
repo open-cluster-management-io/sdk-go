@@ -38,14 +38,13 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			workNamePrefix = "resync"
 
 			mqttOptions := util.NewMQTTAgentOptionsWithSourceBroadcast(mqttBrokerHost, sourceID, clusterName)
-			_, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
+			_, watchStore, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			// wait for informer started
 			<-time.After(time.Second)
 
 			// add two works in the agent cache
-			store := informer.Informer().GetStore()
 			work1Name := fmt.Sprintf("%s-1", workNamePrefix)
 			work1UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work1Name)
 			work1 := util.NewManifestWorkWithStatus(clusterName, work1Name)
@@ -53,7 +52,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work1.ResourceVersion = "1"
 			work1.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}
 			work1.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
-			gomega.Expect(store.Add(work1)).ToNot(gomega.HaveOccurred())
+			gomega.Expect(watchStore.Add(work1)).ToNot(gomega.HaveOccurred())
 
 			work2Name := fmt.Sprintf("%s-2", workNamePrefix)
 			work2UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work2Name)
@@ -62,7 +61,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work2.ResourceVersion = "1"
 			work2.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}
 			work2.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
-			gomega.Expect(store.Add(work2)).ToNot(gomega.HaveOccurred())
+			gomega.Expect(watchStore.Add(work2)).ToNot(gomega.HaveOccurred())
 
 			// wait for cache ready
 			<-time.After(time.Second)

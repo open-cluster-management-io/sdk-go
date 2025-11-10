@@ -18,21 +18,21 @@ import (
 
 // AgentInformerWatcherStore extends the BaseClientWatchStore.
 
-// It gets/lists the resources from the given informer store and send
+// It gets/lists the resources from the given local store and send
 // the resource add/update/delete event to the watch channel directly.
 //
 // It is used for building resource agent client.
 type AgentInformerWatcherStore[T generic.ResourceObject] struct {
 	BaseClientWatchStore[T]
 	Watcher *Watcher
-
-	informer cache.SharedIndexInformer
 }
 
 func NewAgentInformerWatcherStore[T generic.ResourceObject]() *AgentInformerWatcherStore[T] {
 	return &AgentInformerWatcherStore[T]{
-		BaseClientWatchStore: BaseClientWatchStore[T]{},
-		Watcher:              NewWatcher(),
+		BaseClientWatchStore: BaseClientWatchStore[T]{
+			Store: cache.NewStore(cache.MetaNamespaceKeyFunc),
+		},
+		Watcher: NewWatcher(),
 	}
 }
 
@@ -127,11 +127,5 @@ func (s *AgentInformerWatcherStore[T]) GetWatcher(namespace string, opts metav1.
 }
 
 func (s *AgentInformerWatcherStore[T]) HasInitiated() bool {
-	return s.Initiated && s.informer.HasSynced()
-}
-
-func (s *AgentInformerWatcherStore[T]) SetInformer(informer cache.SharedIndexInformer) {
-	s.informer = informer
-	s.Store = informer.GetStore()
-	s.Initiated = true
+	return true
 }

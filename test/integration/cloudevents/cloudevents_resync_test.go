@@ -2,7 +2,11 @@ package cloudevents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	jsonpatch "github.com/evanphx/json-patch/v5"
+	"k8s.io/apimachinery/pkg/types"
+	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -78,7 +82,16 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - RESYNC", func() {
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			ginkgo.By("start a work agent to resync the resources from agent")
-			clientHolder, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
+			clientHolder, _, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
+
+			factory := workinformers.NewSharedInformerFactoryWithOptions(
+				clientHolder.WorkInterface(),
+				5*time.Minute,
+				workinformers.WithNamespace(clusterName),
+			)
+			informer := factory.Work().V1().ManifestWorks()
+			go informer.Informer().Run(ctx.Done())
+
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 			lister := informer.Lister().ManifestWorks(clusterName)
 			agentWorkClient := clientHolder.ManifestWorks(clusterName)
@@ -109,9 +122,18 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - RESYNC", func() {
 				newWork := work.DeepCopy()
 				newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{util.WorkCreatedCondition}}
 
+				workData, err := json.Marshal(work)
+				if err != nil {
+					return err
+				}
+				newWorkData, err := json.Marshal(newWork)
+				if err != nil {
+					return err
+				}
+				patchData, err := jsonpatch.CreateMergePatch(workData, newWorkData)
+
 				// only update the status on the agent local part
-				store := informer.Informer().GetStore()
-				if err := store.Update(newWork); err != nil {
+				if _, err := agentWorkClient.Patch(context.Background(), workName, types.MergePatchType, patchData, metav1.PatchOptions{}); err != nil {
 					return err
 				}
 

@@ -74,13 +74,11 @@ func TestCreate(t *testing.T) {
 			csrInformer := cache.NewSharedIndexInformer(
 				csrClient, &certificatev1.CertificateSigningRequest{}, 30*time.Second,
 				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
-			csrInformerStore := csrInformer.GetStore()
 			for _, csr := range c.csrs {
-				if err := csrInformerStore.Add(csr); err != nil {
+				if err := watcherStore.Store.Add(csr); err != nil {
 					t.Error(err)
 				}
 			}
-			watcherStore.SetInformer(csrInformer)
 			go csrInformer.Run(ctx.Done())
 
 			if _, err := csrClient.Create(ctx, c.csr, metav1.CreateOptions{}); err != nil {
