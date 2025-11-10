@@ -2,7 +2,6 @@ package store
 
 import (
 	"fmt"
-
 	"github.com/google/uuid"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,6 +51,10 @@ func (r *Resource) GetUID() kubetypes.UID {
 
 func (r *Resource) GetResourceVersion() string {
 	return fmt.Sprintf("%d", r.ResourceVersion)
+}
+
+func (r *Resource) GetGeneration() int64 {
+	return r.ResourceVersion
 }
 
 func (r *Resource) GetDeletionTimestamp() *metav1.Time {

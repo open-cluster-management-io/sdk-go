@@ -105,6 +105,7 @@ func TestSourcePublish(t *testing.T) {
 			resources: &generictesting.MockResource{
 				UID:             kubetypes.UID("1234"),
 				ResourceVersion: "2",
+				Generation:      2,
 				Spec:            "test-spec",
 			},
 			eventType: types.CloudEventsType{

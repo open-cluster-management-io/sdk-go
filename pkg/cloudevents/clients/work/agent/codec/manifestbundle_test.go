@@ -2,7 +2,9 @@ package codec
 
 import (
 	"encoding/json"
+	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
@@ -54,6 +56,24 @@ func TestManifestBundleEncode(t *testing.T) {
 				},
 			},
 			expectedErr: true,
+		},
+		{
+			name: "empty resourceversion (should use 0 as default)",
+			eventType: types.CloudEventsType{
+				CloudEventsDataType: payload.ManifestBundleEventDataType,
+				SubResource:         types.SubResourceStatus,
+				Action:              "test",
+			},
+			work: &workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:             "test",
+					ResourceVersion: "",
+					Labels: map[string]string{
+						"cloudevents.open-cluster-management.io/originalsource": "source1",
+					},
+				},
+			},
+			expectedErr: false,
 		},
 		{
 			name: "no originalsource",
@@ -158,6 +178,7 @@ func TestManifestBundleDecode(t *testing.T) {
 	cases := []struct {
 		name        string
 		event       *cloudevents.Event
+		expectWork  *workv1.ManifestWork
 		expectedErr bool
 	}{
 		{
@@ -232,6 +253,25 @@ func TestManifestBundleDecode(t *testing.T) {
 				evt.SetExtension("deletiontimestamp", "1985-04-12T23:20:50.52Z")
 				return &evt
 			}(),
+			expectWork: func() *workv1.ManifestWork {
+				deletionTime, _ := time.Parse(time.RFC3339, "1985-04-12T23:20:50.52Z")
+				return &workv1.ManifestWork{
+					ObjectMeta: metav1.ObjectMeta{
+						UID:               "test",
+						Name:              "test",
+						Generation:        13,
+						Namespace:         "cluster1",
+						DeletionTimestamp: &metav1.Time{Time: deletionTime},
+						Annotations: map[string]string{
+							"cloudevents.open-cluster-management.io/datatype": "io.open-cluster-management.works.v1alpha1.manifestbundles",
+						},
+						Labels: map[string]string{
+							"cloudevents.open-cluster-management.io/originalsource": "source1",
+						},
+						Finalizers: []string{"cluster.open-cluster-management.io/manifest-work-cleanup"},
+					},
+				}
+			}(),
 		},
 		{
 			name: "decode an invalid cloudevent",
@@ -271,6 +311,31 @@ func TestManifestBundleDecode(t *testing.T) {
 				}
 				return &evt
 			}(),
+			expectWork: &workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:        "test",
+					Name:       "test",
+					Generation: 13,
+					Namespace:  "cluster1",
+					Annotations: map[string]string{
+						"cloudevents.open-cluster-management.io/datatype": "io.open-cluster-management.works.v1alpha1.manifestbundles",
+					},
+					Labels: map[string]string{
+						"cloudevents.open-cluster-management.io/originalsource": "source1",
+					},
+				},
+				Spec: workv1.ManifestWorkSpec{
+					Workload: workv1.ManifestsTemplate{
+						Manifests: []workv1.Manifest{
+							{
+								RawExtension: runtime.RawExtension{
+									Raw: toConfigMap(t),
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "decode a cloudevent with metadata extension",
@@ -316,6 +381,43 @@ func TestManifestBundleDecode(t *testing.T) {
 				}
 				return &evt
 			}(),
+			expectWork: &workv1.ManifestWork{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:        "test",
+					Name:       "original-name",
+					Generation: 13,
+					Namespace:  "cluster1",
+					Annotations: map[string]string{
+						"cloudevents.open-cluster-management.io/datatype": "io.open-cluster-management.works.v1alpha1.manifestbundles",
+						"original-annotation":                             "original-value",
+					},
+					Labels: map[string]string{
+						"cloudevents.open-cluster-management.io/originalsource": "source1",
+						"original-label": "original-value",
+					},
+					Finalizers: []string{"original-finalizer"},
+				},
+				Spec: workv1.ManifestWorkSpec{
+					Workload: workv1.ManifestsTemplate{
+						Manifests: []workv1.Manifest{
+							{
+								RawExtension: runtime.RawExtension{
+									Raw: toConfigMap(t),
+								},
+							},
+						},
+					},
+					Executor: &workv1.ManifestWorkExecutor{
+						Subject: workv1.ManifestWorkExecutorSubject{
+							Type: workv1.ExecutorSubjectTypeServiceAccount,
+							ServiceAccount: &workv1.ManifestWorkSubjectServiceAccount{
+								Name:      "test-sa",
+								Namespace: "test-ns",
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -333,38 +435,7 @@ func TestManifestBundleDecode(t *testing.T) {
 				t.Errorf("unexpected error %v", err)
 			}
 
-			// Additional verification for metadata extension test case
-			if c.name == "decode a cloudevent with metadata extension" && work != nil {
-				// Verify that original metadata from extension was merged correctly
-				if work.ObjectMeta.Labels["original-label"] != "original-value" {
-					t.Errorf("expected original-label to be preserved, got %v", work.ObjectMeta.Labels)
-				}
-				if work.ObjectMeta.Annotations["original-annotation"] != "original-value" {
-					t.Errorf("expected original-annotation to be preserved, got %v", work.ObjectMeta.Annotations)
-				}
-				if len(work.ObjectMeta.Finalizers) == 0 || work.ObjectMeta.Finalizers[0] != "original-finalizer" {
-					t.Errorf("expected original-finalizer to be preserved, got %v", work.ObjectMeta.Finalizers)
-				}
-				// Verify that event-specific metadata overrides
-				if work.ObjectMeta.UID != "test" {
-					t.Errorf("expected UID to be overridden to 'test', got %s", work.ObjectMeta.UID)
-				}
-				if work.ObjectMeta.Name != "original-name" {
-					t.Errorf("expected Name to be overridden to 'work1', got %s", work.ObjectMeta.Name)
-				}
-				if work.ObjectMeta.Namespace != "cluster1" {
-					t.Errorf("expected Namespace to be overridden to 'cluster1', got %s", work.ObjectMeta.Namespace)
-				}
-				if work.ObjectMeta.ResourceVersion != "13" {
-					t.Errorf("expected ResourceVersion to be overridden to '13', got %s", work.ObjectMeta.ResourceVersion)
-				}
-				// Verify Executor field
-				if work.Spec.Executor == nil {
-					t.Errorf("expected Executor to be set")
-				} else if work.Spec.Executor.Subject.ServiceAccount.Name != "test-sa" {
-					t.Errorf("expected Executor ServiceAccount name to be 'test-sa', got %s", work.Spec.Executor.Subject.ServiceAccount.Name)
-				}
-			}
+			assert.Equal(t, c.expectWork, work, "decoded work is not correct")
 		})
 	}
 }

@@ -122,6 +122,7 @@ func TestAgentPublish(t *testing.T) {
 			clusterName: "cluster1",
 			resources: &generictesting.MockResource{
 				UID:             kubetypes.UID("1234"),
+				Generation:      2,
 				ResourceVersion: "2",
 				Status:          "test-status",
 				Namespace:       "cluster1",
@@ -409,6 +410,7 @@ func TestReceiveResourceSpec(t *testing.T) {
 					eventType,
 					&generictesting.MockResource{
 						UID:             kubetypes.UID("test1"),
+						Generation:      1,
 						ResourceVersion: "1",
 						Namespace:       "cluster1",
 					})
@@ -435,6 +437,7 @@ func TestReceiveResourceSpec(t *testing.T) {
 					eventType,
 					&generictesting.MockResource{
 						UID:             kubetypes.UID("test1"),
+						Generation:      2,
 						ResourceVersion: "2",
 						Namespace:       "cluster1",
 					})
@@ -505,14 +508,15 @@ func TestReceiveResourceSpec(t *testing.T) {
 					eventType,
 					&generictesting.MockResource{
 						UID:             kubetypes.UID("test1"),
+						Generation:      2,
 						ResourceVersion: "2",
 						Namespace:       "cluster1",
 					})
 				return *evt
 			}(),
 			resources: []*generictesting.MockResource{
-				{UID: kubetypes.UID("test1"), ResourceVersion: "2", Namespace: "cluster1"},
-				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Namespace: "cluster1"},
+				{UID: kubetypes.UID("test1"), Generation: 2, ResourceVersion: "2", Namespace: "cluster1"},
+				{UID: kubetypes.UID("test2"), Generation: 1, ResourceVersion: "1", Namespace: "cluster1"},
 			},
 			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
 				if len(event) != 0 {

@@ -3,6 +3,9 @@ package store
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"strconv"
+	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -88,6 +91,38 @@ func (s *SourceInformerWatcherStore) SetInformer(informer cache.SharedIndexInfor
 // It is used for building ManifestWork agent client.
 type AgentInformerWatcherStore struct {
 	store.AgentInformerWatcherStore[*workv1.ManifestWork]
+
+	versions *versioner
+}
+
+type versioner struct {
+	versions map[string]int64
+	lock     sync.RWMutex
+}
+
+func newVersioner() *versioner {
+	return &versioner{
+		versions: make(map[string]int64),
+	}
+}
+
+func (v *versioner) increment(name string) int64 {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	if _, ok := v.versions[name]; !ok {
+		v.versions[name] = 1
+	} else {
+		v.versions[name] = v.versions[name] + 1
+	}
+
+	return v.versions[name]
+}
+
+func (v *versioner) delete(name string) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+	delete(v.versions, name)
 }
 
 var _ store.ClientWatcherStore[*workv1.ManifestWork] = &AgentInformerWatcherStore{}
@@ -98,12 +133,39 @@ func NewAgentInformerWatcherStore() *AgentInformerWatcherStore {
 			BaseClientWatchStore: store.BaseClientWatchStore[*workv1.ManifestWork]{},
 			Watcher:              store.NewWatcher(),
 		},
+		versions: newVersioner(),
 	}
+}
+
+func (s *AgentInformerWatcherStore) Add(resource runtime.Object) error {
+	accessor, err := meta.Accessor(resource)
+	if err != nil {
+		return err
+	}
+	accessor.SetResourceVersion(strconv.FormatInt(s.versions.increment(accessor.GetName()), 10))
+	return s.AgentInformerWatcherStore.Add(resource)
+}
+
+func (s *AgentInformerWatcherStore) Update(resource runtime.Object) error {
+	accessor, err := meta.Accessor(resource)
+	if err != nil {
+		return err
+	}
+	accessor.SetResourceVersion(strconv.FormatInt(s.versions.increment(accessor.GetName()), 10))
+	return s.AgentInformerWatcherStore.Update(resource)
+}
+
+func (s *AgentInformerWatcherStore) Delete(resource runtime.Object) error {
+	accessor, err := meta.Accessor(resource)
+	if err != nil {
+		return err
+	}
+	s.versions.delete(accessor.GetName())
+	return s.AgentInformerWatcherStore.Delete(resource)
 }
 
 func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, action types.ResourceAction, work *workv1.ManifestWork) error {
 	logger := klog.FromContext(ctx)
-
 	switch action {
 	case types.Added:
 		return s.Add(work.DeepCopy())
@@ -124,9 +186,7 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 
 		updatedWork := work.DeepCopy()
 
-		// restore the fields that are maintained by local agent
-		updatedWork.Labels = lastWork.Labels
-		updatedWork.Annotations = lastWork.Annotations
+		// restore the fields that are maintained by local agent.
 		updatedWork.Finalizers = lastWork.Finalizers
 		updatedWork.Status = lastWork.Status
 
@@ -141,9 +201,8 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 			return nil
 		}
 
+		// we should only update the deletionTimestamp or the local work
 		updatedWork := lastWork.DeepCopy()
-		updatedWork.Generation = work.Generation
-		updatedWork.ResourceVersion = work.ResourceVersion
 		updatedWork.DeletionTimestamp = work.DeletionTimestamp
 		return s.Update(updatedWork)
 	default:
