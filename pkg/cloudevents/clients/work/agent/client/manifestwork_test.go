@@ -61,9 +61,9 @@ func TestVersionCompare(t *testing.T) {
 			errorSubstring: "Internal error",
 		},
 		{
-			name:        "zero versions",
+			name:        "zero new version (force bypass)",
 			newVersion:  "0",
-			oldVersion:  "0",
+			oldVersion:  "5",
 			expectError: false,
 		},
 		{
@@ -73,10 +73,11 @@ func TestVersionCompare(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "empty new version (skip comparison)",
-			newVersion:  "",
-			oldVersion:  "5",
-			expectError: false,
+			name:           "empty new version (conflict error)",
+			newVersion:     "",
+			oldVersion:     "5",
+			expectError:    true,
+			errorSubstring: "resource version of the work cannot be empty",
 		},
 		{
 			name:           "empty old version (parse error)",
@@ -86,10 +87,11 @@ func TestVersionCompare(t *testing.T) {
 			errorSubstring: "Internal error",
 		},
 		{
-			name:        "both versions empty",
-			newVersion:  "",
-			oldVersion:  "",
-			expectError: false,
+			name:           "both versions empty",
+			newVersion:     "",
+			oldVersion:     "",
+			expectError:    true,
+			errorSubstring: "resource version of the work cannot be empty",
 		},
 	}
 

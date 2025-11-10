@@ -248,9 +248,14 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 }
 
 func versionCompare(new, old *workv1.ManifestWork) *errors.StatusError {
-	// If resource version is empty or 0, skip the comparison (e.g., when publishing status updates)
-	if new.GetResourceVersion() == "" || new.GetResourceVersion() == "0" {
+	// Resource version 0 means force conflict.
+	if new.GetResourceVersion() == "0" {
 		return nil
+	}
+
+	if new.GetResourceVersion() == "" {
+		return errors.NewConflict(common.ManifestWorkGR, new.Name, fmt.Errorf(
+			"the resource version of the work cannot be empty"))
 	}
 
 	lastResourceVersion, err := strconv.ParseInt(old.GetResourceVersion(), 10, 64)
