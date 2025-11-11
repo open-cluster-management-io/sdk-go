@@ -12,8 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
-
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
@@ -167,7 +165,6 @@ func (s *AgentInformerWatcherStore) Delete(resource runtime.Object) error {
 }
 
 func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, action types.ResourceAction, work *workv1.ManifestWork) error {
-	logger := klog.FromContext(ctx)
 	switch action {
 	case types.Added:
 		return s.Add(work.DeepCopy())
@@ -179,14 +176,13 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 		if !exists {
 			return fmt.Errorf("the work %s/%s does not exist", work.Namespace, work.Name)
 		}
-		// prevent the work from being updated if it is deleting
-		if !lastWork.GetDeletionTimestamp().IsZero() {
-			logger.Info("the work is deleting, ignore the update",
-				"manifestWorkNamespace", work.Namespace, "manifestWorkName", work.Name)
-			return nil
-		}
 
 		updatedWork := work.DeepCopy()
+
+		// prevent the work from being updated if it is deleting
+		if !lastWork.GetDeletionTimestamp().IsZero() {
+			updatedWork.SetDeletionTimestamp(lastWork.DeletionTimestamp)
+		}
 
 		// restore the fields that are maintained by local agent.
 		updatedWork.Finalizers = lastWork.Finalizers

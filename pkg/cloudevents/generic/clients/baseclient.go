@@ -174,7 +174,7 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 				go func() {
 					if err := c.transport.Receive(receiverCtx, func(evt cloudevents.Event) {
 						logger.V(2).Info("Received event", "event", evt.Context)
-						logger.V(5).Info("Received event", "event", func() any { return evt.String() })
+						logger.V(5).Info("Received event", "event", evt.String())
 
 						receive(receiverCtx, evt)
 					}); err != nil {

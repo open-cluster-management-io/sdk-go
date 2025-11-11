@@ -1023,11 +1023,6 @@ open-cluster-management.io/api/addon/v1alpha1
 open-cluster-management.io/api/client/addon/clientset/versioned
 open-cluster-management.io/api/client/addon/clientset/versioned/scheme
 open-cluster-management.io/api/client/addon/clientset/versioned/typed/addon/v1alpha1
-open-cluster-management.io/api/client/addon/informers/externalversions
-open-cluster-management.io/api/client/addon/informers/externalversions/addon
-open-cluster-management.io/api/client/addon/informers/externalversions/addon/v1alpha1
-open-cluster-management.io/api/client/addon/informers/externalversions/internalinterfaces
-open-cluster-management.io/api/client/addon/listers/addon/v1alpha1
 open-cluster-management.io/api/client/cluster/clientset/versioned
 open-cluster-management.io/api/client/cluster/clientset/versioned/fake
 open-cluster-management.io/api/client/cluster/clientset/versioned/scheme
