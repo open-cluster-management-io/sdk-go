@@ -187,7 +187,6 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 		// restore the fields that are maintained by local agent.
 		updatedWork.Finalizers = lastWork.Finalizers
 		updatedWork.Status = lastWork.Status
-
 		return s.Update(updatedWork)
 	case types.Deleted:
 		// the manifestwork is deleting on the source, we just update its deletion timestamp.
@@ -199,9 +198,12 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 			return nil
 		}
 
-		// we should only update the deletionTimestamp or the local work
+		// update the deletionTimeStamp and generation of last work.
+		// generation needs to be updated because it is possible that generation still change after
+		// the object is in deleting state.
 		updatedWork := lastWork.DeepCopy()
 		updatedWork.DeletionTimestamp = work.DeletionTimestamp
+		updatedWork.Generation = work.Generation
 		return s.Update(updatedWork)
 	default:
 		return fmt.Errorf("unsupported resource action %s", action)

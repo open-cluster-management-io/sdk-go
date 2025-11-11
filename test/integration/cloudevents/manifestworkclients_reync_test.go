@@ -49,7 +49,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work1UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work1Name)
 			work1 := util.NewManifestWorkWithStatus(clusterName, work1Name)
 			work1.UID = apitypes.UID(work1UID)
-			work1.ResourceVersion = "1"
+			work1.Generation = 1
 			work1.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}
 			work1.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
 			gomega.Expect(watchStore.Add(work1)).ToNot(gomega.HaveOccurred())
@@ -58,7 +58,7 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work2UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work2Name)
 			work2 := util.NewManifestWorkWithStatus(clusterName, work2Name)
 			work2.UID = apitypes.UID(work2UID)
-			work2.ResourceVersion = "1"
+			work2.Generation = 1
 			work2.Labels = map[string]string{common.CloudEventsOriginalSourceLabelKey: sourceID}
 			work2.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
 			gomega.Expect(watchStore.Add(work2)).ToNot(gomega.HaveOccurred())

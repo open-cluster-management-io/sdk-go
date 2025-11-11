@@ -204,8 +204,8 @@ func TestManifestBundleDecode(t *testing.T) {
 			}(),
 			expectedWork: &workv1.ManifestWork{
 				ObjectMeta: metav1.ObjectMeta{
-					UID:             kubetypes.UID("test"),
-					ResourceVersion: "13",
+					UID:        kubetypes.UID("test"),
+					Generation: 13,
 					Annotations: map[string]string{
 						"cloudevents.open-cluster-management.io/sequenceid": "1834773391719010304",
 					},
@@ -225,13 +225,13 @@ func TestManifestBundleDecode(t *testing.T) {
 			name: "decode a manifestbundle status cloudevent with meta and spec",
 			event: func() *cloudevents.Event {
 				metaJson, err := json.Marshal(metav1.ObjectMeta{
-					UID:             kubetypes.UID("test"),
-					ResourceVersion: "13",
-					Name:            "work1",
-					Namespace:       "cluster1",
-					Labels:          map[string]string{"test1": "test1"},
-					Annotations:     map[string]string{"test2": "test2"},
-					Finalizers:      []string{"test"},
+					UID:         kubetypes.UID("test"),
+					Generation:  13,
+					Name:        "work1",
+					Namespace:   "cluster1",
+					Labels:      map[string]string{"test1": "test1"},
+					Annotations: map[string]string{"test2": "test2"},
+					Finalizers:  []string{"test"},
 				})
 				if err != nil {
 					t.Fatal(err)
@@ -290,11 +290,11 @@ func TestManifestBundleDecode(t *testing.T) {
 			}(),
 			expectedWork: &workv1.ManifestWork{
 				ObjectMeta: metav1.ObjectMeta{
-					UID:             kubetypes.UID("test"),
-					ResourceVersion: "13",
-					Name:            "work1",
-					Namespace:       "cluster1",
-					Labels:          map[string]string{"test1": "test1"},
+					UID:        kubetypes.UID("test"),
+					Generation: 13,
+					Name:       "work1",
+					Namespace:  "cluster1",
+					Labels:     map[string]string{"test1": "test1"},
 					Annotations: map[string]string{
 						"cloudevents.open-cluster-management.io/sequenceid": "1834773391719010304",
 						"test2": "test2",

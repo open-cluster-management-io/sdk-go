@@ -515,8 +515,8 @@ func TestReceiveResourceSpec(t *testing.T) {
 				return *evt
 			}(),
 			resources: []*generictesting.MockResource{
-				{UID: kubetypes.UID("test1"), Generation: 2, ResourceVersion: "2", Namespace: "cluster1"},
-				{UID: kubetypes.UID("test2"), Generation: 1, ResourceVersion: "1", Namespace: "cluster1"},
+				{UID: kubetypes.UID("test1"), Generation: 3, ResourceVersion: "1", Namespace: "cluster1"},
+				{UID: kubetypes.UID("test2"), Generation: 3, ResourceVersion: "1", Namespace: "cluster1"},
 			},
 			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
 				if len(event) != 0 {

@@ -9,8 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
-
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/utils"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -52,8 +50,6 @@ func (s *AgentInformerWatcherStore[T]) Delete(resource runtime.Object) error {
 }
 
 func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Context, action types.ResourceAction, resource T) error {
-	logger := klog.FromContext(ctx)
-
 	switch action {
 	case types.Added:
 		newObj, err := utils.ToRuntimeObject(resource)
@@ -63,24 +59,22 @@ func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Contex
 
 		return s.Add(newObj)
 	case types.Modified:
-		newObj, err := meta.Accessor(resource)
+		accessor, err := meta.Accessor(resource)
 		if err != nil {
 			return err
 		}
 
-		lastObj, exists, err := s.Get(newObj.GetNamespace(), newObj.GetName())
+		lastObj, exists, err := s.Get(accessor.GetNamespace(), accessor.GetName())
 		if err != nil {
 			return err
 		}
 		if !exists {
-			return fmt.Errorf("the resource %s/%s does not exist", newObj.GetNamespace(), newObj.GetName())
+			return fmt.Errorf("the resource %s/%s does not exist", accessor.GetNamespace(), accessor.GetName())
 		}
 
-		// prevent the resource from being updated if it is deleting
+		// if resource is deleting, keep the deletion timestamp
 		if !lastObj.GetDeletionTimestamp().IsZero() {
-			logger.Info("the resource is deleting, ignore the update",
-				"resourceNamespace", newObj.GetNamespace(), "resourceName", newObj.GetName())
-			return nil
+			accessor.SetDeletionTimestamp(lastObj.GetDeletionTimestamp())
 		}
 
 		updated, err := utils.ToRuntimeObject(resource)
@@ -99,10 +93,6 @@ func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Contex
 			return nil
 		}
 
-		if len(newObj.GetFinalizers()) != 0 {
-			return nil
-		}
-
 		last, exists, err := s.Get(newObj.GetNamespace(), newObj.GetName())
 		if err != nil {
 			return err
@@ -114,6 +104,19 @@ func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Contex
 		deletingObj, err := utils.ToRuntimeObject(last)
 		if err != nil {
 			return err
+		}
+
+		// trigger an update event if the object is deleting.
+		// Only need to update generation/finalizer/deletionTimeStamp of the object.
+		if len(newObj.GetFinalizers()) != 0 {
+			accessor, err := meta.Accessor(deletingObj)
+			if err != nil {
+				return err
+			}
+			accessor.SetDeletionTimestamp(newObj.GetDeletionTimestamp())
+			accessor.SetFinalizers(newObj.GetFinalizers())
+			accessor.SetGeneration(newObj.GetGeneration())
+			return s.Update(deletingObj)
 		}
 
 		return s.Delete(deletingObj)

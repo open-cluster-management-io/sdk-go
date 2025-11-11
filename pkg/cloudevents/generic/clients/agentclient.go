@@ -298,13 +298,13 @@ func (c *CloudEventAgentClient[T]) specAction(
 		return types.Deleted, nil
 	}
 
-	// if both the current and the last object have the resource version "0" or empty, then object
+	// if both the current and the last object have the generation "0" or empty, then object
 	// is considered as modified, the message broker guarantees the order of the messages
 	if lastObj.GetGeneration() == 0 && obj.GetGeneration() == 0 {
 		return types.Modified, nil
 	}
 
-	if obj.GetGeneration() <= lastObj.GetGeneration() {
+	if obj.GetGeneration() < lastObj.GetGeneration() {
 		return evt, nil
 	}
 
