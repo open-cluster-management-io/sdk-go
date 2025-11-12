@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 	grpccli "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
+	grpcv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/grpc"
 	cetypes "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
 )
@@ -89,8 +90,12 @@ func TestServer(t *testing.T) {
 
 	grpcClientOptions := grpccli.NewGRPCOptions()
 	grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
-	agentOption := grpccli.NewAgentOptions(grpcClientOptions, "cluster1", "agent1", dataType)
+	agentOption := grpcv2.NewAgentOptions(grpcClientOptions, "cluster1", "agent1", dataType)
 	if err := agentOption.CloudEventsTransport.Connect(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := agentOption.CloudEventsTransport.Subscribe(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,7 +110,7 @@ func TestServer(t *testing.T) {
 
 	receivedEventCh := make(chan cloudevents.Event)
 	go func() {
-		if err := agentOption.CloudEventsTransport.Receive(ctx, func(event cloudevents.Event) {
+		if err := agentOption.CloudEventsTransport.Receive(ctx, func(ctx context.Context, event cloudevents.Event) {
 			receivedEventCh <- event
 		}); err != nil {
 			t.Error(err)

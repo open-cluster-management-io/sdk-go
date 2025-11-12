@@ -43,6 +43,10 @@ func (c *EventChan) Connect(ctx context.Context) error {
 	return nil
 }
 
+func (c *EventChan) Subscribe(ctx context.Context) error {
+	return nil
+}
+
 func (c *EventChan) Send(ctx context.Context, evt cloudevents.Event) error {
 	select {
 	case c.evtChan <- evt:
@@ -61,7 +65,7 @@ func (c *EventChan) Receive(ctx context.Context, fn options.ReceiveHandlerFn) er
 			if !ok {
 				return nil
 			}
-			fn(e)
+			fn(ctx, e)
 		case <-ctx.Done():
 			return ctx.Err()
 		}

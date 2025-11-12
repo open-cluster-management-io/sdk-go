@@ -61,7 +61,7 @@ func TestSourceResync(t *testing.T) {
 			eventChan := make(chan receiveEvent)
 			stop := make(chan bool)
 			go func() {
-				err = source.transport.Receive(ctx, func(event cloudevents.Event) {
+				err = source.transport.Receive(ctx, func(ctx context.Context, event cloudevents.Event) {
 					select {
 					case eventChan <- receiveEvent{event: event}:
 					case <-ctx.Done():
@@ -134,7 +134,7 @@ func TestSourcePublish(t *testing.T) {
 			eventChan := make(chan receiveEvent)
 			stop := make(chan bool)
 			go func() {
-				err = source.transport.Receive(ctx, func(event cloudevents.Event) {
+				err = source.transport.Receive(ctx, func(ctx context.Context, event cloudevents.Event) {
 					select {
 					case eventChan <- receiveEvent{event: event}:
 					case <-ctx.Done():
@@ -332,7 +332,7 @@ func TestSpecResyncResponse(t *testing.T) {
 			stop := make(chan bool)
 			mutex := &sync.Mutex{}
 			go func() {
-				_ = source.transport.Receive(ctx, func(event cloudevents.Event) {
+				_ = source.transport.Receive(ctx, func(ctx context.Context, event cloudevents.Event) {
 					mutex.Lock()
 					defer mutex.Unlock()
 					receivedEvents = append(receivedEvents, event)
