@@ -70,14 +70,11 @@ func TestCreate(t *testing.T) {
 				ManagedClusterClient: NewManagedClusterClient(ceClient, watcherStore, "cluster1"),
 			}}
 			clusterInformerFactory := clusterinformers.NewSharedInformerFactory(clusterClientSet, time.Minute*10)
-			clusterInformer := clusterInformerFactory.Cluster().V1().ManagedClusters().Informer()
-			clusterInformerStore := clusterInformerFactory.Cluster().V1().ManagedClusters().Informer().GetStore()
 			for _, cluster := range c.clusters {
-				if err := clusterInformerStore.Add(cluster); err != nil {
+				if err := watcherStore.Store.Add(cluster); err != nil {
 					t.Error(err)
 				}
 			}
-			watcherStore.SetInformer(clusterInformer)
 			go clusterInformerFactory.Start(ctx.Done())
 
 			if _, err = clusterClientSet.ClusterV1().ManagedClusters().Create(ctx, c.newCluster, metav1.CreateOptions{}); err != nil {
@@ -129,12 +126,9 @@ func TestPatch(t *testing.T) {
 				ManagedClusterClient: NewManagedClusterClient(ceClient, watcherStore, "cluster1"),
 			}}
 			clusterInformerFactory := clusterinformers.NewSharedInformerFactory(clusterClientSet, time.Minute*10)
-			clusterInformer := clusterInformerFactory.Cluster().V1().ManagedClusters().Informer()
-			clusterInformerStore := clusterInformerFactory.Cluster().V1().ManagedClusters().Informer().GetStore()
-			if err := clusterInformerStore.Add(c.cluster); err != nil {
+			if err := watcherStore.Store.Add(c.cluster); err != nil {
 				t.Error(err)
 			}
-			watcherStore.SetInformer(clusterInformer)
 			go clusterInformerFactory.Start(ctx.Done())
 
 			oldData, err := json.Marshal(c.cluster)

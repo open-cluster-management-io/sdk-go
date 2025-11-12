@@ -12,8 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
-
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
@@ -130,8 +128,10 @@ var _ store.ClientWatcherStore[*workv1.ManifestWork] = &AgentInformerWatcherStor
 func NewAgentInformerWatcherStore() *AgentInformerWatcherStore {
 	return &AgentInformerWatcherStore{
 		AgentInformerWatcherStore: store.AgentInformerWatcherStore[*workv1.ManifestWork]{
-			BaseClientWatchStore: store.BaseClientWatchStore[*workv1.ManifestWork]{},
-			Watcher:              store.NewWatcher(),
+			BaseClientWatchStore: store.BaseClientWatchStore[*workv1.ManifestWork]{
+				Store: cache.NewStore(cache.MetaNamespaceKeyFunc),
+			},
+			Watcher: store.NewWatcher(),
 		},
 		versions: newVersioner(),
 	}
@@ -165,7 +165,6 @@ func (s *AgentInformerWatcherStore) Delete(resource runtime.Object) error {
 }
 
 func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, action types.ResourceAction, work *workv1.ManifestWork) error {
-	logger := klog.FromContext(ctx)
 	switch action {
 	case types.Added:
 		return s.Add(work.DeepCopy())
@@ -177,19 +176,17 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 		if !exists {
 			return fmt.Errorf("the work %s/%s does not exist", work.Namespace, work.Name)
 		}
-		// prevent the work from being updated if it is deleting
-		if !lastWork.GetDeletionTimestamp().IsZero() {
-			logger.Info("the work is deleting, ignore the update",
-				"manifestWorkNamespace", work.Namespace, "manifestWorkName", work.Name)
-			return nil
-		}
 
 		updatedWork := work.DeepCopy()
+
+		// prevent the work from being updated if it is deleting
+		if !lastWork.GetDeletionTimestamp().IsZero() {
+			updatedWork.SetDeletionTimestamp(lastWork.DeletionTimestamp)
+		}
 
 		// restore the fields that are maintained by local agent.
 		updatedWork.Finalizers = lastWork.Finalizers
 		updatedWork.Status = lastWork.Status
-
 		return s.Update(updatedWork)
 	case types.Deleted:
 		// the manifestwork is deleting on the source, we just update its deletion timestamp.
@@ -201,9 +198,12 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 			return nil
 		}
 
-		// we should only update the deletionTimestamp or the local work
+		// update the deletionTimeStamp and generation of last work.
+		// generation needs to be updated because it is possible that generation still change after
+		// the object is in deleting state.
 		updatedWork := lastWork.DeepCopy()
 		updatedWork.DeletionTimestamp = work.DeletionTimestamp
+		updatedWork.Generation = work.Generation
 		return s.Update(updatedWork)
 	default:
 		return fmt.Errorf("unsupported resource action %s", action)

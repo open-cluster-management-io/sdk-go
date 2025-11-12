@@ -502,11 +502,7 @@ func TestAgentInformerWatcherStore_WatchEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	store := NewAgentInformerWatcherStore()
-	store.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	// Add initial work to the informer store so HandleReceivedResource can find it for updates
 	initialWork := &workv1.ManifestWork{
@@ -515,7 +511,7 @@ func TestAgentInformerWatcherStore_WatchEvents(t *testing.T) {
 			Namespace: "test-cluster",
 		},
 	}
-	if err := workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Add(initialWork); err != nil {
+	if err := store.Store.Add(initialWork); err != nil {
 		t.Fatalf("unexpected error adding initial work to informer: %v", err)
 	}
 

@@ -3,17 +3,13 @@ package addon
 import (
 	"context"
 	"encoding/json"
-	"testing"
-	"time"
-
 	jsonpatch "github.com/evanphx/json-patch/v5"
+	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
-	addoninformers "open-cluster-management.io/api/client/addon/informers/externalversions"
-
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
@@ -82,13 +78,9 @@ func TestPatch(t *testing.T) {
 				NewManagedClusterAddOnClient(ceClient, watcherStore),
 			}}
 
-			addonInformerFactory := addoninformers.NewSharedInformerFactory(addonClientSet, time.Minute*10)
-			informer := addonInformerFactory.Addon().V1alpha1().ManagedClusterAddOns().Informer()
-			store := informer.GetStore()
-			if err := store.Add(c.addon); err != nil {
+			if err := watcherStore.Store.Add(c.addon); err != nil {
 				t.Error(err)
 			}
-			watcherStore.SetInformer(informer)
 
 			if _, err = addonClientSet.AddonV1alpha1().ManagedClusterAddOns(c.clusterName).Patch(
 				ctx,

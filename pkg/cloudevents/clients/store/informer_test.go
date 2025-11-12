@@ -9,24 +9,17 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
-	clusterfake "open-cluster-management.io/api/client/cluster/clientset/versioned/fake"
-	clusterinformers "open-cluster-management.io/api/client/cluster/informers/externalversions"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 func TestGet(t *testing.T) {
-	clusterClient := clusterfake.NewSimpleClientset()
-	clusterInformerFactory := clusterinformers.NewSharedInformerFactory(clusterClient, time.Minute*10)
-	clusterStore := clusterInformerFactory.Cluster().V1().ManagedClusters().Informer().GetStore()
-
 	watchStore := NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
-	watchStore.SetInformer(clusterInformerFactory.Cluster().V1().ManagedClusters().Informer())
 
-	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test1"}}); err != nil {
+	if err := watchStore.Store.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test1"}}); err != nil {
 		t.Error(err)
 	}
-	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test2"}}); err != nil {
+	if err := watchStore.Store.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test2"}}); err != nil {
 		t.Error(err)
 	}
 
@@ -66,29 +59,25 @@ func TestGet(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	clusterClient := clusterfake.NewSimpleClientset()
-	clusterInformerFactory := clusterinformers.NewSharedInformerFactory(clusterClient, time.Minute*10)
-	clusterStore := clusterInformerFactory.Cluster().V1().ManagedClusters().Informer().GetStore()
-	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
+	watchStore := NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
+
+	if err := watchStore.Store.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:   "test1",
 		Labels: map[string]string{"test": "true"},
 	}}); err != nil {
 		t.Error(err)
 	}
-	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
+	if err := watchStore.Store.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:   "test2",
 		Labels: map[string]string{"test": "true"},
 	}}); err != nil {
 		t.Error(err)
 	}
-	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
+	if err := watchStore.Store.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{
 		Name: "test3",
 	}}); err != nil {
 		t.Error(err)
 	}
-
-	watchStore := NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
-	watchStore.SetInformer(clusterInformerFactory.Cluster().V1().ManagedClusters().Informer())
 
 	clusters, err := watchStore.List("", metav1.ListOptions{LabelSelector: "test=true"})
 	if err != nil {
@@ -142,18 +131,14 @@ func (r *receiveResult) result() bool {
 }
 
 func TestWatch(t *testing.T) {
-	clusterClient := clusterfake.NewSimpleClientset()
-	clusterInformerFactory := clusterinformers.NewSharedInformerFactory(clusterClient, time.Minute*10)
-	clusterStore := clusterInformerFactory.Cluster().V1().ManagedClusters().Informer().GetStore()
-	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test1"}}); err != nil {
+	watchStore := NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
+	if err := watchStore.Store.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test1"}}); err != nil {
 		t.Error(err)
 	}
-	if err := clusterStore.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test2"}}); err != nil {
+	if err := watchStore.Store.Add(&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test2"}}); err != nil {
 		t.Error(err)
 	}
 
-	watchStore := NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
-	watchStore.SetInformer(clusterInformerFactory.Cluster().V1().ManagedClusters().Informer())
 	watcher, err := watchStore.GetWatcher("", metav1.ListOptions{})
 	if err != nil {
 		t.Error(err)

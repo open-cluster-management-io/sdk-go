@@ -31,7 +31,7 @@ integration: test-cloudevents-integration test-basecontroller-integration test-s
 
 test-cloudevents-integration:
 	go test -c ./test/integration/cloudevents
-	./cloudevents.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
+	./cloudevents.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast -v=5
 .PHONY: test-cloudevents-integration
 
 test-basecontroller-integration: ensure-kubebuilder-tools

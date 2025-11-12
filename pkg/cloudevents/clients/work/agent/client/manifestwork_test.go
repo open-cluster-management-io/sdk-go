@@ -4,16 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"testing"
-	"time"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
+	"testing"
 
-	workfake "open-cluster-management.io/api/client/work/clientset/versioned/fake"
-	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
@@ -131,11 +127,7 @@ func TestVersionCompare(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_Get(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
@@ -172,7 +164,7 @@ func TestManifestWorkAgentClient_Get(t *testing.T) {
 	}
 
 	// Add work to informer store
-	err = workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Add(work)
+	err = watcherStore.Store.Add(work)
 	require.NoError(t, err)
 
 	// Test Get existing work
@@ -188,11 +180,7 @@ func TestManifestWorkAgentClient_Get(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_List(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
@@ -229,7 +217,7 @@ func TestManifestWorkAgentClient_List(t *testing.T) {
 				Namespace: "test-cluster",
 			},
 		}
-		err = workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Add(work)
+		err = watcherStore.Store.Add(work)
 		require.NoError(t, err)
 	}
 
@@ -290,11 +278,7 @@ func TestManifestWorkAgentClient_UnsupportedMethods(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_Patch_WorkNotFound(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
@@ -308,11 +292,7 @@ func TestManifestWorkAgentClient_Patch_WorkNotFound(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_Patch_UnsupportedSubresource(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
@@ -351,7 +331,7 @@ func TestManifestWorkAgentClient_Patch_UnsupportedSubresource(t *testing.T) {
 		},
 	}
 
-	err = workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Add(work)
+	err = watcherStore.Store.Add(work)
 	require.NoError(t, err)
 
 	patchData := []byte(`{"metadata":{"labels":{"test":"label"}}}`)
@@ -363,11 +343,7 @@ func TestManifestWorkAgentClient_Patch_UnsupportedSubresource(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_Patch_ResourceVersionConflict(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
@@ -433,11 +409,7 @@ func TestManifestWorkAgentClient_Patch_ResourceVersionConflict(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_Patch_InvalidPatch(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
@@ -476,7 +448,7 @@ func TestManifestWorkAgentClient_Patch_InvalidPatch(t *testing.T) {
 		},
 	}
 
-	err = workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Add(work)
+	err = watcherStore.Store.Add(work)
 	require.NoError(t, err)
 
 	// Test Patch with invalid JSON
@@ -487,11 +459,7 @@ func TestManifestWorkAgentClient_Patch_InvalidPatch(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_Patch_MissingDataTypeAnnotation(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
@@ -528,7 +496,7 @@ func TestManifestWorkAgentClient_Patch_MissingDataTypeAnnotation(t *testing.T) {
 		},
 	}
 
-	err = workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Add(work)
+	err = watcherStore.Store.Add(work)
 	require.NoError(t, err)
 
 	patchData := []byte(`{"metadata":{"labels":{"test":"label"}}}`)
@@ -549,11 +517,7 @@ func TestManifestWorkAgentClient_SetNamespace(t *testing.T) {
 }
 
 func TestManifestWorkAgentClient_ConcurrentPatches(t *testing.T) {
-	workClient := workfake.NewSimpleClientset()
-	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
-
 	watcherStore := store.NewAgentInformerWatcherStore()
-	watcherStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")

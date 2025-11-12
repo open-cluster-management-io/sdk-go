@@ -2,7 +2,10 @@ package cloudevents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	jsonpatch "github.com/evanphx/json-patch/v5"
+	"k8s.io/apimachinery/pkg/types"
 	"time"
 
 	"github.com/onsi/ginkgo"
@@ -10,7 +13,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -78,20 +80,20 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - RESYNC", func() {
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 			ginkgo.By("start a work agent to resync the resources from agent")
-			clientHolder, informer, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
+			clientHolder, watchStore, err := agent.StartWorkAgent(ctx, clusterName, mqttOptions, codec.NewManifestBundleCodec())
+
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			lister := informer.Lister().ManifestWorks(clusterName)
 			agentWorkClient := clientHolder.ManifestWorks(clusterName)
 
 			ginkgo.By("ensure the resources is synced on the agent")
 			gomega.Eventually(func() error {
-				list, err := lister.List(labels.Everything())
+				list, err := watchStore.List(clusterName, metav1.ListOptions{})
 				if err != nil {
 					return err
 				}
 
 				// ensure there is only one work was synced on the cluster1
-				if len(list) != 1 {
+				if len(list.Items) != 1 {
 					return fmt.Errorf("unexpected work list %v", list)
 				}
 
@@ -109,9 +111,21 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - RESYNC", func() {
 				newWork := work.DeepCopy()
 				newWork.Status = workv1.ManifestWorkStatus{Conditions: []metav1.Condition{util.WorkCreatedCondition}}
 
+				workData, err := json.Marshal(work)
+				if err != nil {
+					return err
+				}
+				newWorkData, err := json.Marshal(newWork)
+				if err != nil {
+					return err
+				}
+				patchData, err := jsonpatch.CreateMergePatch(workData, newWorkData)
+				if err != nil {
+					return err
+				}
+
 				// only update the status on the agent local part
-				store := informer.Informer().GetStore()
-				if err := store.Update(newWork); err != nil {
+				if _, err := agentWorkClient.Patch(context.Background(), workName, types.MergePatchType, patchData, metav1.PatchOptions{}); err != nil {
 					return err
 				}
 
