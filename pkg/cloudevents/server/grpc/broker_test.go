@@ -49,7 +49,7 @@ func (s *testService) HandleStatusUpdate(ctx context.Context, evt *cloudevents.E
 }
 
 // RegisterHandler register the handler to the service.
-func (s *testService) RegisterHandler(handler server.EventHandler) {
+func (s *testService) RegisterHandler(_ context.Context, handler server.EventHandler) {
 	s.handler = handler
 }
 
@@ -67,7 +67,7 @@ func TestServer(t *testing.T) {
 	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
-	grpcEventServer.RegisterService(dataType, svc)
+	grpcEventServer.RegisterService(context.Background(), dataType, svc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

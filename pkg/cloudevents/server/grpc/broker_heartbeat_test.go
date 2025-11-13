@@ -104,7 +104,7 @@ func TestGRPCBroker_Subscribe_HeartbeatIntegration(t *testing.T) {
 	}
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
-	broker.RegisterService(dataType, svc)
+	broker.RegisterService(context.Background(), dataType, svc)
 
 	mockServer := newMockSubscribeServer()
 	defer mockServer.Close()
@@ -162,7 +162,7 @@ func TestGRPCBroker_Subscribe_SendError(t *testing.T) {
 	}
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
-	broker.RegisterService(dataType, svc)
+	broker.RegisterService(context.Background(), dataType, svc)
 
 	mockServer := newMockSubscribeServer()
 	defer mockServer.Close()
@@ -196,7 +196,7 @@ func TestGRPCBroker_Subscribe_EventAndHeartbeatSeparation(t *testing.T) {
 	}
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
-	broker.RegisterService(dataType, svc)
+	broker.RegisterService(context.Background(), dataType, svc)
 
 	mockServer := newMockSubscribeServer()
 	defer mockServer.Close()
@@ -317,7 +317,7 @@ func TestGRPCBroker_Subscribe_ChannelBlocking(t *testing.T) {
 	}
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
-	broker.RegisterService(dataType, svc)
+	broker.RegisterService(context.Background(), dataType, svc)
 
 	// Create a slow mock server that simulates slow processing
 	slowMockServer := &slowMockSubscribeServer{}

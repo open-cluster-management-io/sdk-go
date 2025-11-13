@@ -136,7 +136,7 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 
 	// start the grpc broker
 	grpcBroker := cloudeventsgrpc.NewGRPCBroker()
-	grpcBroker.RegisterService(payload.ManifestBundleEventDataType, service)
+	grpcBroker.RegisterService(context.Background(), payload.ManifestBundleEventDataType, service)
 
 	opt := sdkgrpc.NewGRPCServerOptions()
 	opt.ClientCAFile = caFile
