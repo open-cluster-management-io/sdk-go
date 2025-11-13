@@ -62,7 +62,7 @@ func (s *ResourceService) HandleStatusUpdate(ctx context.Context, evt *cloudeven
 	return s.statusHandler(resource)
 }
 
-func (s *ResourceService) RegisterHandler(handler server.EventHandler) {
+func (s *ResourceService) RegisterHandler(_ context.Context, handler server.EventHandler) {
 	s.handler = handler
 }
 

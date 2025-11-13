@@ -44,7 +44,7 @@ func startBufServer(t *testing.T) *grpc.Server {
 	)
 
 	grpcBroker := cegrpc.NewGRPCBroker()
-	grpcBroker.RegisterService(payload.ManifestBundleEventDataType, newMockWorkService())
+	grpcBroker.RegisterService(context.Background(), payload.ManifestBundleEventDataType, newMockWorkService())
 	pbv1.RegisterCloudEventServiceServer(server, grpcBroker)
 
 	RegisterGRPCMetrics(promMiddleware, cemetrics.CloudEventsGRPCMetrics()...)
@@ -219,7 +219,7 @@ func (s *mockWorkService) HandleStatusUpdate(ctx context.Context, evt *cloudeven
 	return nil
 }
 
-func (s *mockWorkService) RegisterHandler(handler server.EventHandler) {}
+func (s *mockWorkService) RegisterHandler(ctx context.Context, handler server.EventHandler) {}
 
 var testCloudEventJSON = `{
     "specversion": "1.0",
