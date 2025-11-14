@@ -1,9 +1,8 @@
 package builder
 
 import (
-	"encoding/json"
 	"os"
-	"strings"
+	"reflect"
 	"testing"
 	"time"
 
@@ -31,10 +30,11 @@ url: grpc
 )
 
 type buildingCloudEventsOptionTestCase struct {
-	name            string
-	configType      string
-	configFile      *os.File
-	expectedOptions any
+	name                  string
+	configType            string
+	configFile            *os.File
+	expectedOptions       any
+	expectedTransportType string
 }
 
 func TestBuildCloudEventsSourceOptions(t *testing.T) {
@@ -56,6 +56,7 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 					Timeout:    60 * time.Second,
 				},
 			},
+			expectedTransportType: "*mqtt.mqttSourceTransport",
 		},
 		{
 			name:       "grpc config",
@@ -72,6 +73,7 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 					},
 				},
 			},
+			expectedTransportType: "*grpc.grpcTransport",
 		},
 	}
 
@@ -107,10 +109,9 @@ func assertOptions(t *testing.T, c buildingCloudEventsOptionTestCase) {
 		t.Errorf("unexpected error %v", err)
 	}
 
-	optionsRaw, _ := json.Marshal(options)
-	expectedRaw, _ := json.Marshal(c.expectedOptions)
+	tt := reflect.TypeOf(options.CloudEventsTransport)
 
-	if !strings.Contains(string(optionsRaw), string(expectedRaw)) {
-		t.Errorf("the results %v\n does not contain the original options %v\n", string(optionsRaw), string(expectedRaw))
+	if tt.String() != c.expectedTransportType {
+		t.Errorf("expected %s, but got %s", c.expectedTransportType, tt)
 	}
 }
