@@ -34,23 +34,23 @@ service RolloutPluginService {
   // If the validation is failed, the plugin should return a FAILED result.
   rpc ValidateRolloutCompletion(ValidateCompletionRequest) returns (ValidateResponse);
 
-  // BeginRollback is called before the manifestwork resource is rolled back.
+  // BeginAbort is called before the manifestwork resource is aborted.
   // It is used to prepare the rollback.
-  rpc BeginRollback(RolloutPluginRequest) returns (google.protobuf.Empty);
+  rpc BeginAbort(RolloutPluginRequest) returns (google.protobuf.Empty);
 
-  // ProgressRollback is called after the manifestwork is rolled back.
+  // ProgressAbort is called after the manifestwork is aborted.
   // Whenever the feedbacks are updated, this method will be called.
-  // The plugin can execute the rollback logic based on the feedback status changes.
-  rpc ProgressRollback(RolloutPluginRequest) returns (google.protobuf.Empty);
+  // The plugin can execute the abort logic based on the feedback status changes.
+  rpc ProgressAbort(RolloutPluginRequest) returns (google.protobuf.Empty);
 
-  // ValidateRollbackCompletion is called to validate the completion of the rollback.
-  // It is used to check if the rollback is completed successfully.
+  // ValidateAbortCompletion is called to validate the completion of the abort.
+  // It is used to check if the abort is completed successfully.
   // If the validation is completed successfully, the plugin should return a SUCCEEDED result.
   // If the validation is still in progress, the plugin should return a INPROGRESS result.
   // If the validation is failed, the plugin should return a FAILED result.
-  rpc ValidateRollbackCompletion(ValidateCompletionRequest) returns (ValidateResponse);
+  rpc ValidateAbortCompletion(ValidateCompletionRequest) returns (ValidateResponse);
 
-  // MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
+  // MutateManifestWork is called to mutate the manifestwork resource before it is applied or aborted.
   // MWRS controller provides the current rollout status to the plugin.
   // The plugin can use this information to mutate the manifestwork resource.
   rpc MutateManifestWork(MutateManifestWorkRequest) returns (MutateManifestWorkResponse);
@@ -112,8 +112,8 @@ message RolloutResult {
   int32 placement_total_clusters = 6;
 }
 
-// RolloutMeta is the metadata of the rollout.
-message RolloutMeta {
+// RolloutMetadata is the metadata of the rollout.
+message RolloutMetadata {
   // mwrs_name is the name of the manifestwork resource set.
   string mwrs_name = 1;
 
@@ -130,16 +130,16 @@ message RolloutMeta {
 // RolloutPluginRequest is the request to the rollout plugin.
 message RolloutPluginRequest {
   // metadata is the metadata of the rollout.
-  RolloutMeta metadata = 1;
+  RolloutMetadata metadata = 1;
 
   // rollout_result is the result of the rollout.
-  optional RolloutResult rollout_result = 7;
+  optional RolloutResult rollout_result = 2;
 }
 
 // ValidateCompletionRequest is the request to validate the completion of the rollout.
 message ValidateCompletionRequest {
   // metadata is the metadata of the rollout.
-  RolloutMeta metadata = 1;
+  RolloutMetadata metadata = 1;
 }
 
 // ValidateResponse is the response from the plugin for the validation of the rollout.
@@ -182,15 +182,15 @@ message MutateManifestWorkRequest {
     // ROLLOUT is the rollout state for the rollout.
     ROLLOUT = 1;
 
-    // ROLLBACK is the rollout state for the rollback.
-    ROLLBACK = 2;
+    // ABORT is the rollout state for the abort.
+    ABORT = 2;
   }
 
   // rollout_state is the rollout state.
   RolloutState rollout_state = 1;
 
   // metadata is the metadata of the rollout.
-  RolloutMeta metadata = 2;
+  RolloutMetadata metadata = 2;
 
   // rollout_result is the result of the rollout.
   optional RolloutResult rollout_result = 3;

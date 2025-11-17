@@ -24,14 +24,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RolloutPluginService_Initialize_FullMethodName                 = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/Initialize"
-	RolloutPluginService_BeginRollout_FullMethodName               = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/BeginRollout"
-	RolloutPluginService_ProgressRollout_FullMethodName            = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ProgressRollout"
-	RolloutPluginService_ValidateRolloutCompletion_FullMethodName  = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ValidateRolloutCompletion"
-	RolloutPluginService_BeginRollback_FullMethodName              = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/BeginRollback"
-	RolloutPluginService_ProgressRollback_FullMethodName           = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ProgressRollback"
-	RolloutPluginService_ValidateRollbackCompletion_FullMethodName = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ValidateRollbackCompletion"
-	RolloutPluginService_MutateManifestWork_FullMethodName         = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/MutateManifestWork"
+	RolloutPluginService_Initialize_FullMethodName                = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/Initialize"
+	RolloutPluginService_BeginRollout_FullMethodName              = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/BeginRollout"
+	RolloutPluginService_ProgressRollout_FullMethodName           = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ProgressRollout"
+	RolloutPluginService_ValidateRolloutCompletion_FullMethodName = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ValidateRolloutCompletion"
+	RolloutPluginService_BeginAbort_FullMethodName                = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/BeginAbort"
+	RolloutPluginService_ProgressAbort_FullMethodName             = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ProgressAbort"
+	RolloutPluginService_ValidateAbortCompletion_FullMethodName   = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/ValidateAbortCompletion"
+	RolloutPluginService_MutateManifestWork_FullMethodName        = "/io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.RolloutPluginService/MutateManifestWork"
 )
 
 // RolloutPluginServiceClient is the client API for RolloutPluginService service.
@@ -55,20 +55,20 @@ type RolloutPluginServiceClient interface {
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
 	ValidateRolloutCompletion(ctx context.Context, in *ValidateCompletionRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
-	// BeginRollback is called before the manifestwork resource is rolled back.
+	// BeginAbort is called before the manifestwork resource is aborted.
 	// It is used to prepare the rollback.
-	BeginRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// ProgressRollback is called after the manifestwork is rolled back.
+	BeginAbort(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ProgressAbort is called after the manifestwork is aborted.
 	// Whenever the feedbacks are updated, this method will be called.
-	// The plugin can execute the rollback logic based on the feedback status changes.
-	ProgressRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// ValidateRollbackCompletion is called to validate the completion of the rollback.
-	// It is used to check if the rollback is completed successfully.
+	// The plugin can execute the abort logic based on the feedback status changes.
+	ProgressAbort(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// ValidateAbortCompletion is called to validate the completion of the abort.
+	// It is used to check if the abort is completed successfully.
 	// If the validation is completed successfully, the plugin should return a SUCCEEDED result.
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
-	ValidateRollbackCompletion(ctx context.Context, in *ValidateCompletionRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
-	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
+	ValidateAbortCompletion(ctx context.Context, in *ValidateCompletionRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
+	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or aborted.
 	// MWRS controller provides the current rollout status to the plugin.
 	// The plugin can use this information to mutate the manifestwork resource.
 	MutateManifestWork(ctx context.Context, in *MutateManifestWorkRequest, opts ...grpc.CallOption) (*MutateManifestWorkResponse, error)
@@ -122,30 +122,30 @@ func (c *rolloutPluginServiceClient) ValidateRolloutCompletion(ctx context.Conte
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) BeginRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *rolloutPluginServiceClient) BeginAbort(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, RolloutPluginService_BeginRollback_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, RolloutPluginService_BeginAbort_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) ProgressRollback(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *rolloutPluginServiceClient) ProgressAbort(ctx context.Context, in *RolloutPluginRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, RolloutPluginService_ProgressRollback_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, RolloutPluginService_ProgressAbort_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *rolloutPluginServiceClient) ValidateRollbackCompletion(ctx context.Context, in *ValidateCompletionRequest, opts ...grpc.CallOption) (*ValidateResponse, error) {
+func (c *rolloutPluginServiceClient) ValidateAbortCompletion(ctx context.Context, in *ValidateCompletionRequest, opts ...grpc.CallOption) (*ValidateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ValidateResponse)
-	err := c.cc.Invoke(ctx, RolloutPluginService_ValidateRollbackCompletion_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, RolloutPluginService_ValidateAbortCompletion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,20 +183,20 @@ type RolloutPluginServiceServer interface {
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
 	ValidateRolloutCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error)
-	// BeginRollback is called before the manifestwork resource is rolled back.
+	// BeginAbort is called before the manifestwork resource is aborted.
 	// It is used to prepare the rollback.
-	BeginRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
-	// ProgressRollback is called after the manifestwork is rolled back.
+	BeginAbort(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
+	// ProgressAbort is called after the manifestwork is aborted.
 	// Whenever the feedbacks are updated, this method will be called.
-	// The plugin can execute the rollback logic based on the feedback status changes.
-	ProgressRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
-	// ValidateRollbackCompletion is called to validate the completion of the rollback.
-	// It is used to check if the rollback is completed successfully.
+	// The plugin can execute the abort logic based on the feedback status changes.
+	ProgressAbort(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error)
+	// ValidateAbortCompletion is called to validate the completion of the abort.
+	// It is used to check if the abort is completed successfully.
 	// If the validation is completed successfully, the plugin should return a SUCCEEDED result.
 	// If the validation is still in progress, the plugin should return a INPROGRESS result.
 	// If the validation is failed, the plugin should return a FAILED result.
-	ValidateRollbackCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error)
-	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or rolled back.
+	ValidateAbortCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error)
+	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or aborted.
 	// MWRS controller provides the current rollout status to the plugin.
 	// The plugin can use this information to mutate the manifestwork resource.
 	MutateManifestWork(context.Context, *MutateManifestWorkRequest) (*MutateManifestWorkResponse, error)
@@ -222,14 +222,14 @@ func (UnimplementedRolloutPluginServiceServer) ProgressRollout(context.Context, 
 func (UnimplementedRolloutPluginServiceServer) ValidateRolloutCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateRolloutCompletion not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) BeginRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BeginRollback not implemented")
+func (UnimplementedRolloutPluginServiceServer) BeginAbort(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BeginAbort not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) ProgressRollback(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ProgressRollback not implemented")
+func (UnimplementedRolloutPluginServiceServer) ProgressAbort(context.Context, *RolloutPluginRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProgressAbort not implemented")
 }
-func (UnimplementedRolloutPluginServiceServer) ValidateRollbackCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ValidateRollbackCompletion not implemented")
+func (UnimplementedRolloutPluginServiceServer) ValidateAbortCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateAbortCompletion not implemented")
 }
 func (UnimplementedRolloutPluginServiceServer) MutateManifestWork(context.Context, *MutateManifestWorkRequest) (*MutateManifestWorkResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MutateManifestWork not implemented")
@@ -327,56 +327,56 @@ func _RolloutPluginService_ValidateRolloutCompletion_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RolloutPluginService_BeginRollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RolloutPluginService_BeginAbort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RolloutPluginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RolloutPluginServiceServer).BeginRollback(ctx, in)
+		return srv.(RolloutPluginServiceServer).BeginAbort(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RolloutPluginService_BeginRollback_FullMethodName,
+		FullMethod: RolloutPluginService_BeginAbort_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RolloutPluginServiceServer).BeginRollback(ctx, req.(*RolloutPluginRequest))
+		return srv.(RolloutPluginServiceServer).BeginAbort(ctx, req.(*RolloutPluginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RolloutPluginService_ProgressRollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RolloutPluginService_ProgressAbort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RolloutPluginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RolloutPluginServiceServer).ProgressRollback(ctx, in)
+		return srv.(RolloutPluginServiceServer).ProgressAbort(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RolloutPluginService_ProgressRollback_FullMethodName,
+		FullMethod: RolloutPluginService_ProgressAbort_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RolloutPluginServiceServer).ProgressRollback(ctx, req.(*RolloutPluginRequest))
+		return srv.(RolloutPluginServiceServer).ProgressAbort(ctx, req.(*RolloutPluginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RolloutPluginService_ValidateRollbackCompletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RolloutPluginService_ValidateAbortCompletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ValidateCompletionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RolloutPluginServiceServer).ValidateRollbackCompletion(ctx, in)
+		return srv.(RolloutPluginServiceServer).ValidateAbortCompletion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RolloutPluginService_ValidateRollbackCompletion_FullMethodName,
+		FullMethod: RolloutPluginService_ValidateAbortCompletion_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RolloutPluginServiceServer).ValidateRollbackCompletion(ctx, req.(*ValidateCompletionRequest))
+		return srv.(RolloutPluginServiceServer).ValidateAbortCompletion(ctx, req.(*ValidateCompletionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -423,16 +423,16 @@ var RolloutPluginService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _RolloutPluginService_ValidateRolloutCompletion_Handler,
 		},
 		{
-			MethodName: "BeginRollback",
-			Handler:    _RolloutPluginService_BeginRollback_Handler,
+			MethodName: "BeginAbort",
+			Handler:    _RolloutPluginService_BeginAbort_Handler,
 		},
 		{
-			MethodName: "ProgressRollback",
-			Handler:    _RolloutPluginService_ProgressRollback_Handler,
+			MethodName: "ProgressAbort",
+			Handler:    _RolloutPluginService_ProgressAbort_Handler,
 		},
 		{
-			MethodName: "ValidateRollbackCompletion",
-			Handler:    _RolloutPluginService_ValidateRollbackCompletion_Handler,
+			MethodName: "ValidateAbortCompletion",
+			Handler:    _RolloutPluginService_ValidateAbortCompletion_Handler,
 		},
 		{
 			MethodName: "MutateManifestWork",
