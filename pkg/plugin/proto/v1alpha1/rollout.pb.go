@@ -28,7 +28,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Result is the result of the validation response.
+// Result represents the validation result.
 type ValidateResponse_Result int32
 
 const (
@@ -38,7 +38,7 @@ const (
 	// MWRS Controller continues the rollout to the next group of clusters.
 	ValidateResponse_SUCCEEDED ValidateResponse_Result = 1
 	// FAILED represents the failed result of the validation.
-	// MWRS Controller stops the current rollout and rollback is triggered if the rollback is required.
+	// MWRS Controller stops the current rollout and rollback is triggered if rollback is required.
 	ValidateResponse_FAILED ValidateResponse_Result = 2
 	// INPROGRESS represents the state where the validation is still in progress.
 	// MWRS Controller keeps calling this method until the result is not INPROGRESS.
@@ -92,9 +92,9 @@ type MutateManifestWorkRequest_RolloutState int32
 
 const (
 	MutateManifestWorkRequest_ROLLOUT_STATE_UNSPECIFIED MutateManifestWorkRequest_RolloutState = 0
-	// ROLLOUT is the rollout state for the rollout.
+	// ROLLOUT indicates the manifestwork is being rolled out.
 	MutateManifestWorkRequest_ROLLOUT MutateManifestWorkRequest_RolloutState = 1
-	// ABORT is the rollout state for the abort.
+	// ABORT indicates the manifestwork is being aborted.
 	MutateManifestWorkRequest_ABORT MutateManifestWorkRequest_RolloutState = 2
 )
 
@@ -250,12 +250,12 @@ func (x *InitializeResponse) GetCapabilities() *InitializeResponse_Capabilities 
 	return nil
 }
 
-// ClusterRolloutStatus is the status of the cluster rollout.
+// ClusterRolloutStatus represents the status of a cluster rollout.
 type ClusterRolloutStatus struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// cluster_name is the name of the cluster.
 	ClusterName string `protobuf:"bytes,1,opt,name=cluster_name,json=clusterName,proto3" json:"cluster_name,omitempty"`
-	// rollout_status is the status of the cluster rollout.
+	// rollout_status is the current status of the cluster rollout (e.g., "succeeded", "failed", "in_progress").
 	RolloutStatus string `protobuf:"bytes,2,opt,name=rollout_status,json=rolloutStatus,proto3" json:"rollout_status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -305,18 +305,18 @@ func (x *ClusterRolloutStatus) GetRolloutStatus() string {
 	return ""
 }
 
-// RolloutResult is the the current result of clusters.
+// RolloutResult represents the current result of clusters in the rollout process.
 type RolloutResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// applied is the clusters that have been completed.
+	// applied contains the clusters that have been successfully completed.
 	Applied []*ClusterRolloutStatus `protobuf:"bytes,1,rep,name=applied,proto3" json:"applied,omitempty"`
-	// to_rollout is the clusters that are currently being rolled out.
+	// to_rollout contains the clusters that are currently being rolled out.
 	ToRollout []*ClusterRolloutStatus `protobuf:"bytes,2,rep,name=to_rollout,json=toRollout,proto3" json:"to_rollout,omitempty"`
-	// timed_out is the clusters that have timed out.
+	// timed_out contains the clusters that have timed out during the rollout.
 	TimedOut []*ClusterRolloutStatus `protobuf:"bytes,3,rep,name=timed_out,json=timedOut,proto3" json:"timed_out,omitempty"`
-	// removed is the clusters that have been removed.
+	// removed contains the clusters that have been removed from the rollout.
 	Removed []*ClusterRolloutStatus `protobuf:"bytes,4,rep,name=removed,proto3" json:"removed,omitempty"`
-	// placement_total_clusters is the total clusters in placement decision.
+	// placement_total_clusters is the total number of clusters in the placement decision.
 	PlacementTotalClusters int32 `protobuf:"varint,6,opt,name=placement_total_clusters,json=placementTotalClusters,proto3" json:"placement_total_clusters,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
@@ -387,16 +387,16 @@ func (x *RolloutResult) GetPlacementTotalClusters() int32 {
 	return 0
 }
 
-// RolloutMetadata is the metadata of the rollout.
+// RolloutMetadata contains the metadata of the rollout.
 type RolloutMetadata struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// mwrs_name is the name of the manifestwork resource set.
 	MwrsName string `protobuf:"bytes,1,opt,name=mwrs_name,json=mwrsName,proto3" json:"mwrs_name,omitempty"`
 	// placement_name is the name of the placement.
 	PlacementName string `protobuf:"bytes,2,opt,name=placement_name,json=placementName,proto3" json:"placement_name,omitempty"`
-	// namespace is the namespace where mwrs and placement are located.
+	// namespace is the namespace where the manifestwork resource set and placement are located.
 	Namespace string `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	// cluster_name is the name of the cluster.
+	// cluster_name is the name of the cluster. This field is optional and may not be present for all operations.
 	ClusterName   *string `protobuf:"bytes,4,opt,name=cluster_name,json=clusterName,proto3,oneof" json:"cluster_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -561,10 +561,10 @@ func (x *ValidateCompletionRequest) GetMetadata() *RolloutMetadata {
 	return nil
 }
 
-// ValidateResponse is the response from the plugin for the validation of the rollout.
+// ValidateResponse is the response from the plugin for the validation of the rollout or abort.
 type ValidateResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// result is the result of the response.
+	// result is the validation result.
 	Result ValidateResponse_Result `protobuf:"varint,1,opt,name=result,proto3,enum=io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.ValidateResponse_Result" json:"result,omitempty"`
 	// Types that are valid to be assigned to Data:
 	//
@@ -642,12 +642,12 @@ type isValidateResponse_Data interface {
 }
 
 type ValidateResponse_TextData struct {
-	// text_data is the text data of the response.
+	// text_data contains optional text data in the response.
 	TextData string `protobuf:"bytes,2,opt,name=text_data,json=textData,proto3,oneof"`
 }
 
 type ValidateResponse_ProtoData struct {
-	// proto_data is the protobuf data of the response.
+	// proto_data contains optional protobuf data in the response.
 	ProtoData *anypb.Any `protobuf:"bytes,3,opt,name=proto_data,json=protoData,proto3,oneof"`
 }
 
@@ -655,16 +655,16 @@ func (*ValidateResponse_TextData) isValidateResponse_Data() {}
 
 func (*ValidateResponse_ProtoData) isValidateResponse_Data() {}
 
-// MutateManifestWorkRequest is the request to mutate the manifestwork resource before it is applied.
+// MutateManifestWorkRequest is the request to mutate the manifestwork resource before it is applied or aborted.
 type MutateManifestWorkRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// rollout_state is the rollout state.
+	// rollout_state indicates the current state of the rollout operation.
 	RolloutState MutateManifestWorkRequest_RolloutState `protobuf:"varint,1,opt,name=rollout_state,json=rolloutState,proto3,enum=io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.MutateManifestWorkRequest_RolloutState" json:"rollout_state,omitempty"`
-	// metadata is the metadata of the rollout.
+	// metadata contains the metadata of the rollout.
 	Metadata *RolloutMetadata `protobuf:"bytes,2,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	// rollout_result is the result of the rollout.
+	// rollout_result contains the current result of the rollout. This field is optional.
 	RolloutResult *RolloutResult `protobuf:"bytes,3,opt,name=rollout_result,json=rolloutResult,proto3,oneof" json:"rollout_result,omitempty"`
-	// manifestwork is the unstructured manifestwork resource.
+	// manifestwork is the unstructured manifestwork resource to be mutated.
 	Manifestwork  *runtime.Unknown `protobuf:"bytes,4,opt,name=manifestwork,proto3" json:"manifestwork,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -728,7 +728,7 @@ func (x *MutateManifestWorkRequest) GetManifestwork() *runtime.Unknown {
 	return nil
 }
 
-// MutateManifestWorkResponse is the response to mutate the manifestwork resource before it is applied.
+// MutateManifestWorkResponse is the response containing the mutated manifestwork resource.
 type MutateManifestWorkResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// manifestwork is the mutated manifestwork resource.
@@ -776,11 +776,11 @@ func (x *MutateManifestWorkResponse) GetManifestwork() *runtime.Unknown {
 
 type InitializeResponse_Capabilities struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// rollout is the capability to rollout.
+	// rollout indicates whether the plugin supports rollout operations.
 	Rollout bool `protobuf:"varint,1,opt,name=rollout,proto3" json:"rollout,omitempty"`
-	// rollback is the capability to rollback.
-	Rollback bool `protobuf:"varint,2,opt,name=rollback,proto3" json:"rollback,omitempty"`
-	// mutate_manifestwork is the capability to mutate the manifestwork resource.
+	// abort indicates whether the plugin supports abort operations.
+	Abort bool `protobuf:"varint,2,opt,name=abort,proto3" json:"abort,omitempty"`
+	// mutate_manifestwork indicates whether the plugin can mutate the manifestwork resource.
 	MutateManifestwork bool `protobuf:"varint,3,opt,name=mutate_manifestwork,json=mutateManifestwork,proto3" json:"mutate_manifestwork,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
@@ -823,9 +823,9 @@ func (x *InitializeResponse_Capabilities) GetRollout() bool {
 	return false
 }
 
-func (x *InitializeResponse_Capabilities) GetRollback() bool {
+func (x *InitializeResponse_Capabilities) GetAbort() bool {
 	if x != nil {
-		return x.Rollback
+		return x.Abort
 	}
 	return false
 }
@@ -844,14 +844,14 @@ const file_rollout_proto_rawDesc = "" +
 	"\rrollout.proto\x124io.openclustermanagement.sdkgo.plugin.proto.v1alpha1\x1a\x19google/protobuf/any.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a/k8s.io/apimachinery/pkg/runtime/generated.proto\"4\n" +
 	"\x11InitializeRequest\x12\x1f\n" +
 	"\vocm_version\x18\x01 \x01(\tR\n" +
-	"ocmVersion\"\xb4\x02\n" +
+	"ocmVersion\"\xae\x02\n" +
 	"\x12InitializeResponse\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12y\n" +
-	"\fcapabilities\x18\x03 \x01(\v2U.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse.CapabilitiesR\fcapabilities\x1au\n" +
+	"\fcapabilities\x18\x03 \x01(\v2U.io.openclustermanagement.sdkgo.plugin.proto.v1alpha1.InitializeResponse.CapabilitiesR\fcapabilities\x1ao\n" +
 	"\fCapabilities\x12\x18\n" +
-	"\arollout\x18\x01 \x01(\bR\arollout\x12\x1a\n" +
-	"\brollback\x18\x02 \x01(\bR\brollback\x12/\n" +
+	"\arollout\x18\x01 \x01(\bR\arollout\x12\x14\n" +
+	"\x05abort\x18\x02 \x01(\bR\x05abort\x12/\n" +
 	"\x13mutate_manifestwork\x18\x03 \x01(\bR\x12mutateManifestwork\"`\n" +
 	"\x14ClusterRolloutStatus\x12!\n" +
 	"\fcluster_name\x18\x01 \x01(\tR\vclusterName\x12%\n" +

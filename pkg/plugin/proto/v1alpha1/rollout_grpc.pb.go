@@ -40,7 +40,7 @@ const (
 //
 // RolloutPluginService is the service for the rollout plugin.
 type RolloutPluginServiceClient interface {
-	// Initialize initializes the plugin
+	// Initialize initializes the plugin.
 	Initialize(ctx context.Context, in *InitializeRequest, opts ...grpc.CallOption) (*InitializeResponse, error)
 	// BeginRollout is called before the manifestwork resource is applied.
 	// It is used to prepare the rollout.
@@ -52,8 +52,8 @@ type RolloutPluginServiceClient interface {
 	// ValidateRolloutCompletion is called to validate the completion of the rollout.
 	// It is used to check if the rollout is completed successfully.
 	// If the validation is completed successfully, the plugin should return a SUCCEEDED result.
-	// If the validation is still in progress, the plugin should return a INPROGRESS result.
-	// If the validation is failed, the plugin should return a FAILED result.
+	// If the validation is still in progress, the plugin should return an INPROGRESS result.
+	// If the validation fails, the plugin should return a FAILED result.
 	ValidateRolloutCompletion(ctx context.Context, in *ValidateCompletionRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	// BeginAbort is called before the manifestwork resource is aborted.
 	// It is used to prepare the rollback.
@@ -65,11 +65,11 @@ type RolloutPluginServiceClient interface {
 	// ValidateAbortCompletion is called to validate the completion of the abort.
 	// It is used to check if the abort is completed successfully.
 	// If the validation is completed successfully, the plugin should return a SUCCEEDED result.
-	// If the validation is still in progress, the plugin should return a INPROGRESS result.
-	// If the validation is failed, the plugin should return a FAILED result.
+	// If the validation is still in progress, the plugin should return an INPROGRESS result.
+	// If the validation fails, the plugin should return a FAILED result.
 	ValidateAbortCompletion(ctx context.Context, in *ValidateCompletionRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or aborted.
-	// MWRS controller provides the current rollout status to the plugin.
+	// MWRS Controller provides the current rollout status to the plugin.
 	// The plugin can use this information to mutate the manifestwork resource.
 	MutateManifestWork(ctx context.Context, in *MutateManifestWorkRequest, opts ...grpc.CallOption) (*MutateManifestWorkResponse, error)
 }
@@ -168,7 +168,7 @@ func (c *rolloutPluginServiceClient) MutateManifestWork(ctx context.Context, in 
 //
 // RolloutPluginService is the service for the rollout plugin.
 type RolloutPluginServiceServer interface {
-	// Initialize initializes the plugin
+	// Initialize initializes the plugin.
 	Initialize(context.Context, *InitializeRequest) (*InitializeResponse, error)
 	// BeginRollout is called before the manifestwork resource is applied.
 	// It is used to prepare the rollout.
@@ -180,8 +180,8 @@ type RolloutPluginServiceServer interface {
 	// ValidateRolloutCompletion is called to validate the completion of the rollout.
 	// It is used to check if the rollout is completed successfully.
 	// If the validation is completed successfully, the plugin should return a SUCCEEDED result.
-	// If the validation is still in progress, the plugin should return a INPROGRESS result.
-	// If the validation is failed, the plugin should return a FAILED result.
+	// If the validation is still in progress, the plugin should return an INPROGRESS result.
+	// If the validation fails, the plugin should return a FAILED result.
 	ValidateRolloutCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error)
 	// BeginAbort is called before the manifestwork resource is aborted.
 	// It is used to prepare the rollback.
@@ -193,11 +193,11 @@ type RolloutPluginServiceServer interface {
 	// ValidateAbortCompletion is called to validate the completion of the abort.
 	// It is used to check if the abort is completed successfully.
 	// If the validation is completed successfully, the plugin should return a SUCCEEDED result.
-	// If the validation is still in progress, the plugin should return a INPROGRESS result.
-	// If the validation is failed, the plugin should return a FAILED result.
+	// If the validation is still in progress, the plugin should return an INPROGRESS result.
+	// If the validation fails, the plugin should return a FAILED result.
 	ValidateAbortCompletion(context.Context, *ValidateCompletionRequest) (*ValidateResponse, error)
 	// MutateManifestWork is called to mutate the manifestwork resource before it is applied or aborted.
-	// MWRS controller provides the current rollout status to the plugin.
+	// MWRS Controller provides the current rollout status to the plugin.
 	// The plugin can use this information to mutate the manifestwork resource.
 	MutateManifestWork(context.Context, *MutateManifestWorkRequest) (*MutateManifestWorkResponse, error)
 	mustEmbedUnimplementedRolloutPluginServiceServer()
