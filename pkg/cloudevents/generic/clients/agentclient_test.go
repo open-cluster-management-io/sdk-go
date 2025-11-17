@@ -72,7 +72,7 @@ func TestAgentResync(t *testing.T) {
 
 			go func() {
 				transport := agent.(*CloudEventAgentClient[*generictesting.MockResource]).transport
-				err = transport.Receive(ctx, func(event cloudevents.Event) {
+				err = transport.Receive(ctx, func(ctx context.Context, event cloudevents.Event) {
 					select {
 					case eventChan <- receiveEvent{event: event}:
 					case <-ctx.Done():
@@ -155,7 +155,7 @@ func TestAgentPublish(t *testing.T) {
 			stop := make(chan bool)
 			go func() {
 				cloudEventsClient := agent.(*CloudEventAgentClient[*generictesting.MockResource]).transport
-				err = cloudEventsClient.Receive(ctx, func(event cloudevents.Event) {
+				err = cloudEventsClient.Receive(ctx, func(ctx context.Context, event cloudevents.Event) {
 					select {
 					case eventChan <- receiveEvent{event: event}:
 					case <-ctx.Done():
@@ -325,7 +325,7 @@ func TestStatusResyncResponse(t *testing.T) {
 
 			go func() {
 				cloudEventsClient := agent.(*CloudEventAgentClient[*generictesting.MockResource]).transport
-				_ = cloudEventsClient.Receive(ctx, func(event cloudevents.Event) {
+				_ = cloudEventsClient.Receive(ctx, func(ctx context.Context, event cloudevents.Event) {
 					mutex.Lock()
 					defer mutex.Unlock()
 					receivedEvents = append(receivedEvents, event)
