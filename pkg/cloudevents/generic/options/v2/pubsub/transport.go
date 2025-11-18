@@ -2,10 +2,8 @@ package pubsub
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
-	"sync/atomic"
 
 	"cloud.google.com/go/pubsub/v2"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -29,6 +27,7 @@ type pubsubTransport struct {
 	// cluster name, required for agent
 	clusterName string
 	client      *pubsub.Client
+	grpcConn    *grpc.ClientConn
 	// Publisher for spec/status updates
 	publisher *pubsub.Publisher
 	// Publisher for resync broadcasts
@@ -54,6 +53,7 @@ func (o *pubsubTransport) Connect(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			o.grpcConn = pubsubConn
 			clientOptions = append(clientOptions, option.WithGRPCConn(pubsubConn))
 		}
 	}
@@ -133,28 +133,27 @@ func (o *pubsubTransport) Send(ctx context.Context, evt cloudevents.Event) error
 }
 
 func (o *pubsubTransport) Receive(ctx context.Context, fn options.ReceiveHandlerFn) error {
-	// Use an atomic flag to ensure only one of the subscriber or resync subscriber sends an error to errorChan.
-	// This prevents triggering client reconnect and receiver restart twice if both subscribers fail.
-	// 0 = no error sent, 1 = error sent
-	var errorSent atomic.Int32
+	errChan := make(chan error)
 
 	// start the subscriber for spec/status updates
-	go o.receiveFromSubscriber(ctx, o.subscriber, fn, &errorSent)
+	go o.receiveFromSubscriber(ctx, o.subscriber, fn, errChan)
 
-	// start the resync subscriber for broadcast messages
-	go o.receiveFromSubscriber(ctx, o.resyncSubscriber, fn, &errorSent)
+	// start the resync subscriber for resync events
+	go o.receiveFromSubscriber(ctx, o.resyncSubscriber, fn, errChan)
 
-	// wait for context cancellation or timeout
-	<-ctx.Done()
-	return ctx.Err()
+	// Return the error from either subscriber (including context cancellation).
+	// We return errors directly instead of writing to the transport errorChan because
+	// Pub/Sub client has internal retry logic for transient errors. Only non-retryable
+	// errors or context cancellation will be returned here.
+	return <-errChan
 }
 
-// receiveFromSubscriber handles receiving messages from a subscriber and error handling.
+// receiveFromSubscriber handles receiving messages from a subscriber.
 func (o *pubsubTransport) receiveFromSubscriber(
 	ctx context.Context,
 	subscriber *pubsub.Subscriber,
 	fn options.ReceiveHandlerFn,
-	errorSent *atomic.Int32,
+	errChan chan<- error,
 ) {
 	logger := klog.FromContext(ctx)
 	err := subscriber.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
@@ -168,26 +167,29 @@ func (o *pubsubTransport) receiveFromSubscriber(
 		// send ACK after all receiver handlers complete.
 		msg.Ack()
 	})
+
 	// The Pub/Sub client's Receive call automatically retries on retryable errors.
 	// See: https://github.com/googleapis/google-cloud-go/blob/b8e70aa0056a3e126bc36cb7bf242d987f32c0bd/pubsub/service.go#L51
-	// If Receive call returns an error, it's usually due to a non-retryable issue or service outage, eg, subscription not found.
-	// In such cases, we send the error to the error channel to signal the source/agent client to reconnect later.
-	if err != nil {
-		// for normal shutdown, won't send error to error channel.
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return
-		}
-		// use CompareAndSwap to atomically check and set the flag. Only the first subscriber wins the race.
-		if errorSent.CompareAndSwap(0, 1) {
-			o.errorChan <- fmt.Errorf("subscriber is interrupted by error: %w", err)
-		} else {
-			logger.Error(err, "subscriber is interrupted by error but error already sent, skipping...")
-		}
+	// If Receive returns an error, it's usually due to a non-retryable issue (e.g., subscription not found),
+	// service outage, or context cancellation.
+	select {
+	case errChan <- err:
+	default:
 	}
 }
 
 func (o *pubsubTransport) Close(ctx context.Context) error {
-	return o.client.Close()
+	var err error
+	if o.client != nil {
+		err = o.client.Close()
+	}
+
+	if o.grpcConn != nil {
+		_ = o.grpcConn.Close()
+		o.grpcConn = nil
+	}
+
+	return err
 }
 
 func (o *pubsubTransport) ErrorChan() <-chan error {

@@ -144,7 +144,7 @@ func TestBuildCloudEventsAgentOptions(t *testing.T) {
 					Timeout:    60 * time.Second,
 				},
 			},
-			expectedTransportType: "*mqtt.mqttAgentTransport",
+			expectedTransportType: "*mqtt.mqttTransport",
 		},
 		{
 			name:       "grpc config",
