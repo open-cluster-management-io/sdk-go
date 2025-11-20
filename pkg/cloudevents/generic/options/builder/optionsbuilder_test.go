@@ -56,7 +56,7 @@ func TestBuildCloudEventsSourceOptions(t *testing.T) {
 					Timeout:    60 * time.Second,
 				},
 			},
-			expectedTransportType: "*mqtt.mqttSourceTransport",
+			expectedTransportType: "*mqtt.mqttTransport",
 		},
 		{
 			name:       "grpc config",

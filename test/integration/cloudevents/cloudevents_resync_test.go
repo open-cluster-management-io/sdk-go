@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	"k8s.io/apimachinery/pkg/types"
-	"time"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -20,6 +21,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/agent/codec"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
+	mqttv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/mqtt"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/agent"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/source"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
@@ -55,7 +57,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - RESYNC", func() {
 
 		sourceCloudEventsClient, err = source.StartResourceSourceClient(
 			ctx,
-			mqtt.NewSourceOptions(
+			mqttv2.NewSourceOptions(
 				util.NewMQTTSourceOptions(mqttBrokerHost, sourceID),
 				fmt.Sprintf("%s-client", sourceID),
 				sourceID,

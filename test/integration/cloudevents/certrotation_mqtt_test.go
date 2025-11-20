@@ -10,6 +10,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/cert"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
+	mqttv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/mqtt"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/util"
 )
@@ -18,7 +19,7 @@ var _ = ginkgo.Describe("CloudEvents Certificate Rotation Test - MQTT", runCloud
 
 func GetMQTTAgentOptions(_ context.Context, agentID, clusterName, clientCertFile, clientKeyFile string) *options.CloudEventsAgentOptions {
 	mqttOptions := newTLSMQTTOptions(certPool, mqttTLSBrokerHost, clientCertFile, clientKeyFile)
-	return mqtt.NewAgentOptions(mqttOptions, clusterName, agentID)
+	return mqttv2.NewAgentOptions(mqttOptions, clusterName, agentID)
 }
 
 func newTLSMQTTOptions(certPool *x509.CertPool, brokerHost, clientCertFile, clientKeyFile string) *mqtt.MQTTOptions {
