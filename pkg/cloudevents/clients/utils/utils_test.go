@@ -335,7 +335,7 @@ func TestValidateResourceMetadata(t *testing.T) {
 		{
 			name:             "no metadata",
 			resource:         nil,
-			expectedErrorMsg: "metadata: Invalid value: \"null\": object does not implement the Object interfaces",
+			expectedErrorMsg: "metadata: Invalid value: null: object does not implement the Object interfaces",
 		},
 		{
 			name:             "no uid",
