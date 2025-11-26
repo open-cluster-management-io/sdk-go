@@ -142,13 +142,13 @@ func TestGetRolloutCluster_All(t *testing.T) {
 			expectRolloutStrategy: &clusterv1alpha1.RolloutStrategy{Type: clusterv1alpha1.All, All: &clusterv1alpha1.RolloutAll{RolloutConfig: clusterv1alpha1.RolloutConfig{ProgressDeadline: "90s"}}},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Failed, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
-					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Failed, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
+					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster6", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				RecheckAfter: &recheckTime,
 			},
@@ -208,7 +208,6 @@ func TestGetRolloutCluster_All(t *testing.T) {
 
 func TestGetRolloutCluster_Progressive(t *testing.T) {
 	recheck30Duration := 30 * time.Second
-	recheck60Duration := 60 * time.Second
 	tests := []testCase{
 		{
 			name: "test progressive rollout deprecated timeout",
@@ -347,7 +346,7 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: ToApply},
@@ -433,7 +432,7 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: ToApply},
@@ -492,10 +491,10 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				MaxFailureBreach: true,
 				RecheckAfter:     &recheck30Duration,
@@ -552,14 +551,82 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Succeeded, LastTransitionTime: &fakeTime_30s},
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_30s, TimeOutTime: &fakeTime60s},
+					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Succeeded, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime60s},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				MaxFailureBreach: false,
-				RecheckAfter:     &recheck60Duration,
+				RecheckAfter:     &recheck30Duration,
+			},
+		},
+		{
+			name: "test progressive rollout with mixed timeout and minSuccessTime scenarios",
+			rolloutStrategy: clusterv1alpha1.RolloutStrategy{
+				Type: clusterv1alpha1.Progressive,
+				Progressive: &clusterv1alpha1.RolloutProgressive{
+					RolloutConfig: clusterv1alpha1.RolloutConfig{
+						ProgressDeadline: "90s",
+						MaxFailures:      intstr.FromString("100%"),
+						MinSuccessTime:   metav1.Duration{Duration: time.Minute},
+					},
+					MaxConcurrency: intstr.FromInt32(4),
+				},
+			},
+			existingScheduledClusterGroups: map[clusterv1beta1sdk.GroupKey]sets.Set[string]{
+				{GroupName: "group1", GroupIndex: 0}: sets.New[string]("cluster1", "cluster2", "cluster3", "cluster4"),
+			},
+			clusterRolloutStatusFunc: dummyWorkloadClusterRolloutStatusFunc,
+			expectRolloutStrategy: &clusterv1alpha1.RolloutStrategy{
+				Type: clusterv1alpha1.Progressive,
+				Progressive: &clusterv1alpha1.RolloutProgressive{
+					RolloutConfig: clusterv1alpha1.RolloutConfig{
+						ProgressDeadline: "90s",
+						MaxFailures:      intstr.FromString("100%"),
+						MinSuccessTime:   metav1.Duration{Duration: time.Minute},
+					},
+					MaxConcurrency: intstr.FromInt32(4),
+				},
+			},
+			existingWorkloads: []dummyWorkload{
+				{
+					ClusterGroup:       clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0},
+					ClusterName:        "cluster1",
+					State:              done,
+					LastTransitionTime: &fakeTime_30s, // Succeeded 30s ago, still in 60s soak period
+				},
+				{
+					ClusterGroup:       clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0},
+					ClusterName:        "cluster2",
+					State:              applying,
+					LastTransitionTime: &fakeTime_60s, // Progressing 60s ago, will timeout in 30s
+				},
+				{
+					ClusterGroup:       clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0},
+					ClusterName:        "cluster3",
+					State:              applying,
+					LastTransitionTime: &fakeTime_30s, // Progressing 30s ago, will timeout in 60s
+				},
+				{
+					ClusterGroup:       clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0},
+					ClusterName:        "cluster4",
+					State:              done,
+					LastTransitionTime: &fakeTime_120s, // Succeeded 120s ago, outside 60s soak period
+				},
+			},
+			expectRolloutResult: RolloutResult{
+				ClustersToRollout: []ClusterRolloutStatus{
+					// cluster1: in soak period (30s into 60s soak), RecheckTime in 30s
+					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Succeeded, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime30s},
+					// cluster2: progressing, will timeout in 30s
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
+					// cluster3: progressing, will timeout in 60s
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime60s},
+					// cluster4: succeeded and outside soak period, not included
+				},
+				MaxFailureBreach: false,
+				RecheckAfter:     &recheck30Duration, // Min of cluster1 soak (30s) and cluster2 timeout (30s)
 			},
 		},
 		{
@@ -605,11 +672,11 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				RecheckAfter: &recheck30Duration,
 			},
@@ -661,8 +728,8 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_30s, TimeOutTime: &fakeTime_30s},
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_30s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime_30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime_30s},
 				},
 			},
 		},
@@ -719,10 +786,10 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				MaxFailureBreach: true,
 				RecheckAfter:     &recheck30Duration,
@@ -874,10 +941,10 @@ func TestGetRolloutCluster_Progressive(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Failed, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Failed, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				MaxFailureBreach: true,
 				RecheckAfter:     &recheck30Duration,
@@ -1076,7 +1143,7 @@ func TestGetRolloutCluster_ProgressivePerGroup(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 				},
@@ -1124,10 +1191,10 @@ func TestGetRolloutCluster_ProgressivePerGroup(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				MaxFailureBreach: true,
 				RecheckAfter:     &recheck30Duration,
@@ -1180,7 +1247,7 @@ func TestGetRolloutCluster_ProgressivePerGroup(t *testing.T) {
 					{ClusterName: "cluster6", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 			},
 		},
@@ -1249,7 +1316,7 @@ func TestGetRolloutCluster_ProgressivePerGroup(t *testing.T) {
 					{ClusterName: "cluster9", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 2}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 			},
 		},
@@ -1448,8 +1515,8 @@ func TestGetRolloutCluster_ProgressivePerGroup(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				MaxFailureBreach: true,
 			},
@@ -1506,7 +1573,7 @@ func TestGetRolloutCluster_ProgressivePerGroup(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				MaxFailureBreach: true,
 			},
@@ -1567,6 +1634,65 @@ func TestGetRolloutCluster_ProgressivePerGroup(t *testing.T) {
 					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: ToApply},
 					{ClusterName: "cluster6", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: ToApply},
 				},
+			},
+		},
+		{
+			name: "test progressivePerGroup rollout with minSuccessTime and mixed cluster states",
+			rolloutStrategy: clusterv1alpha1.RolloutStrategy{
+				Type: clusterv1alpha1.ProgressivePerGroup,
+				ProgressivePerGroup: &clusterv1alpha1.RolloutProgressivePerGroup{
+					RolloutConfig: clusterv1alpha1.RolloutConfig{
+						ProgressDeadline: "90s",
+						MaxFailures:      intstr.FromString("50%"),
+						MinSuccessTime:   metav1.Duration{Duration: time.Minute},
+					},
+				},
+			},
+			existingScheduledClusterGroups: map[clusterv1beta1sdk.GroupKey]sets.Set[string]{
+				{GroupName: "group1", GroupIndex: 0}: sets.New[string]("cluster1", "cluster2", "cluster3"),
+				{GroupName: "group2", GroupIndex: 1}: sets.New[string]("cluster4", "cluster5"),
+			},
+			clusterRolloutStatusFunc: dummyWorkloadClusterRolloutStatusFunc,
+			expectRolloutStrategy: &clusterv1alpha1.RolloutStrategy{
+				Type: clusterv1alpha1.ProgressivePerGroup,
+				ProgressivePerGroup: &clusterv1alpha1.RolloutProgressivePerGroup{
+					RolloutConfig: clusterv1alpha1.RolloutConfig{
+						ProgressDeadline: "90s",
+						MaxFailures:      intstr.FromString("50%"),
+						MinSuccessTime:   metav1.Duration{Duration: time.Minute},
+					},
+				},
+			},
+			existingWorkloads: []dummyWorkload{
+				{
+					ClusterGroup:       clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0},
+					ClusterName:        "cluster1",
+					State:              done,
+					LastTransitionTime: &fakeTime_30s, // Succeeded 30s ago, in soak period
+				},
+				{
+					ClusterGroup:       clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0},
+					ClusterName:        "cluster2",
+					State:              done,
+					LastTransitionTime: &fakeTime_120s, // Succeeded 120s ago, outside soak period
+				},
+				{
+					ClusterGroup:       clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0},
+					ClusterName:        "cluster3",
+					State:              applying,
+					LastTransitionTime: &fakeTime_30s, // Progressing 30s ago
+				},
+			},
+			expectRolloutResult: RolloutResult{
+				ClustersToRollout: []ClusterRolloutStatus{
+					// cluster1: in soak period (30s into 60s soak)
+					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Succeeded, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime30s},
+					// cluster2: succeeded and outside soak period, not included
+					// cluster3: progressing, will timeout in 60s
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime60s},
+				},
+				MaxFailureBreach: false,
+				RecheckAfter:     func() *time.Duration { d := 30 * time.Second; return &d }(),
 			},
 		},
 	}
@@ -1670,14 +1796,14 @@ func TestGetRolloutCluster_ClusterAdded(t *testing.T) {
 			expectRolloutStrategy: &clusterv1alpha1.RolloutStrategy{Type: clusterv1alpha1.All, All: &clusterv1alpha1.RolloutAll{RolloutConfig: clusterv1alpha1.RolloutConfig{ProgressDeadline: "90s"}}},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Failed, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
-					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Failed, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
+					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster6", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: ToApply},
 					{ClusterName: "cluster7", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				RecheckAfter: &recheck30Time,
 			},
@@ -1748,8 +1874,8 @@ func TestGetRolloutCluster_ClusterAdded(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
-					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 2}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
+					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 2}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster7", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 				},
 				RecheckAfter: &recheck30Time,
@@ -1802,8 +1928,8 @@ func TestGetRolloutCluster_ClusterAdded(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
-					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
+					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: ToApply},
 				},
 				RecheckAfter: &recheck30Time,
@@ -1910,10 +2036,10 @@ func TestGetRolloutCluster_ClusterRemoved(t *testing.T) {
 			expectRolloutStrategy: &clusterv1alpha1.RolloutStrategy{Type: clusterv1alpha1.All, All: &clusterv1alpha1.RolloutAll{RolloutConfig: clusterv1alpha1.RolloutConfig{ProgressDeadline: "90s"}}},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster5", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				ClustersRemoved: []ClusterRolloutStatus{
 					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Failed, LastTransitionTime: &fakeTime_120s},
@@ -1965,11 +2091,11 @@ func TestGetRolloutCluster_ClusterRemoved(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 					{ClusterName: "cluster4", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "", GroupIndex: 1}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				ClustersRemoved: []ClusterRolloutStatus{
 					{ClusterName: "cluster1", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Succeeded, LastTransitionTime: &fakeTime_60s},
@@ -2079,7 +2205,7 @@ func TestGetRolloutCluster_ClusterRemoved(t *testing.T) {
 			},
 			expectRolloutResult: RolloutResult{
 				ClustersToRollout: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Progressing, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime30s},
 				},
 				ClustersRemoved: []ClusterRolloutStatus{
 					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Failed, LastTransitionTime: &fakeTime_60s},
@@ -2133,7 +2259,7 @@ func TestGetRolloutCluster_ClusterRemoved(t *testing.T) {
 					{ClusterName: "cluster6", GroupKey: clusterv1beta1sdk.GroupKey{GroupIndex: 1}, Status: ToApply},
 				},
 				ClustersTimeOut: []ClusterRolloutStatus{
-					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, TimeOutTime: &fakeTime_30s},
+					{ClusterName: "cluster3", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: TimeOut, LastTransitionTime: &fakeTime_120s, RecheckTime: &fakeTime_30s},
 				},
 				ClustersRemoved: []ClusterRolloutStatus{
 					{ClusterName: "cluster2", GroupKey: clusterv1beta1sdk.GroupKey{GroupName: "group1", GroupIndex: 0}, Status: Failed, LastTransitionTime: &fakeTime_60s},
@@ -2286,7 +2412,12 @@ func TestDetermineRolloutStatus(t *testing.T) {
 			name:                  "Succeeded status within the minSuccessTime",
 			clusterStatus:         ClusterRolloutStatus{ClusterName: "cluster1", Status: Succeeded},
 			minSuccessTime:        time.Minute,
-			expectRolloutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: Succeeded}},
+			expectRolloutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: Succeeded, RecheckTime: &fakeTime60s}},
+		},
+		{
+			name:           "Succeeded status outside the minSuccessTime",
+			clusterStatus:  ClusterRolloutStatus{ClusterName: "cluster1", Status: Succeeded, LastTransitionTime: &fakeTime_120s},
+			minSuccessTime: time.Minute,
 		},
 		{
 			name:          "TimeOut status",
@@ -2297,25 +2428,31 @@ func TestDetermineRolloutStatus(t *testing.T) {
 			name:                  "Progressing status within the timeout duration",
 			clusterStatus:         ClusterRolloutStatus{ClusterName: "cluster1", Status: Progressing, LastTransitionTime: &fakeTime_30s},
 			timeout:               time.Minute,
-			expectRolloutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: Progressing, LastTransitionTime: &fakeTime_30s, TimeOutTime: &fakeTime30s}},
+			expectRolloutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: Progressing, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime30s}},
 		},
 		{
 			name:                  "Failed status outside of the timeout duration",
 			clusterStatus:         ClusterRolloutStatus{ClusterName: "cluster1", Status: Failed, LastTransitionTime: &fakeTime_60s},
 			timeout:               time.Minute,
-			expectTimeOutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: TimeOut, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime}},
+			expectTimeOutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: TimeOut, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime}},
 		},
 		{
 			name:                  "unknown status outside of the timeout duration",
 			clusterStatus:         ClusterRolloutStatus{ClusterName: "cluster1", Status: 8, LastTransitionTime: &fakeTime_60s},
 			timeout:               time.Minute,
-			expectTimeOutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: TimeOut, LastTransitionTime: &fakeTime_60s, TimeOutTime: &fakeTime}},
+			expectTimeOutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: TimeOut, LastTransitionTime: &fakeTime_60s, RecheckTime: &fakeTime}},
 		},
 		{
 			name:                  "unknown status within the timeout duration",
 			clusterStatus:         ClusterRolloutStatus{ClusterName: "cluster1", Status: 9, LastTransitionTime: &fakeTime_30s},
 			timeout:               time.Minute,
-			expectRolloutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: 9, LastTransitionTime: &fakeTime_30s, TimeOutTime: &fakeTime30s}},
+			expectRolloutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: 9, LastTransitionTime: &fakeTime_30s, RecheckTime: &fakeTime30s}},
+		},
+		{
+			name:                  "Succeeded status with nil LastTransitionTime and minSuccessTime",
+			clusterStatus:         ClusterRolloutStatus{ClusterName: "cluster1", Status: Succeeded},
+			minSuccessTime:        2 * time.Minute,
+			expectRolloutClusters: []ClusterRolloutStatus{{ClusterName: "cluster1", Status: Succeeded, RecheckTime: func() *metav1.Time { t := metav1.NewTime(fakeTime.Add(2 * time.Minute)); return &t }()}},
 		},
 	}
 
@@ -2331,6 +2468,82 @@ func TestDetermineRolloutStatus(t *testing.T) {
 			t.Errorf("Case: %v\nFailed to run NewRolloutHandler. Expect timeout clusters: %+v\nActual rollout clusters: %+v", tc.name, tc.expectTimeOutClusters, timeoutClusters)
 			return
 		}
+	}
+}
+
+func TestMinRecheckAfter(t *testing.T) {
+	RolloutClock = testingclock.NewFakeClock(fakeTime.Time)
+
+	testCases := []struct {
+		name                 string
+		rolloutClusters      []ClusterRolloutStatus
+		expectedRecheckAfter *time.Duration
+	}{
+		{
+			name: "Single cluster with RecheckTime in 30s",
+			rolloutClusters: []ClusterRolloutStatus{
+				{ClusterName: "cluster1", Status: Progressing, RecheckTime: &fakeTime30s},
+			},
+			expectedRecheckAfter: func() *time.Duration { d := 30 * time.Second; return &d }(),
+		},
+		{
+			name: "Multiple clusters, minimum RecheckTime should be selected",
+			rolloutClusters: []ClusterRolloutStatus{
+				{ClusterName: "cluster1", Status: Succeeded, RecheckTime: &fakeTime60s},   // 60s from now
+				{ClusterName: "cluster2", Status: Progressing, RecheckTime: &fakeTime30s}, // 30s from now (min)
+				{ClusterName: "cluster3", Status: Progressing, RecheckTime: &fakeTime60s}, // 60s from now
+			},
+			expectedRecheckAfter: func() *time.Duration { d := 30 * time.Second; return &d }(),
+		},
+		{
+			name: "Mixed timeout and soak period scenarios",
+			rolloutClusters: []ClusterRolloutStatus{
+				{ClusterName: "cluster1", Status: Succeeded, RecheckTime: &fakeTime30s},   // Soak period ends in 30s
+				{ClusterName: "cluster2", Status: Progressing, RecheckTime: &fakeTime30s}, // Timeout in 30s
+				{ClusterName: "cluster3", Status: Progressing, RecheckTime: &fakeTime60s}, // Timeout in 60s
+			},
+			expectedRecheckAfter: func() *time.Duration { d := 30 * time.Second; return &d }(),
+		},
+		{
+			name: "No RecheckTime set, should return nil",
+			rolloutClusters: []ClusterRolloutStatus{
+				{ClusterName: "cluster1", Status: ToApply},
+				{ClusterName: "cluster2", Status: ToApply},
+			},
+			expectedRecheckAfter: nil,
+		},
+		{
+			name:                 "No clusters, should return nil",
+			rolloutClusters:      []ClusterRolloutStatus{},
+			expectedRecheckAfter: nil,
+		},
+		{
+			name: "Only clusters with RecheckTime are considered",
+			rolloutClusters: []ClusterRolloutStatus{
+				{ClusterName: "cluster1", Status: ToApply}, // No RecheckTime
+				{ClusterName: "cluster2", Status: Progressing, RecheckTime: &fakeTime60s},
+				{ClusterName: "cluster3", Status: ToApply}, // No RecheckTime
+			},
+			expectedRecheckAfter: func() *time.Duration { d := 60 * time.Second; return &d }(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := minRecheckAfter(tc.rolloutClusters)
+
+			if tc.expectedRecheckAfter == nil {
+				if result != nil {
+					t.Errorf("Expected nil RecheckAfter, got: %v", *result)
+				}
+			} else {
+				if result == nil {
+					t.Errorf("Expected RecheckAfter: %v, got nil", *tc.expectedRecheckAfter)
+				} else if *result != *tc.expectedRecheckAfter {
+					t.Errorf("Expected RecheckAfter: %v, got: %v", *tc.expectedRecheckAfter, *result)
+				}
+			}
+		})
 	}
 }
 
