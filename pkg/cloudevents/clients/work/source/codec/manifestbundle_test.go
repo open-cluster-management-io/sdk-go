@@ -370,3 +370,173 @@ func TestManifestBundleDecode(t *testing.T) {
 		})
 	}
 }
+
+func TestManifestBundleLogTracing(t *testing.T) {
+	codec := NewManifestBundleCodec()
+
+	t.Run("encode preserves log tracing annotations to event", func(t *testing.T) {
+		work := &workv1.ManifestWork{
+			ObjectMeta: metav1.ObjectMeta{
+				UID:             "test-uid",
+				ResourceVersion: "1",
+				Namespace:       "cluster1",
+				Name:            "test-work",
+				Generation:      1,
+				Annotations: map[string]string{
+					"logging.open-cluster-management.io/trace-id": "trace-123",
+					"logging.open-cluster-management.io/user":     "test-user",
+					"other-annotation":                            "other-value",
+				},
+			},
+			Spec: workv1.ManifestWorkSpec{},
+		}
+
+		eventType := types.CloudEventsType{
+			CloudEventsDataType: payload.ManifestBundleEventDataType,
+			SubResource:         types.SubResourceSpec,
+			Action:              "test_create",
+		}
+
+		evt, err := codec.Encode("test-source", eventType, work)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Verify that log tracing annotations are transferred to event extensions
+		extensions := evt.Extensions()
+		if logTracingExt, ok := extensions["logtracing"]; ok {
+			logTracingJSON, ok := logTracingExt.(string)
+			if !ok {
+				t.Errorf("logtracing extension is not a string")
+			}
+
+			var tracingMap map[string]string
+			if err := json.Unmarshal([]byte(logTracingJSON), &tracingMap); err != nil {
+				t.Errorf("failed to unmarshal logtracing: %v", err)
+			}
+
+			if tracingMap["logging.open-cluster-management.io/trace-id"] != "trace-123" {
+				t.Errorf("expected trace-id in logtracing, got %v", tracingMap)
+			}
+			if tracingMap["logging.open-cluster-management.io/user"] != "test-user" {
+				t.Errorf("expected user in logtracing, got %v", tracingMap)
+			}
+			if _, ok := tracingMap["other-annotation"]; ok {
+				t.Errorf("non-tracing annotation should not be in logtracing")
+			}
+		} else {
+			t.Errorf("expected logtracing extension to be set")
+		}
+	})
+
+	t.Run("decode transfers log tracing from event to work annotations", func(t *testing.T) {
+		evt := cloudevents.NewEvent()
+		evt.SetSource("source1")
+		evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.status.test")
+		evt.SetExtension("resourceid", "test-uid")
+		evt.SetExtension("resourceversion", "5")
+		evt.SetExtension("sequenceid", "1834773391719010304")
+
+		// Add log tracing extension
+		tracingMap := map[string]string{
+			"logging.open-cluster-management.io/request-id": "req-456",
+			"logging.open-cluster-management.io/session":    "sess-789",
+		}
+		tracingJSON, _ := json.Marshal(tracingMap)
+		evt.SetExtension("logtracing", string(tracingJSON))
+
+		if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   "Applied",
+					Status: metav1.ConditionTrue,
+				},
+			},
+		}); err != nil {
+			t.Fatalf("failed to set event data: %v", err)
+		}
+
+		work, err := codec.Decode(&evt)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Verify that log tracing was transferred to work annotations
+		if work.Annotations["logging.open-cluster-management.io/request-id"] != "req-456" {
+			t.Errorf("expected request-id annotation, got %v", work.Annotations)
+		}
+		if work.Annotations["logging.open-cluster-management.io/session"] != "sess-789" {
+			t.Errorf("expected session annotation, got %v", work.Annotations)
+		}
+	})
+
+	t.Run("encode with no tracing annotations", func(t *testing.T) {
+		work := &workv1.ManifestWork{
+			ObjectMeta: metav1.ObjectMeta{
+				UID:        "test-uid",
+				Namespace:  "cluster1",
+				Generation: 1,
+				Annotations: map[string]string{
+					"regular-annotation": "regular-value",
+				},
+			},
+			Spec: workv1.ManifestWorkSpec{},
+		}
+
+		eventType := types.CloudEventsType{
+			CloudEventsDataType: payload.ManifestBundleEventDataType,
+			SubResource:         types.SubResourceSpec,
+			Action:              "test_create",
+		}
+
+		evt, err := codec.Encode("test-source", eventType, work)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Verify that logtracing extension is either not set or is empty
+		if logTracingExt, ok := evt.Extensions()["logtracing"]; ok {
+			logTracingJSON, ok := logTracingExt.(string)
+			if !ok {
+				t.Errorf("logtracing extension is not a string")
+			}
+			var tracingMap map[string]string
+			if err := json.Unmarshal([]byte(logTracingJSON), &tracingMap); err != nil {
+				t.Errorf("failed to unmarshal logtracing: %v", err)
+			}
+			if len(tracingMap) != 0 {
+				t.Errorf("expected empty logtracing map, got %v", tracingMap)
+			}
+		}
+	})
+
+	t.Run("decode with no tracing extension", func(t *testing.T) {
+		evt := cloudevents.NewEvent()
+		evt.SetSource("source1")
+		evt.SetType("io.open-cluster-management.works.v1alpha1.manifestbundles.status.test")
+		evt.SetExtension("resourceid", "test-uid")
+		evt.SetExtension("resourceversion", "3")
+		evt.SetExtension("sequenceid", "1834773391719010304")
+
+		if err := evt.SetData(cloudevents.ApplicationJSON, &payload.ManifestBundleStatus{}); err != nil {
+			t.Fatalf("failed to set event data: %v", err)
+		}
+
+		work, err := codec.Decode(&evt)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Verify that only sequenceid annotation is present (no tracing annotations)
+		foundTracingAnnotation := false
+		for key := range work.Annotations {
+			if key != "cloudevents.open-cluster-management.io/sequenceid" {
+				foundTracingAnnotation = true
+				break
+			}
+		}
+		if foundTracingAnnotation {
+			t.Errorf("unexpected tracing annotations found: %v", work.Annotations)
+		}
+	})
+}
