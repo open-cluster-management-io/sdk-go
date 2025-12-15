@@ -1228,12 +1228,14 @@ k8s.io/utils/lru
 k8s.io/utils/net
 k8s.io/utils/ptr
 k8s.io/utils/trace
-# open-cluster-management.io/api v1.1.1-0.20251124092621-2337d27c3b7f
+# open-cluster-management.io/api v1.1.1-0.20251215032811-ee922fbb996c
 ## explicit; go 1.24.0
 open-cluster-management.io/api/addon/v1alpha1
+open-cluster-management.io/api/addon/v1beta1
 open-cluster-management.io/api/client/addon/clientset/versioned
 open-cluster-management.io/api/client/addon/clientset/versioned/scheme
 open-cluster-management.io/api/client/addon/clientset/versioned/typed/addon/v1alpha1
+open-cluster-management.io/api/client/addon/clientset/versioned/typed/addon/v1beta1
 open-cluster-management.io/api/client/cluster/clientset/versioned
 open-cluster-management.io/api/client/cluster/clientset/versioned/fake
 open-cluster-management.io/api/client/cluster/clientset/versioned/scheme
