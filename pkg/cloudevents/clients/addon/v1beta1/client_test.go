@@ -1,15 +1,15 @@
-package addon
+package v1beta1
 
 import (
 	"context"
 	"encoding/json"
 	jsonpatch "github.com/evanphx/json-patch/v5"
+	addonapiv1beta1 "open-cluster-management.io/api/addon/v1beta1"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/statushash"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
@@ -20,17 +20,17 @@ func TestPatch(t *testing.T) {
 	cases := []struct {
 		name        string
 		clusterName string
-		addon       *addonapiv1alpha1.ManagedClusterAddOn
+		addon       *addonapiv1beta1.ManagedClusterAddOn
 		patch       []byte
 	}{
 		{
 			name:        "patch addon",
 			clusterName: "cluster1",
-			addon: &addonapiv1alpha1.ManagedClusterAddOn{
+			addon: &addonapiv1beta1.ManagedClusterAddOn{
 				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "cluster1"},
 			},
 			patch: func() []byte {
-				old := &addonapiv1alpha1.ManagedClusterAddOn{
+				old := &addonapiv1beta1.ManagedClusterAddOn{
 					ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "cluster1"},
 				}
 				oldData, err := json.Marshal(old)
@@ -39,7 +39,7 @@ func TestPatch(t *testing.T) {
 				}
 
 				new := old.DeepCopy()
-				new.Status = addonapiv1alpha1.ManagedClusterAddOnStatus{
+				new.Status = addonapiv1beta1.ManagedClusterAddOnStatus{
 					Namespace: "install",
 				}
 
@@ -62,7 +62,7 @@ func TestPatch(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			watcherStore := store.NewAgentInformerWatcherStore[*addonapiv1alpha1.ManagedClusterAddOn]()
+			watcherStore := store.NewAgentInformerWatcherStore[*addonapiv1beta1.ManagedClusterAddOn]()
 
 			ceClientOpt := fake.NewAgentOptions(fake.NewEventChan(), c.clusterName, c.clusterName+"agent")
 			ceClient, err := clients.NewCloudEventAgentClient(
@@ -74,15 +74,12 @@ func TestPatch(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-			addonClientSet := &AddonClientSetWrapper{&AddonV1Alpha1ClientWrapper{
-				NewManagedClusterAddOnClient(ceClient, watcherStore),
-			}}
-
+			addonClient := NewAddonClientWrapper(NewManagedClusterAddOnClient(ceClient, watcherStore))
 			if err := watcherStore.Store.Add(c.addon); err != nil {
 				t.Error(err)
 			}
 
-			if _, err = addonClientSet.AddonV1alpha1().ManagedClusterAddOns(c.clusterName).Patch(
+			if _, err = addonClient.ManagedClusterAddOns(c.clusterName).Patch(
 				ctx,
 				c.addon.Name,
 				types.MergePatchType,
