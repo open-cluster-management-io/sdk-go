@@ -30,8 +30,12 @@ type GRPCServerOptions struct {
 	ServerPingInterval      time.Duration `json:"server_ping_interval" yaml:"server_ping_interval"`
 	ServerPingTimeout       time.Duration `json:"server_ping_timeout" yaml:"server_ping_timeout"`
 	PermitPingWithoutStream bool          `json:"permit_ping_without_stream" yaml:"permit_ping_without_stream"`
+	CertWatchInterval       time.Duration `json:"cert_watch_interval" yaml:"cert_watch_interval"`
 }
 
+// LoadGRPCServerOptions loads GRPCServerOptions from the YAML file at configPath, falling back to defaults if the file does not exist.
+// If the file exists, it unmarshals its YAML into the options and validates them. It returns the populated options or an error
+// encountered while reading, unmarshalling, or validating the configuration.
 func LoadGRPCServerOptions(configPath string) (*GRPCServerOptions, error) {
 	opts := NewGRPCServerOptions()
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -55,6 +59,8 @@ func LoadGRPCServerOptions(configPath string) (*GRPCServerOptions, error) {
 	return opts, nil
 }
 
+// NewGRPCServerOptions creates a GRPCServerOptions populated with sensible defaults for TLS, timeouts, message sizes, and connection settings.
+// The returned options set TLS versions to 1.2–1.3, default file paths for serving certificate and client CA, ServerBindPort "8090", large limits for concurrent streams and message sizes (4 MB receive), sensible connection and keepalive/ping intervals, 32 KB read/write buffers, and a certificate watch interval of one minute.
 func NewGRPCServerOptions() *GRPCServerOptions {
 	return &GRPCServerOptions{
 		ClientCAFile:          "/var/run/secrets/hub/grpc/ca/ca-bundle.crt",
@@ -73,6 +79,7 @@ func NewGRPCServerOptions() *GRPCServerOptions {
 		ServerPingTimeout:     10 * time.Second,
 		WriteBufferSize:       32 * 1024,
 		ReadBufferSize:        32 * 1024,
+		CertWatchInterval:     1 * time.Minute, // Default: 1 minute
 	}
 }
 
@@ -92,6 +99,7 @@ func (o *GRPCServerOptions) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&o.TLSCertFile, "grpc-tls-cert-file", o.TLSCertFile, "The path to the tls.crt file")
 	flags.StringVar(&o.TLSKeyFile, "grpc-tls-key-file", o.TLSKeyFile, "The path to the tls.key file")
 	flags.StringVar(&o.ClientCAFile, "grpc-client-ca-file", o.ClientCAFile, "The path to the client ca file, must specify if using mtls authentication type")
+	flags.DurationVar(&o.CertWatchInterval, "grpc-cert-watch-interval", o.CertWatchInterval, "Certificate watch interval for polling certificate file changes")
 }
 
 // Validate checks option ranges and cross-field constraints.
@@ -102,6 +110,10 @@ func (o *GRPCServerOptions) Validate() error {
 	}
 	if o.TLSMinVersion > o.TLSMaxVersion {
 		return fmt.Errorf("tls_min_version (%d) must be <= tls_max_version (%d)", o.TLSMinVersion, o.TLSMaxVersion)
+	}
+	// Validate certificate watch interval to prevent time.NewTicker panic
+	if o.CertWatchInterval <= 0 {
+		return fmt.Errorf("cert_watch_interval (%v) must be greater than 0", o.CertWatchInterval)
 	}
 	return nil
 }
