@@ -99,7 +99,7 @@ func TestCloudEventsMetrics(t *testing.T) {
 			require.NoError(t, err)
 
 			// start agent subscription
-			agent.Subscribe(ctx, func(_ context.Context, action types.ResourceAction, obj *generictesting.MockResource) error {
+			agent.Subscribe(ctx, func(_ context.Context, obj *generictesting.MockResource) error {
 				// do nothing
 				return nil
 			})

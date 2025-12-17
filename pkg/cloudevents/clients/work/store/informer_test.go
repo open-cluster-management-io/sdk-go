@@ -2,9 +2,10 @@ package store
 
 import (
 	"context"
-	"k8s.io/client-go/tools/cache"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/tools/cache"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -13,8 +14,6 @@ import (
 	workfake "open-cluster-management.io/api/client/work/clientset/versioned/fake"
 	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	workv1 "open-cluster-management.io/api/work/v1"
-
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 func TestVersioner(t *testing.T) {
@@ -504,17 +503,6 @@ func TestAgentInformerWatcherStore_WatchEvents(t *testing.T) {
 
 	store := NewAgentInformerWatcherStore()
 
-	// Add initial work to the informer store so HandleReceivedResource can find it for updates
-	initialWork := &workv1.ManifestWork{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-work",
-			Namespace: "test-cluster",
-		},
-	}
-	if err := store.Store.Add(initialWork); err != nil {
-		t.Fatalf("unexpected error adding initial work to informer: %v", err)
-	}
-
 	// Get a watcher
 	watcher, err := store.GetWatcher("", metav1.ListOptions{})
 	if err != nil {
@@ -554,13 +542,13 @@ func TestAgentInformerWatcherStore_WatchEvents(t *testing.T) {
 		},
 	}
 
-	err = store.HandleReceivedResource(ctx, types.Added, work)
+	err = store.HandleReceivedResource(ctx, work)
 	if err != nil {
 		t.Fatalf("unexpected error handling added resource: %v", err)
 	}
 
 	// Update the work
-	err = store.HandleReceivedResource(ctx, types.Modified, work)
+	err = store.HandleReceivedResource(ctx, work)
 	if err != nil {
 		t.Fatalf("unexpected error handling modified resource: %v", err)
 	}
@@ -568,7 +556,7 @@ func TestAgentInformerWatcherStore_WatchEvents(t *testing.T) {
 	// Delete the work
 	deletedWork := work.DeepCopy()
 	deletedWork.DeletionTimestamp = &metav1.Time{Time: time.Now()}
-	err = store.HandleReceivedResource(ctx, types.Deleted, deletedWork)
+	err = store.HandleReceivedResource(ctx, deletedWork)
 	if err != nil {
 		t.Fatalf("unexpected error handling deleted resource: %v", err)
 	}

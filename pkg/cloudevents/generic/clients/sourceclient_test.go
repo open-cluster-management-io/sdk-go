@@ -360,7 +360,7 @@ func TestReceiveResourceStatus(t *testing.T) {
 		name         string
 		requestEvent cloudevents.Event
 		resources    []*generictesting.MockResource
-		validate     func(event types.ResourceAction, resource *generictesting.MockResource)
+		validate     func(resource *generictesting.MockResource)
 	}{
 		{
 			name: "unsupported sub resource",
@@ -375,8 +375,8 @@ func TestReceiveResourceStatus(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if len(event) != 0 {
+			validate: func(resource *generictesting.MockResource) {
+				if resource != nil {
 					t.Errorf("should not be invoked")
 				}
 			},
@@ -393,8 +393,8 @@ func TestReceiveResourceStatus(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if len(event) != 0 {
+			validate: func(resource *generictesting.MockResource) {
+				if resource != nil {
 					t.Errorf("should not be invoked")
 				}
 			},
@@ -423,10 +423,7 @@ func TestReceiveResourceStatus(t *testing.T) {
 				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Status: "test1"},
 				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Status: "test2"},
 			},
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if event != types.StatusModified {
-					t.Errorf("expected modified, but get %s", event)
-				}
+			validate: func(resource *generictesting.MockResource) {
 				if resource.UID != "test1" {
 					t.Errorf("unexpected resource %v", resource)
 				}
@@ -447,19 +444,17 @@ func TestReceiveResourceStatus(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			var actualEvent types.ResourceAction
 			var actualRes *generictesting.MockResource
 			source.receive(
 				context.TODO(),
 				c.requestEvent,
-				func(_ context.Context, event types.ResourceAction, resource *generictesting.MockResource) error {
-					actualEvent = event
+				func(_ context.Context, resource *generictesting.MockResource) error {
 					actualRes = resource
 					return nil
 				},
 			)
 
-			c.validate(actualEvent, actualRes)
+			c.validate(actualRes)
 		})
 	}
 }

@@ -10,7 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
 
 func TestGet(t *testing.T) {
@@ -174,10 +173,10 @@ func TestWatch(t *testing.T) {
 		}
 	}()
 
-	if err := watchStore.HandleReceivedResource(ctx, types.Added, &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test0"}}); err != nil {
+	if err := watchStore.HandleReceivedResource(ctx, &clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test0"}}); err != nil {
 		t.Error(err)
 	}
-	if err := watchStore.HandleReceivedResource(ctx, types.Modified, &clusterv1.ManagedCluster{
+	if err := watchStore.HandleReceivedResource(ctx, &clusterv1.ManagedCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test1",
 		},
@@ -186,7 +185,7 @@ func TestWatch(t *testing.T) {
 		}}); err != nil {
 		t.Error(err)
 	}
-	if err := watchStore.HandleReceivedResource(ctx, types.Deleted, &clusterv1.ManagedCluster{
+	if err := watchStore.HandleReceivedResource(ctx, &clusterv1.ManagedCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "test1",
 			DeletionTimestamp: &metav1.Time{Time: time.Now()},

@@ -10,7 +10,6 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/stretchr/testify/require"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/fake"
@@ -354,7 +353,7 @@ func TestReceiveResourceSpec(t *testing.T) {
 		clusterName  string
 		requestEvent cloudevents.Event
 		resources    []*generictesting.MockResource
-		validate     func(event types.ResourceAction, resource *generictesting.MockResource)
+		validate     func(resource *generictesting.MockResource)
 	}{
 		{
 			name:        "unsupported sub resource",
@@ -370,8 +369,8 @@ func TestReceiveResourceSpec(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if len(event) != 0 {
+			validate: func(resource *generictesting.MockResource) {
+				if resource != nil {
 					t.Errorf("should not be invoked")
 				}
 			},
@@ -389,14 +388,14 @@ func TestReceiveResourceSpec(t *testing.T) {
 				evt.SetType(eventType.String())
 				return evt
 			}(),
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if len(event) != 0 {
+			validate: func(resource *generictesting.MockResource) {
+				if resource != nil {
 					t.Errorf("should not be invoked")
 				}
 			},
 		},
 		{
-			name:        "create a resource",
+			name:        "receive a resource",
 			clusterName: "cluster1",
 			requestEvent: func() cloudevents.Event {
 				eventType := types.CloudEventsType{
@@ -416,111 +415,9 @@ func TestReceiveResourceSpec(t *testing.T) {
 					})
 				return *evt
 			}(),
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if event != types.Added {
-					t.Errorf("expected added, but get %s", event)
-				}
-			},
-		},
-		{
-			name:        "update a resource",
-			clusterName: "cluster1",
-			requestEvent: func() cloudevents.Event {
-				eventType := types.CloudEventsType{
-					CloudEventsDataType: generictesting.MockEventDataType,
-					SubResource:         types.SubResourceSpec,
-					Action:              "test_update_request",
-				}
-
-				evt, _ := generictesting.NewMockResourceCodec().Encode(
-					testAgentName,
-					eventType,
-					&generictesting.MockResource{
-						UID:             kubetypes.UID("test1"),
-						Generation:      2,
-						ResourceVersion: "2",
-						Namespace:       "cluster1",
-					})
-				return *evt
-			}(),
-			resources: []*generictesting.MockResource{
-				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Namespace: "cluster1"},
-				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Namespace: "cluster1"},
-			},
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if event != types.Modified {
-					t.Errorf("expected modified, but get %s", event)
-				}
+			validate: func(resource *generictesting.MockResource) {
 				if resource.UID != "test1" {
 					t.Errorf("unexpected resource %v", resource)
-				}
-				if resource.ResourceVersion != "2" {
-					t.Errorf("unexpected resource %v", resource)
-				}
-			},
-		},
-		{
-			name:        "delete a resource",
-			clusterName: "cluster1",
-			requestEvent: func() cloudevents.Event {
-				eventType := types.CloudEventsType{
-					CloudEventsDataType: generictesting.MockEventDataType,
-					SubResource:         types.SubResourceSpec,
-					Action:              "test_delete_request",
-				}
-				now := metav1.Now()
-				evt, _ := generictesting.NewMockResourceCodec().Encode(
-					testAgentName,
-					eventType,
-					&generictesting.MockResource{
-						UID:               kubetypes.UID("test2"),
-						ResourceVersion:   "2",
-						DeletionTimestamp: &now,
-						Namespace:         "cluster1",
-					})
-				return *evt
-			}(),
-			resources: []*generictesting.MockResource{
-				{UID: kubetypes.UID("test1"), ResourceVersion: "1", Namespace: "cluster1"},
-				{UID: kubetypes.UID("test2"), ResourceVersion: "1", Namespace: "cluster1"},
-			},
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if event != types.Deleted {
-					t.Errorf("expected deleted, but get %s", event)
-				}
-				if resource.UID != "test2" {
-					t.Errorf("unexpected resource %v", resource)
-				}
-			},
-		},
-		{
-			name:        "no change resource",
-			clusterName: "cluster1",
-			requestEvent: func() cloudevents.Event {
-				eventType := types.CloudEventsType{
-					CloudEventsDataType: generictesting.MockEventDataType,
-					SubResource:         types.SubResourceSpec,
-					Action:              "test_create_request",
-				}
-
-				evt, _ := generictesting.NewMockResourceCodec().Encode(
-					testAgentName,
-					eventType,
-					&generictesting.MockResource{
-						UID:             kubetypes.UID("test1"),
-						Generation:      2,
-						ResourceVersion: "2",
-						Namespace:       "cluster1",
-					})
-				return *evt
-			}(),
-			resources: []*generictesting.MockResource{
-				{UID: kubetypes.UID("test1"), Generation: 3, ResourceVersion: "1", Namespace: "cluster1"},
-				{UID: kubetypes.UID("test2"), Generation: 3, ResourceVersion: "1", Namespace: "cluster1"},
-			},
-			validate: func(event types.ResourceAction, resource *generictesting.MockResource) {
-				if len(event) != 0 {
-					t.Errorf("expected no change, but get %s", event)
 				}
 			},
 		},
@@ -538,18 +435,16 @@ func TestReceiveResourceSpec(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			var actualEvent types.ResourceAction
 			var actualRes *generictesting.MockResource
 			agent.(*CloudEventAgentClient[*generictesting.MockResource]).receive(
 				context.TODO(),
 				c.requestEvent,
-				func(_ context.Context, event types.ResourceAction, resource *generictesting.MockResource) error {
-					actualEvent = event
+				func(_ context.Context, resource *generictesting.MockResource) error {
 					actualRes = resource
 					return nil
 				})
 
-			c.validate(actualEvent, actualRes)
+			c.validate(actualRes)
 		})
 	}
 }
