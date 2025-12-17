@@ -39,6 +39,7 @@ client_min_ping_interval: 10s
 server_ping_interval: 60s
 server_ping_timeout: 20s
 permit_ping_without_stream: true
+cert_watch_interval: 30s
 `
 				tmpFile, err := os.CreateTemp(t.TempDir(), "config-*.yaml")
 				if err != nil {
@@ -68,6 +69,7 @@ permit_ping_without_stream: true
 				ServerPingInterval:      60 * time.Second,
 				ServerPingTimeout:       20 * time.Second,
 				PermitPingWithoutStream: true,
+				CertWatchInterval:       30 * time.Second,
 			},
 			expectErr: false,
 		},
@@ -145,6 +147,7 @@ connection_timeout: 90s
 				ServerPingInterval:      defaultOpts.ServerPingInterval,
 				ServerPingTimeout:       defaultOpts.ServerPingTimeout,
 				PermitPingWithoutStream: false, // a bool's zero value is false
+				CertWatchInterval:       defaultOpts.CertWatchInterval,
 			},
 			expectErr: false,
 		},
