@@ -185,3 +185,70 @@ connection_timeout: 90s
 		})
 	}
 }
+
+func TestGRPCServerOptions_Validate_CertWatchInterval(t *testing.T) {
+	tests := []struct {
+		name              string
+		certWatchInterval time.Duration
+		expectError       bool
+		errorContains     string
+	}{
+		{
+			name:              "valid interval - 1 minute",
+			certWatchInterval: 1 * time.Minute,
+			expectError:       false,
+		},
+		{
+			name:              "valid interval - 30 seconds",
+			certWatchInterval: 30 * time.Second,
+			expectError:       false,
+		},
+		{
+			name:              "zero interval",
+			certWatchInterval: 0,
+			expectError:       true,
+			errorContains:     "cert_watch_interval",
+		},
+		{
+			name:              "negative interval",
+			certWatchInterval: -1 * time.Minute,
+			expectError:       true,
+			errorContains:     "cert_watch_interval",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := NewGRPCServerOptions()
+			opts.CertWatchInterval = tt.certWatchInterval
+
+			err := opts.Validate()
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected validation error but got none")
+				} else if tt.errorContains != "" && !contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error to contain '%s', got: %v", tt.errorContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected validation error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

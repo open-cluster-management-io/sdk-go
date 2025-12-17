@@ -390,12 +390,79 @@ func TestGRPCServer_InvalidCertificateFiles(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 
+			// Errors should be returned synchronously, not just logged
 			err := builder.Run(ctx)
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
 			if !tt.expectError && err != nil {
 				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestGRPCServer_InvalidCertWatchInterval tests that invalid cert watch intervals are rejected
+func TestGRPCServer_InvalidCertWatchInterval(t *testing.T) {
+	cert, key, err := certutil.GenerateSelfSignedCertKey("localhost", []net.IP{net.ParseIP("127.0.0.1")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := os.MkdirTemp("", "certs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(path)
+
+	certFile := path + "/tls.crt"
+	keyFile := path + "/tls.key"
+	err = os.WriteFile(certFile, cert, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(keyFile, key, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name              string
+		certWatchInterval time.Duration
+		expectError       bool
+	}{
+		{
+			name:              "zero interval",
+			certWatchInterval: 0,
+			expectError:       true,
+		},
+		{
+			name:              "negative interval",
+			certWatchInterval: -1 * time.Minute,
+			expectError:       true,
+		},
+		{
+			name:              "valid interval",
+			certWatchInterval: 1 * time.Minute,
+			expectError:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opt := NewGRPCServerOptions()
+			opt.ClientCAFile = ""
+			opt.TLSKeyFile = keyFile
+			opt.TLSCertFile = certFile
+			opt.ServerBindPort = "0"
+			opt.CertWatchInterval = tt.certWatchInterval
+
+			// Validation should catch invalid intervals
+			err := opt.Validate()
+			if tt.expectError && err == nil {
+				t.Error("Expected validation error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected validation error: %v", err)
 			}
 		})
 	}

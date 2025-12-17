@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"google.golang.org/grpc"
@@ -89,13 +90,28 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 	// Configure watch interval from options (default is 1 minute, configurable via --grpc-cert-watch-interval flag or YAML config)
 	certWatcher.WithWatchInterval(b.options.CertWatchInterval)
 
-	// Start certificate watcher in background
+	// Start certificate watcher in background with synchronous error detection
 	// This uses fsnotify for immediate detection + polling fallback
+	watcherErrCh := make(chan error, 1)
 	go func() {
 		if err := certWatcher.Start(ctx); err != nil {
-			klog.FromContext(ctx).Error(err, "Certificate watcher stopped")
+			select {
+			case watcherErrCh <- err:
+				// Send startup error if channel is not full
+			default:
+				// If channel is full, just log (watcher already started successfully)
+				klog.FromContext(ctx).Error(err, "Certificate watcher stopped")
+			}
 		}
 	}()
+
+	// Wait briefly for potential startup errors
+	select {
+	case err := <-watcherErrCh:
+		return fmt.Errorf("failed to start certificate watcher: %w", err)
+	case <-time.After(100 * time.Millisecond):
+		// No error within startup window, proceed
+	}
 
 	tlsConfig := &tls.Config{
 		// Use GetCertificate callback from certwatcher

@@ -106,5 +106,9 @@ func (o *GRPCServerOptions) Validate() error {
 	if o.TLSMinVersion > o.TLSMaxVersion {
 		return fmt.Errorf("tls_min_version (%d) must be <= tls_max_version (%d)", o.TLSMinVersion, o.TLSMaxVersion)
 	}
+	// Validate certificate watch interval to prevent time.NewTicker panic
+	if o.CertWatchInterval <= 0 {
+		return fmt.Errorf("cert_watch_interval (%v) must be greater than 0", o.CertWatchInterval)
+	}
 	return nil
 }
