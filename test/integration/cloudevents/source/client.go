@@ -16,7 +16,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/clients"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/test/integration/cloudevents/store"
 )
 
@@ -37,7 +36,7 @@ func StartResourceSourceClient(
 		return nil, err
 	}
 
-	client.Subscribe(ctx, func(_ context.Context, action types.ResourceAction, resource *store.Resource) error {
+	client.Subscribe(ctx, func(_ context.Context, resource *store.Resource) error {
 		return lister.Store.UpdateStatus(resource)
 	})
 

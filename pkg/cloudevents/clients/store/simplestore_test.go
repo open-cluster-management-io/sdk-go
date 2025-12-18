@@ -7,8 +7,7 @@ import (
 
 	coordv1 "k8s.io/api/coordination/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 func TestHandleReceivedResource(t *testing.T) {
@@ -33,13 +32,13 @@ func TestHandleReceivedResource(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		action   types.ResourceAction
+		action   watch.EventType
 		received *coordv1.Lease
 		validate func(t *testing.T, namespace, name string)
 	}{
 		{
 			name:   "add resource",
-			action: types.Added,
+			action: watch.Added,
 			received: &coordv1.Lease{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "new",
@@ -59,7 +58,7 @@ func TestHandleReceivedResource(t *testing.T) {
 		},
 		{
 			name:   "update resource",
-			action: types.Modified,
+			action: watch.Modified,
 			received: &coordv1.Lease{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "update",
@@ -86,7 +85,7 @@ func TestHandleReceivedResource(t *testing.T) {
 		},
 		{
 			name:   "delete resource",
-			action: types.Deleted,
+			action: watch.Deleted,
 			received: &coordv1.Lease{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "deletion",
@@ -109,7 +108,7 @@ func TestHandleReceivedResource(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			err := store.HandleReceivedResource(context.Background(), c.action, c.received)
+			err := store.HandleReceivedResource(context.Background(), c.received)
 			if err != nil {
 				t.Error(err)
 			}
