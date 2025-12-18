@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -270,25 +271,44 @@ func TestGRPCServer_CertificateReload(t *testing.T) {
 	opt.ClientCAFile = ""
 	opt.TLSKeyFile = keyFile
 	opt.TLSCertFile = certFile
-	opt.ServerBindPort = "50051" // Use fixed port for testing
+	opt.ServerBindPort = "0" // Use dynamic port allocation to avoid conflicts
 
 	builder := NewGRPCServer(opt)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Channel to receive the actual server address
+	addrCh := make(chan string, 1)
+
 	go func() {
-		err := builder.Run(ctx)
+		// Pre-bind to get the actual port before starting the server
+		lis, err := net.Listen("tcp", ":0")
+		if err != nil {
+			t.Errorf("Failed to get free port: %v", err)
+			return
+		}
+		actualPort := lis.Addr().(*net.TCPAddr).Port
+		lis.Close()
+
+		// Update the option with the actual port
+		opt.ServerBindPort = fmt.Sprintf("%d", actualPort)
+		addrCh <- fmt.Sprintf("localhost:%d", actualPort)
+
+		err = builder.Run(ctx)
 		if err != nil {
 			t.Logf("server run completed: %v", err)
 		}
 	}()
 
+	// Wait for server address
+	serverAddr := <-addrCh
+
 	// Give server time to start
 	time.Sleep(300 * time.Millisecond)
 
 	// Connect and get the first certificate
-	conn1, err := tls.Dial("tcp", "localhost:50051", &tls.Config{
+	conn1, err := tls.Dial("tcp", serverAddr, &tls.Config{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
@@ -323,7 +343,7 @@ func TestGRPCServer_CertificateReload(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Connect again and verify we get the new certificate
-	conn2, err := tls.Dial("tcp", "localhost:50051", &tls.Config{
+	conn2, err := tls.Dial("tcp", serverAddr, &tls.Config{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
@@ -408,7 +428,6 @@ func TestGRPCServer_InvalidCertificateFiles(t *testing.T) {
 	}
 }
 
-
 // TestGRPCServer_CertificateWatcherContextCancellation tests that cert watcher stops on context cancellation
 func TestGRPCServer_CertificateWatcherContextCancellation(t *testing.T) {
 	cert, key, err := certutil.GenerateSelfSignedCertKey("localhost", []net.IP{net.ParseIP("127.0.0.1")}, nil)
@@ -492,50 +511,55 @@ func TestGRPCServer_TLSConnection(t *testing.T) {
 	opt.ClientCAFile = ""
 	opt.TLSKeyFile = keyFile
 	opt.TLSCertFile = certFile
-	opt.ServerBindPort = "0"
+	opt.ServerBindPort = "0" // Use dynamic port allocation to avoid conflicts
 
 	builder := NewGRPCServer(opt)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Channel to get the actual port
-	portChan := make(chan string, 1)
+	// Channel to receive the actual server address
+	addrCh := make(chan string, 1)
 
 	go func() {
-		// We need to extract the port from the server
-		// For now, just start the server
-		err := builder.Run(ctx)
+		// Pre-bind to get the actual port before starting the server
+		lis, err := net.Listen("tcp", ":0")
+		if err != nil {
+			t.Errorf("Failed to get free port: %v", err)
+			return
+		}
+		actualPort := lis.Addr().(*net.TCPAddr).Port
+		lis.Close()
+
+		// Update the option with the actual port
+		opt.ServerBindPort = fmt.Sprintf("%d", actualPort)
+		addrCh <- fmt.Sprintf("localhost:%d", actualPort)
+
+		err = builder.Run(ctx)
 		if err != nil {
 			t.Logf("server run completed: %v", err)
 		}
 	}()
+
+	// Wait for server address
+	serverAddr := <-addrCh
 
 	// Give server time to start
 	time.Sleep(300 * time.Millisecond)
 
 	// Test that we can establish a TLS connection to the server
 	// This verifies the certificate watcher is providing valid certificates
-	conn, err := tls.Dial("tcp", "localhost:"+opt.ServerBindPort, &tls.Config{
+	conn, err := tls.Dial("tcp", serverAddr, &tls.Config{
 		InsecureSkipVerify: true, // Skip verification for self-signed cert in test
 	})
 	if err != nil {
-		// Server is on random port (0), so we can't connect without knowing the actual port
-		// This test verifies the server starts successfully with cert watcher
-		t.Logf("Could not connect (expected with random port): %v", err)
-	} else {
-		defer conn.Close()
-		// Verify we got a certificate from the server
-		state := conn.ConnectionState()
-		if len(state.PeerCertificates) == 0 {
-			t.Error("No certificates received from server")
-		}
+		t.Fatalf("Failed to connect to server: %v", err)
 	}
+	defer conn.Close()
 
-	// Close channel if not used
-	select {
-	case <-portChan:
-	default:
-		close(portChan)
+	// Verify we got a certificate from the server
+	state := conn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		t.Error("No certificates received from server")
 	}
 }
