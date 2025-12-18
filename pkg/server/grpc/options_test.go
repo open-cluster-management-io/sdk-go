@@ -39,7 +39,7 @@ client_min_ping_interval: 10s
 server_ping_interval: 60s
 server_ping_timeout: 20s
 permit_ping_without_stream: true
-cert_watch_interval: 30s
+cert_watch_interval: 60s
 `
 				tmpFile, err := os.CreateTemp(t.TempDir(), "config-*.yaml")
 				if err != nil {
@@ -69,7 +69,7 @@ cert_watch_interval: 30s
 				ServerPingInterval:      60 * time.Second,
 				ServerPingTimeout:       20 * time.Second,
 				PermitPingWithoutStream: true,
-				CertWatchInterval:       30 * time.Second,
+				CertWatchInterval:       60 * time.Second,
 			},
 			expectErr: false,
 		},
@@ -199,9 +199,9 @@ func TestGRPCServerOptions_Validate_CertWatchInterval(t *testing.T) {
 			expectError:       false,
 		},
 		{
-			name:              "valid interval - 30 seconds",
-			certWatchInterval: 30 * time.Second,
-			expectError:       false,
+			name:              "Interval less than 30 seconds",
+			certWatchInterval: 20 * time.Second,
+			expectError:       true,
 		},
 		{
 			name:              "zero interval",
