@@ -92,10 +92,9 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 	// This uses fsnotify for immediate detection + polling fallback
 	go func() {
 		if err := certWatcher.Start(ctx); err != nil {
-			klog.FromContext(ctx).Error(err, "Certificate watcher stopped");
+			klog.FromContext(ctx).Error(err, "Certificate watcher stopped")
 		}
 	}()
-
 
 	tlsConfig := &tls.Config{
 		// Use GetCertificate callback from certwatcher
