@@ -366,8 +366,14 @@ func TestGRPCServer_InvalidCertificateFiles(t *testing.T) {
 				path, _ := os.MkdirTemp("", "certs")
 				certFile := path + "/tls.crt"
 				keyFile := path + "/tls.key"
-				os.WriteFile(certFile, []byte(""), 0600)
-				os.WriteFile(keyFile, []byte(""), 0600)
+				err := os.WriteFile(certFile, []byte(""), 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = os.WriteFile(keyFile, []byte(""), 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
 				return certFile, keyFile, func() { os.RemoveAll(path) }
 			},
 			expectError: true,
