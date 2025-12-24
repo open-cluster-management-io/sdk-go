@@ -3,9 +3,10 @@ package clients
 import (
 	"context"
 	"fmt"
-	"open-cluster-management.io/sdk-go/pkg/logging"
 	"sync"
 	"time"
+
+	"open-cluster-management.io/sdk-go/pkg/logging"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
@@ -256,7 +257,13 @@ func (c *baseClient) sendReceiverSignal(signal int) {
 	defer c.RUnlock()
 
 	if c.receiverChan != nil {
-		c.receiverChan <- signal
+		select {
+		case c.receiverChan <- signal:
+			// Signal sent successfully
+		default:
+			// Receiver is busy/blocked, can't send now
+			// This prevents deadlock when receiver is stuck in Subscribe()
+		}
 	}
 }
 
