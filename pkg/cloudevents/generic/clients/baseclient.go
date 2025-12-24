@@ -3,9 +3,10 @@ package clients
 import (
 	"context"
 	"fmt"
-	"open-cluster-management.io/sdk-go/pkg/logging"
 	"sync"
 	"time"
+
+	"open-cluster-management.io/sdk-go/pkg/logging"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 
@@ -94,10 +95,13 @@ func (c *baseClient) connect(ctx context.Context) error {
 
 			select {
 			case <-ctx.Done():
+				klog.Info("CONTEXT CANCELED - goroutine exiting!", "err", ctx.Err())
 				c.closeChannels()
 				return
 			case err, ok := <-c.transport.ErrorChan():
+				klog.Info("ERROR CHANNEL WAS TRIGGERED!")
 				if !ok {
+					klog.Info("ERROR CHANNEL WAS CLOSED - goroutine exiting!")
 					// error channel is closed, do nothing
 					return
 				}
