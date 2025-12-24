@@ -95,13 +95,10 @@ func (c *baseClient) connect(ctx context.Context) error {
 
 			select {
 			case <-ctx.Done():
-				klog.Info("CONTEXT CANCELED - goroutine exiting!", "err", ctx.Err())
 				c.closeChannels()
 				return
 			case err, ok := <-c.transport.ErrorChan():
-				klog.Info("ERROR CHANNEL WAS TRIGGERED!")
 				if !ok {
-					klog.Info("ERROR CHANNEL WAS CLOSED - goroutine exiting!")
 					// error channel is closed, do nothing
 					return
 				}
@@ -260,7 +257,13 @@ func (c *baseClient) sendReceiverSignal(signal int) {
 	defer c.RUnlock()
 
 	if c.receiverChan != nil {
-		c.receiverChan <- signal
+		select {
+		case c.receiverChan <- signal:
+			// Signal sent successfully
+		default:
+			// Receiver is busy/blocked, can't send now
+			// This prevents deadlock when receiver is stuck in Subscribe()
+		}
 	}
 }
 

@@ -250,8 +250,6 @@ func (t *grpcTransport) getCloseChan() chan struct{} {
 // when the connection becomes disconnected.
 func (t *grpcTransport) monitorConnectionState(ctx context.Context, conn *grpc.ClientConn) {
 	logger := klog.FromContext(ctx)
-	logger.Info("START monitoring connection state")      // Add this
-	defer logger.Info("STOP monitoring connection state") // Add this
 	state := conn.GetState()
 	for {
 		if !conn.WaitForStateChange(ctx, state) {
