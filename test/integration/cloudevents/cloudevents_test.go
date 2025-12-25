@@ -84,7 +84,7 @@ func runCloudeventsClientPubSubTest(getSourceOptionsFn GetSourceOptionsFn) func(
 			case constants.ConfigTypeGRPC:
 				agentOptions = util.NewGRPCAgentOptions(certPool, grpcBrokerHost, tokenFile)
 			case constants.ConfigTypePubSub:
-				agentOptions = util.NewPubSubAgentOptions(pubsubServer.Addr, pubsubProjectID, clusterName)
+				agentOptions = util.NewPubSubAgentOptions(pubsubServer.Addr, pubsubProjectID, clusterName, true)
 				// setup topics and subscriptions
 				gomega.Expect(setupTopicsAndSubscriptions(ctx, clusterName, sourceID)).ToNot(gomega.HaveOccurred())
 			}

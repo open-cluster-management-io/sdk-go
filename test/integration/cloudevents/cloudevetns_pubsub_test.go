@@ -15,7 +15,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - PubSub", runCloudeventsClien
 
 func GetPubSubSourceOptions(_ context.Context, sourceID string) (*options.CloudEventsSourceOptions, string) {
 	return pubsub.NewSourceOptions(
-		util.NewPubSubSourceOptions(pubsubServer.Addr, pubsubProjectID, sourceID),
+		util.NewPubSubSourceOptions(pubsubServer.Addr, pubsubProjectID, sourceID, true),
 		sourceID,
 	), constants.ConfigTypePubSub
 }
