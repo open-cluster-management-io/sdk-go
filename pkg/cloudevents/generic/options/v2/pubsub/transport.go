@@ -49,7 +49,7 @@ func (o *pubsubTransport) Connect(ctx context.Context) error {
 	}
 
 	// Use insecure connection for test environments (e.g., pubsub emulator or test server)
-	if o.Insecure {
+	if o.DisableTLS {
 		pubsubConn, err := grpc.NewClient(o.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return err
