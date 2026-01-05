@@ -17,7 +17,6 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
-	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/utils"
 )
 
 // CloudEventSourceClient is a client for a source to resync/send/receive its resources with cloud events.
@@ -46,13 +45,7 @@ func NewCloudEventSourceClient[T generic.ResourceObject](
 	statusHashGetter generic.StatusHashGetter[T],
 	codec generic.Codec[T],
 ) (*CloudEventSourceClient[T], error) {
-	baseClient := &baseClient{
-		clientID:               sourceOptions.SourceID,
-		transport:              sourceOptions.CloudEventsTransport,
-		cloudEventsRateLimiter: utils.NewRateLimiter(sourceOptions.EventRateLimit),
-		reconnectedChan:        make(chan struct{}),
-	}
-
+	baseClient := newBaseClient(sourceOptions.SourceID, sourceOptions.CloudEventsTransport, sourceOptions.EventRateLimit)
 	if err := baseClient.connect(ctx); err != nil {
 		return nil, err
 	}
@@ -67,7 +60,7 @@ func NewCloudEventSourceClient[T generic.ResourceObject](
 }
 
 func (c *CloudEventSourceClient[T]) ReconnectedChan() <-chan struct{} {
-	return c.reconnectedChan
+	return c.resyncChan
 }
 
 // Resync the resources status by sending a status resync request from the current source to a specified cluster.
