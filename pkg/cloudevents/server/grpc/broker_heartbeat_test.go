@@ -92,7 +92,7 @@ func (m *mockSubscribeServer) Close() {
 }
 
 func TestGRPCBroker_Subscribe_HeartbeatIntegration(t *testing.T) {
-	broker := NewGRPCBroker()
+	broker := NewGRPCBroker(NewBrokerOptions())
 
 	// Reduce heartbeat interval for testing
 	broker.heartbeatCheckInterval = 50 * time.Millisecond
@@ -152,7 +152,7 @@ func TestGRPCBroker_Subscribe_HeartbeatIntegration(t *testing.T) {
 }
 
 func TestGRPCBroker_Subscribe_SendError(t *testing.T) {
-	broker := NewGRPCBroker()
+	broker := NewGRPCBroker(NewBrokerOptions())
 	broker.heartbeatCheckInterval = 30 * time.Millisecond
 
 	dataType := cetypes.CloudEventsDataType{
@@ -186,7 +186,7 @@ func TestGRPCBroker_Subscribe_SendError(t *testing.T) {
 }
 
 func TestGRPCBroker_Subscribe_EventAndHeartbeatSeparation(t *testing.T) {
-	broker := NewGRPCBroker()
+	broker := NewGRPCBroker(NewBrokerOptions())
 	broker.heartbeatCheckInterval = 30 * time.Millisecond
 
 	dataType := cetypes.CloudEventsDataType{
@@ -256,7 +256,7 @@ func TestGRPCBroker_Subscribe_EventAndHeartbeatSeparation(t *testing.T) {
 }
 
 func TestGRPCBroker_Subscribe_InvalidRequest(t *testing.T) {
-	broker := NewGRPCBroker()
+	broker := NewGRPCBroker(NewBrokerOptions())
 
 	mockServer := newMockSubscribeServer()
 	defer mockServer.Close()
@@ -307,7 +307,7 @@ func TestGRPCBroker_Subscribe_InvalidRequest(t *testing.T) {
 }
 
 func TestGRPCBroker_Subscribe_ChannelBlocking(t *testing.T) {
-	broker := NewGRPCBroker()
+	broker := NewGRPCBroker(NewBrokerOptions())
 	broker.heartbeatCheckInterval = 20 * time.Millisecond
 
 	dataType := cetypes.CloudEventsDataType{
@@ -374,4 +374,83 @@ func (s *slowMockSubscribeServer) SendHeader(metadata.MD) error {
 }
 
 func (s *slowMockSubscribeServer) SetTrailer(metadata.MD) {
+}
+
+func TestGRPCBroker_Subscribe_HeartbeatDisabled(t *testing.T) {
+	broker := NewGRPCBroker(NewBrokerOptions())
+	broker.heartbeatDisabled = true // Disable heartbeat
+
+	dataType := cetypes.CloudEventsDataType{
+		Group:    "test",
+		Version:  "v1",
+		Resource: "tests",
+	}
+
+	svc := &testService{evts: make(map[string]*cloudevents.Event)}
+	broker.RegisterService(context.Background(), dataType, svc)
+
+	mockServer := newMockSubscribeServer()
+	defer mockServer.Close()
+
+	req := &pbv1.SubscriptionRequest{
+		ClusterName: "test-cluster",
+		DataType:    dataType.String(),
+	}
+
+	// Start subscription in background
+	errChan := make(chan error, 1)
+	go func() {
+		err := broker.Subscribe(req, mockServer)
+		errChan <- err
+	}()
+
+	// Wait to ensure no heartbeats are sent
+	time.Sleep(200 * time.Millisecond)
+
+	// Send a regular event to verify subscription still works
+	evt := cetypes.NewEventBuilder("test",
+		cetypes.CloudEventsType{CloudEventsDataType: dataType, SubResource: cetypes.SubResourceSpec}).
+		WithResourceID("test1").
+		WithClusterName("test-cluster").NewEvent()
+
+	if err := svc.create(&evt); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the event to be processed
+	time.Sleep(100 * time.Millisecond)
+
+	// Close the mock server
+	mockServer.Close()
+
+	// Wait for subscription to end
+	select {
+	case err := <-errChan:
+		if err != nil && err != context.Canceled {
+			t.Errorf("Unexpected error: %v", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("Subscription should have ended")
+	}
+
+	// Verify NO heartbeats were sent but regular event was sent
+	events := mockServer.GetEvents()
+	heartbeatCount := 0
+	regularEventCount := 0
+
+	for _, event := range events {
+		if event.Type == cetypes.HeartbeatCloudEventsType {
+			heartbeatCount++
+		} else {
+			regularEventCount++
+		}
+	}
+
+	if heartbeatCount > 0 {
+		t.Errorf("Expected 0 heartbeats when disabled, got %d", heartbeatCount)
+	}
+
+	if regularEventCount < 1 {
+		t.Errorf("Expected at least 1 regular event, got %d", regularEventCount)
+	}
 }

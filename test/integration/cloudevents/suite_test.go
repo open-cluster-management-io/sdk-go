@@ -144,7 +144,7 @@ var _ = ginkgo.BeforeSuite(func(done ginkgo.Done) {
 	resourceServer.SetResourceService(service)
 
 	// start the grpc broker
-	grpcBroker := cloudeventsgrpc.NewGRPCBroker()
+	grpcBroker := cloudeventsgrpc.NewGRPCBroker(cloudeventsgrpc.NewBrokerOptions())
 	grpcBroker.RegisterService(context.Background(), payload.ManifestBundleEventDataType, service)
 
 	opt := sdkgrpc.NewGRPCServerOptions()
