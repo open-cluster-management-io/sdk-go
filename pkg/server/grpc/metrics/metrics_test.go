@@ -43,7 +43,7 @@ func startBufServer(t *testing.T) *grpc.Server {
 		grpc.StatsHandler(NewGRPCMetricsHandler()),
 	)
 
-	grpcBroker := cegrpc.NewGRPCBroker()
+	grpcBroker := cegrpc.NewGRPCBroker(cegrpc.NewBrokerOptions())
 	grpcBroker.RegisterService(context.Background(), payload.ManifestBundleEventDataType, newMockWorkService())
 	pbv1.RegisterCloudEventServiceServer(server, grpcBroker)
 
