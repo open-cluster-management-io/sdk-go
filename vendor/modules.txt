@@ -1228,7 +1228,7 @@ k8s.io/utils/lru
 k8s.io/utils/net
 k8s.io/utils/ptr
 k8s.io/utils/trace
-# open-cluster-management.io/api v1.1.1-0.20251215032811-ee922fbb996c => github.com/haoqing0110/api v0.0.0-20260106155845-87de4323e162
+# open-cluster-management.io/api v1.1.1-0.20260108015315-68cef17a0643
 ## explicit; go 1.25.0
 open-cluster-management.io/api/addon/v1alpha1
 open-cluster-management.io/api/addon/v1beta1
@@ -1320,4 +1320,3 @@ sigs.k8s.io/structured-merge-diff/v6/value
 # sigs.k8s.io/yaml v1.6.0
 ## explicit; go 1.22
 sigs.k8s.io/yaml
-# open-cluster-management.io/api => github.com/haoqing0110/api v0.0.0-20260106155845-87de4323e162
