@@ -118,3 +118,5 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
+
+replace open-cluster-management.io/api => github.com/haoqing0110/api v0.0.0-20260106155845-87de4323e162

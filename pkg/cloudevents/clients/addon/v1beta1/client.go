@@ -170,3 +170,7 @@ func (c *AddonClientWrapper) RESTClient() rest.Interface {
 func (c *AddonClientWrapper) ManagedClusterAddOns(namespace string) addonv1beta1client.ManagedClusterAddOnInterface {
 	return c.client.Namespace(namespace)
 }
+
+func (c *AddonClientWrapper) AddOnDeploymentConfigs(namespace string) addonv1beta1client.AddOnDeploymentConfigInterface {
+	panic("AddOnDeploymentConfigs is unsupported")
+}
