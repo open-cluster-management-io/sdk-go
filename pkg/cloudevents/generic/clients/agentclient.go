@@ -69,7 +69,7 @@ func (c *CloudEventAgentClient[T]) ReconnectedChan() <-chan struct{} {
 func (c *CloudEventAgentClient[T]) Resync(ctx context.Context, source string) error {
 	// list the resource objects that are maintained by the current agent with the given source
 	options := types.ListOptions{Source: source, ClusterName: c.clusterName, CloudEventsDataType: c.codec.EventDataType()}
-	objs, err := c.lister.List(options)
+	objs, err := c.lister.List(ctx, options)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func (c *CloudEventAgentClient[T]) respondResyncStatusRequest(
 	logger := klog.FromContext(ctx).WithValues("eventDataType", eventDataType.String())
 
 	options := types.ListOptions{ClusterName: c.clusterName, Source: evt.Source(), CloudEventsDataType: eventDataType}
-	objs, err := c.lister.List(options)
+	objs, err := c.lister.List(ctx, options)
 	if err != nil {
 		return err
 	}

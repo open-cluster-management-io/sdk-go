@@ -46,7 +46,7 @@ func TestHandleReceivedResource(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, namespace, name string) {
-				_, exists, err := store.Get(namespace, name)
+				_, exists, err := store.Get(context.Background(), namespace, name)
 				if err != nil {
 					t.Error(err)
 				}
@@ -69,7 +69,7 @@ func TestHandleReceivedResource(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, namespace, name string) {
-				updated, exists, err := store.Get(namespace, name)
+				updated, exists, err := store.Get(context.Background(), namespace, name)
 				if err != nil {
 					t.Error(err)
 				}
@@ -94,7 +94,7 @@ func TestHandleReceivedResource(t *testing.T) {
 				},
 			},
 			validate: func(t *testing.T, namespace, name string) {
-				_, exists, err := store.Get(namespace, name)
+				_, exists, err := store.Get(context.Background(), namespace, name)
 				if err != nil {
 					t.Error(err)
 				}

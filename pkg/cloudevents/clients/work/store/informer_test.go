@@ -81,7 +81,7 @@ func TestAgentInformerWatcherStore_Add(t *testing.T) {
 	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
-	watcher, err := store.GetWatcher("", metav1.ListOptions{})
+	watcher, err := store.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error getting watcher: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestAgentInformerWatcherStore_Update(t *testing.T) {
 	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
-	watcher, err := store.GetWatcher("", metav1.ListOptions{})
+	watcher, err := store.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error getting watcher: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestAgentInformerWatcherStore_Delete(t *testing.T) {
 	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
-	watcher, err := store.GetWatcher("", metav1.ListOptions{})
+	watcher, err := store.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error getting watcher: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestAgentInformerWatcherStore_ResourceVersionIncrement(t *testing.T) {
 	store.Store = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	// Start consuming events to prevent blocking
-	watcher, err := store.GetWatcher("", metav1.ListOptions{})
+	watcher, err := store.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error getting watcher: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestSourceInformerWatcherStore(t *testing.T) {
 	sourceStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	// Start consuming watch events to prevent blocking
-	watcher, err := sourceStore.GetWatcher(metav1.NamespaceAll, metav1.ListOptions{})
+	watcher, err := sourceStore.GetWatcher(context.Background(), metav1.NamespaceAll, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error getting watcher: %v", err)
 	}
@@ -396,7 +396,7 @@ func TestSourceInformerWatcherStore(t *testing.T) {
 	}
 
 	// Test Get
-	retrievedWork, exists, err := sourceStore.Get("test-cluster", "test-work")
+	retrievedWork, exists, err := sourceStore.Get(context.Background(), "test-cluster", "test-work")
 	if err != nil {
 		t.Fatalf("unexpected error getting work: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestSourceInformerWatcherStore_Watch(t *testing.T) {
 	sourceStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
 
 	// Test GetWatcher with namespace=all
-	watcher, err := sourceStore.GetWatcher(metav1.NamespaceAll, metav1.ListOptions{})
+	watcher, err := sourceStore.GetWatcher(context.Background(), metav1.NamespaceAll, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error getting watcher: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestSourceInformerWatcherStore_Watch(t *testing.T) {
 	}
 
 	// Test GetWatcher with specific namespace should fail
-	_, err = sourceStore.GetWatcher("specific-namespace", metav1.ListOptions{})
+	_, err = sourceStore.GetWatcher(context.Background(), "specific-namespace", metav1.ListOptions{})
 	if err == nil {
 		t.Error("expected error when watching specific namespace, got nil")
 	}
@@ -462,7 +462,7 @@ func TestSourceInformerWatcherStore_HasInitiated(t *testing.T) {
 	sourceStore := NewSourceInformerWatcherStore(ctx)
 
 	// Start consuming watch events to prevent blocking
-	watcher, err := sourceStore.GetWatcher(metav1.NamespaceAll, metav1.ListOptions{})
+	watcher, err := sourceStore.GetWatcher(context.Background(), metav1.NamespaceAll, metav1.ListOptions{})
 	if err == nil {
 		defer watcher.Stop()
 		go func() {
@@ -504,7 +504,7 @@ func TestAgentInformerWatcherStore_WatchEvents(t *testing.T) {
 	store := NewAgentInformerWatcherStore()
 
 	// Get a watcher
-	watcher, err := store.GetWatcher("", metav1.ListOptions{})
+	watcher, err := store.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error getting watcher: %v", err)
 	}

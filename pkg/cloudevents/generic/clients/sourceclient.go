@@ -67,7 +67,7 @@ func (c *CloudEventSourceClient[T]) ReconnectedChan() <-chan struct{} {
 func (c *CloudEventSourceClient[T]) Resync(ctx context.Context, clusterName string) error {
 	// list the resource objects that are maintained by the current source with a specified cluster
 	options := types.ListOptions{Source: c.sourceID, ClusterName: clusterName, CloudEventsDataType: c.codec.EventDataType()}
-	objs, err := c.lister.List(options)
+	objs, err := c.lister.List(ctx, options)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func (c *CloudEventSourceClient[T]) respondResyncSpecRequest(
 		Source:              c.sourceID,
 		CloudEventsDataType: evtDataType,
 	}
-	objs, err := c.lister.List(options)
+	objs, err := c.lister.List(ctx, options)
 	if err != nil {
 		return err
 	}

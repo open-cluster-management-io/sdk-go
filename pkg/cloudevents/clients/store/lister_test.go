@@ -1,10 +1,12 @@
 package store
 
 import (
+	"context"
+	"testing"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
-	"testing"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
@@ -27,7 +29,7 @@ func TestAgentLister(t *testing.T) {
 	}
 
 	agentLister := NewAgentWatcherStoreLister(watchStore)
-	clusters, err := agentLister.List(types.ListOptions{Source: "source1"})
+	clusters, err := agentLister.List(context.Background(), types.ListOptions{Source: "source1"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -53,7 +55,7 @@ func TestSourceLister(t *testing.T) {
 	}
 
 	agentLister := NewSourceWatcherStoreLister(watchStore)
-	works, err := agentLister.List(types.ListOptions{ClusterName: "cluster1"})
+	works, err := agentLister.List(context.Background(), types.ListOptions{ClusterName: "cluster1"})
 	if err != nil {
 		t.Error(err)
 	}

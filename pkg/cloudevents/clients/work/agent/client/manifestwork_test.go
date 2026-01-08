@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
-	"testing"
 
 	workv1 "open-cluster-management.io/api/work/v1"
 
@@ -133,7 +134,7 @@ func TestManifestWorkAgentClient_Get(t *testing.T) {
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -186,7 +187,7 @@ func TestManifestWorkAgentClient_List(t *testing.T) {
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -298,7 +299,7 @@ func TestManifestWorkAgentClient_Patch_UnsupportedSubresource(t *testing.T) {
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -349,7 +350,7 @@ func TestManifestWorkAgentClient_Patch_ResourceVersionConflict(t *testing.T) {
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -415,7 +416,7 @@ func TestManifestWorkAgentClient_Patch_InvalidPatch(t *testing.T) {
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -465,7 +466,7 @@ func TestManifestWorkAgentClient_Patch_MissingDataTypeAnnotation(t *testing.T) {
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -523,7 +524,7 @@ func TestManifestWorkAgentClient_ConcurrentPatches(t *testing.T) {
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
