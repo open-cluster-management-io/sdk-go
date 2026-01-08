@@ -89,7 +89,7 @@ var _ = ginkgo.Describe("CloudEvents Clients Test - RESYNC", func() {
 
 			ginkgo.By("ensure the resources is synced on the agent")
 			gomega.Eventually(func() error {
-				list, err := watchStore.List(clusterName, metav1.ListOptions{})
+				list, err := watchStore.List(context.Background(), clusterName, metav1.ListOptions{})
 				if err != nil {
 					return err
 				}

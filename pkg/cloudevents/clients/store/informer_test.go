@@ -46,7 +46,7 @@ func TestGet(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, exists, err := watchStore.Get("", c.clusterName)
+			_, exists, err := watchStore.Get(context.Background(), "", c.clusterName)
 			if err != nil {
 				t.Error(err)
 			}
@@ -78,7 +78,7 @@ func TestList(t *testing.T) {
 		t.Error(err)
 	}
 
-	clusters, err := watchStore.List("", metav1.ListOptions{LabelSelector: "test=true"})
+	clusters, err := watchStore.List(context.Background(), "", metav1.ListOptions{LabelSelector: "test=true"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -87,7 +87,7 @@ func TestList(t *testing.T) {
 		t.Error("expect 2, but failed")
 	}
 
-	all, err := watchStore.ListAll()
+	all, err := watchStore.ListAll(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
@@ -138,7 +138,7 @@ func TestWatch(t *testing.T) {
 		t.Error(err)
 	}
 
-	watcher, err := watchStore.GetWatcher("", metav1.ListOptions{})
+	watcher, err := watchStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
 	if err != nil {
 		t.Error(err)
 	}

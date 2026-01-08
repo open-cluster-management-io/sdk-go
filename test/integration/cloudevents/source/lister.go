@@ -1,6 +1,8 @@
 package source
 
 import (
+	"context"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 
@@ -19,6 +21,6 @@ func NewResourceLister(store *store.MemoryStore) *ResourceLister {
 	}
 }
 
-func (l *ResourceLister) List(listOpts types.ListOptions) ([]*store.Resource, error) {
+func (l *ResourceLister) List(ctx context.Context, listOpts types.ListOptions) ([]*store.Resource, error) {
 	return l.Store.List(listOpts.ClusterName), nil
 }

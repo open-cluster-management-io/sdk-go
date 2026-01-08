@@ -1,6 +1,7 @@
 package testing
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -56,7 +57,7 @@ func NewMockResourceLister(resources ...*MockResource) *MockResourceLister {
 	}
 }
 
-func (l *MockResourceLister) List(opt types.ListOptions) ([]*MockResource, error) {
+func (l *MockResourceLister) List(ctx context.Context, opt types.ListOptions) ([]*MockResource, error) {
 	return l.resources, nil
 }
 
