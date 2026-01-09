@@ -64,7 +64,7 @@ func TestServer(t *testing.T) {
 	grpcServer := grpc.NewServer(grpcServerOptions...)
 	defer grpcServer.Stop()
 
-	grpcEventServer := NewGRPCBroker()
+	grpcEventServer := NewGRPCBroker(NewBrokerOptions())
 	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
 
 	svc := &testService{evts: make(map[string]*cloudevents.Event)}
