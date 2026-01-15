@@ -155,3 +155,96 @@ func ApplySecret(ctx context.Context, client coreclientv1.SecretsGetter, require
 	actual, err = client.Secrets(required.Namespace).Create(ctx, existingCopy, metav1.CreateOptions{})
 	return actual, true, err
 }
+
+// ApplySecretWithOwnerReference is like ApplySecret but also updates OwnerReferences.
+// This is useful when you need to set owner references for garbage collection.
+func ApplySecretWithOwnerReference(ctx context.Context, client coreclientv1.SecretsGetter, requiredInput *corev1.Secret) (*corev1.Secret, bool, error) {
+	existing, err := client.Secrets(requiredInput.Namespace).Get(ctx, requiredInput.Name, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, false, err
+	}
+
+	required := requiredInput.DeepCopy()
+	if required.Data == nil {
+		required.Data = map[string][]byte{}
+	}
+	for k, v := range required.StringData {
+		if dataV, ok := required.Data[k]; ok {
+			if string(dataV) != v {
+				return nil, false, fmt.Errorf("Secret.stringData[%q] conflicts with Secret.data[%q]", k, k)
+			}
+		}
+		required.Data[k] = []byte(v)
+	}
+	required.StringData = nil
+
+	if apierrors.IsNotFound(err) {
+		requiredCopy := required.DeepCopy()
+		actual, err := client.Secrets(requiredCopy.Namespace).
+			Create(ctx, requiredCopy, metav1.CreateOptions{})
+		return actual, true, err
+	}
+	if err != nil {
+		return nil, false, err
+	}
+
+	existingCopy := existing.DeepCopy()
+
+	switch required.Type {
+	case corev1.SecretTypeServiceAccountToken:
+		// Secrets for ServiceAccountTokens will have data injected by kube controller manager.
+		// We will apply only the explicitly set keys.
+		if existingCopy.Data == nil {
+			existingCopy.Data = map[string][]byte{}
+		}
+
+		for k, v := range required.Data {
+			existingCopy.Data[k] = v
+		}
+
+	default:
+		existingCopy.Data = required.Data
+	}
+
+	existingCopy.Type = required.Type
+
+	// Also update OwnerReferences from required
+	existingCopy.OwnerReferences = required.OwnerReferences
+
+	// Server defaults some values and we need to do it as well or it will never equal.
+	if existingCopy.Type == "" {
+		existingCopy.Type = corev1.SecretTypeOpaque
+	}
+
+	if equality.Semantic.DeepEqual(existingCopy, existing) {
+		return existing, false, nil
+	}
+
+	var actual *corev1.Secret
+	/*
+	 * Kubernetes validation silently hides failures to update secret type.
+	 * https://github.com/kubernetes/kubernetes/blob/98e65951dccfd40d3b4f31949c2ab8df5912d93e/pkg/apis/core/validation/validation.go#L5048
+	 * We need to explicitly opt for delete+create in that case.
+	 */
+	if existingCopy.Type == existing.Type {
+		actual, err = client.Secrets(required.Namespace).Update(ctx, existingCopy, metav1.UpdateOptions{})
+
+		if err == nil {
+			return actual, true, nil
+		}
+		if !strings.Contains(err.Error(), "field is immutable") {
+			return actual, true, err
+		}
+	}
+
+	// if the field was immutable on a secret, we're going to be stuck until we delete it.  Try to delete and then create
+	deleteErr := client.Secrets(required.Namespace).Delete(ctx, existingCopy.Name, metav1.DeleteOptions{})
+	if deleteErr != nil {
+		return actual, false, deleteErr
+	}
+
+	// clear the RV and track the original actual and error for the return like our create value.
+	existingCopy.ResourceVersion = ""
+	actual, err = client.Secrets(required.Namespace).Create(ctx, existingCopy, metav1.CreateOptions{})
+	return actual, true, err
+}

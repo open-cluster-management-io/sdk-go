@@ -10,6 +10,7 @@ import (
 
 	"github.com/openshift/library-go/pkg/crypto"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/cert"
 )
@@ -20,13 +21,21 @@ func TestSetTargetCertKeyPairSecret(t *testing.T) {
 		t.Fatalf("Expected no error, but got: %v", err)
 	}
 
+	ownerRef := metav1.OwnerReference{
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "my-deployment",
+		UID:        "test-uid-12345",
+	}
+
 	cases := []struct {
-		name         string
-		validity     time.Duration
-		signer       *crypto.CA
-		hostNames    []string
-		targetSecret *corev1.Secret
-		expectErr    bool
+		name           string
+		validity       time.Duration
+		signer         *crypto.CA
+		hostNames      []string
+		targetSecret   *corev1.Secret
+		ownerReference *metav1.OwnerReference
+		expectErr      bool
 	}{
 		{
 			name:     "no hostname",
@@ -58,12 +67,29 @@ func TestSetTargetCertKeyPairSecret(t *testing.T) {
 			hostNames:    []string{"service1.ns1.svc"},
 			targetSecret: &corev1.Secret{},
 		},
+		{
+			name:     "with owner reference",
+			validity: time.Hour * 1,
+			signer: &crypto.CA{
+				SerialGenerator: &crypto.RandomSerialGenerator{},
+				Config:          ca1,
+			},
+			hostNames:      []string{"service1.ns1.svc"},
+			targetSecret:   &corev1.Secret{},
+			ownerReference: &ownerRef,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			// Set owner reference on secret if provided (simulating what EnsureTargetCertKeyPair does)
+			if c.ownerReference != nil {
+				c.targetSecret.OwnerReferences = []metav1.OwnerReference{*c.ownerReference}
+			}
+
 			tr := &TargetRotation{
-				HostNames: c.hostNames,
+				HostNames:      c.hostNames,
+				OwnerReference: c.ownerReference,
 			}
 			err = tr.setTargetCertKeyPairSecret(c.targetSecret, c.validity, c.signer)
 
@@ -93,6 +119,19 @@ func TestSetTargetCertKeyPairSecret(t *testing.T) {
 				cert := certificates[0]
 				if cert.NotAfter.After(c.signer.Config.Certs[0].NotAfter) {
 					t.Fatalf("NotAfter of cert should not over NotAfter of ca")
+				}
+
+				// Verify owner reference if expected
+				if c.ownerReference != nil {
+					if len(c.targetSecret.OwnerReferences) != 1 {
+						t.Fatalf("Expected 1 owner reference, got %d", len(c.targetSecret.OwnerReferences))
+					}
+					if c.targetSecret.OwnerReferences[0].Name != c.ownerReference.Name {
+						t.Fatalf("Expected owner reference name %q, got %q", c.ownerReference.Name, c.targetSecret.OwnerReferences[0].Name)
+					}
+					if c.targetSecret.OwnerReferences[0].UID != c.ownerReference.UID {
+						t.Fatalf("Expected owner reference UID %q, got %q", c.ownerReference.UID, c.targetSecret.OwnerReferences[0].UID)
+					}
 				}
 			}
 		})
@@ -299,5 +338,92 @@ func startsWith(suffix string) validateReasonFunc {
 		if !strings.HasPrefix(actualReason, suffix) {
 			t.Fatalf("Expect reason start with %q, but got %q", suffix, actualReason)
 		}
+	}
+}
+
+func TestNeedsOwnerReferenceUpdate(t *testing.T) {
+	ownerRef := metav1.OwnerReference{
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "my-deployment",
+		UID:        "test-uid-12345",
+	}
+
+	differentOwnerRef := metav1.OwnerReference{
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "other-deployment",
+		UID:        "different-uid-67890",
+	}
+
+	cases := []struct {
+		name           string
+		ownerReference *metav1.OwnerReference
+		existingSecret *corev1.Secret
+		expectUpdate   bool
+	}{
+		{
+			name:           "no owner reference configured",
+			ownerReference: nil,
+			existingSecret: &corev1.Secret{},
+			expectUpdate:   false,
+		},
+		{
+			name:           "new secret needs owner reference",
+			ownerReference: &ownerRef,
+			existingSecret: nil,
+			expectUpdate:   true,
+		},
+		{
+			name:           "existing secret without owner reference needs update",
+			ownerReference: &ownerRef,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-secret",
+					Namespace:       "test-ns",
+					OwnerReferences: nil,
+				},
+			},
+			expectUpdate: true,
+		},
+		{
+			name:           "existing secret with matching owner reference does not need update",
+			ownerReference: &ownerRef,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-secret",
+					Namespace:       "test-ns",
+					OwnerReferences: []metav1.OwnerReference{ownerRef},
+				},
+			},
+			expectUpdate: false,
+		},
+		{
+			name:           "existing secret with different owner reference needs update",
+			ownerReference: &ownerRef,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "test-secret",
+					Namespace:       "test-ns",
+					OwnerReferences: []metav1.OwnerReference{differentOwnerRef},
+				},
+			},
+			expectUpdate: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tr := &TargetRotation{
+				Namespace:      "test-ns",
+				Name:           "test-secret",
+				OwnerReference: c.ownerReference,
+			}
+
+			result := tr.needsOwnerReferenceUpdate(c.existingSecret)
+			if result != c.expectUpdate {
+				t.Fatalf("Expected needsOwnerReferenceUpdate to return %v, got %v", c.expectUpdate, result)
+			}
+		})
 	}
 }

@@ -34,6 +34,9 @@ type TargetRotation struct {
 	HostNames []string
 	Lister    corev1listers.SecretLister
 	Client    corev1client.SecretsGetter
+	// OwnerReference is an optional owner reference to set on the secret for garbage collection.
+	// When set, the secret will be automatically deleted when the owner resource is deleted.
+	OwnerReference *metav1.OwnerReference
 }
 
 func (c TargetRotation) EnsureTargetCertKeyPair(signingCertKeyPair *crypto.CA, caBundleCerts []*x509.Certificate,
@@ -42,24 +45,42 @@ func (c TargetRotation) EnsureTargetCertKeyPair(signingCertKeyPair *crypto.CA, c
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
+
+	secretExists := !apierrors.IsNotFound(err)
 	targetCertKeyPairSecret := originalTargetCertKeyPairSecret.DeepCopy()
-	if apierrors.IsNotFound(err) {
+	if !secretExists {
 		// create an empty one
 		targetCertKeyPairSecret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: c.Namespace, Name: c.Name}}
 	}
 	targetCertKeyPairSecret.Type = corev1.SecretTypeTLS
 
+	// Check if owner reference needs to be updated
+	ownerRefNeedsUpdate := c.needsOwnerReferenceUpdate(originalTargetCertKeyPairSecret)
+
+	// Set owner reference if configured in struct
+	if c.OwnerReference != nil {
+		targetCertKeyPairSecret.OwnerReferences = []metav1.OwnerReference{*c.OwnerReference}
+	}
+
 	reason := needNewTargetCertKeyPair(targetCertKeyPairSecret, caBundleCerts, c.HostNames)
-	if len(reason) == 0 {
+	needsCertRotation := len(reason) > 0
+
+	// If neither cert rotation nor owner reference update is needed, return early
+	if !needsCertRotation && !ownerRefNeedsUpdate {
 		return nil
 	}
 
-	if err := c.setTargetCertKeyPairSecret(
-		targetCertKeyPairSecret, c.Validity, signingCertKeyPair, fns...); err != nil {
-		return err
+	// Only regenerate cert if needed
+	if needsCertRotation {
+		if err := c.setTargetCertKeyPairSecret(
+			targetCertKeyPairSecret, c.Validity, signingCertKeyPair, fns...); err != nil {
+			return err
+		}
 	}
 
-	if targetCertKeyPairSecret, _, err = helpers.ApplySecret(context.TODO(), c.Client, targetCertKeyPairSecret); err != nil {
+	// Apply the secret (handles both create and update)
+	if targetCertKeyPairSecret, _, err = helpers.ApplySecretWithOwnerReference(
+		context.TODO(), c.Client, targetCertKeyPairSecret); err != nil {
 		return err
 	}
 
@@ -68,6 +89,24 @@ func (c TargetRotation) EnsureTargetCertKeyPair(signingCertKeyPair *crypto.CA, c
 	}
 
 	return c.loadTargetSecret(targetCertKeyPairSecret)
+}
+
+// needsOwnerReferenceUpdate checks if the owner reference needs to be updated on the existing secret.
+func (c TargetRotation) needsOwnerReferenceUpdate(existingSecret *corev1.Secret) bool {
+	if c.OwnerReference == nil {
+		return false
+	}
+	if existingSecret == nil {
+		return true // New secret, needs owner reference
+	}
+
+	// Check if the desired owner reference already exists
+	for _, ref := range existingSecret.OwnerReferences {
+		if ref.UID == c.OwnerReference.UID {
+			return false // Owner reference already exists
+		}
+	}
+	return true // Owner reference not found, needs update
 }
 
 // needNewTargetCertKeyPair returns a reason for creating a new target cert/key pair.
