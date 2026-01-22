@@ -12,6 +12,7 @@ import (
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/tools/cache"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/cloudevents/sdk-go/v2/binding"
@@ -467,9 +468,21 @@ func (bkr *GRPCBroker) OnDelete(ctx context.Context, t types.CloudEventsDataType
 	}
 
 	resource, err := service.Get(ctx, id)
-	// if the resource is not found, it indicates the resource has been processed.
+	// if the resource is not found, it indicates the resource has been deleted in the server,
+	// we send an event to notify agent clean up this resource
 	if errors.IsNotFound(err) {
-		return nil
+		namespace, _, err := cache.SplitMetaNamespaceKey(id)
+		if err != nil {
+			return err
+		}
+
+		// TODO maintain a source name in the broker
+		deletedResource := types.NewEventBuilder("source", types.CloudEventsType{CloudEventsDataType: t}).
+			WithResourceID(id).
+			WithClusterName(namespace).
+			WithDeletionTimestamp(time.Now()).
+			NewEvent()
+		return bkr.handleRes(ctx, &deletedResource, t, "delete_request")
 	}
 	if err != nil {
 		return err

@@ -3,7 +3,10 @@ package v1alpha1
 import (
 	"fmt"
 
+	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -58,6 +61,32 @@ func (c *ManagedClusterAddOnCodec) Encode(source string, eventType types.CloudEv
 
 // Decode a cloudevent to a ManagedClusterAddOn
 func (c *ManagedClusterAddOnCodec) Decode(evt *cloudevents.Event) (*addonapiv1alpha1.ManagedClusterAddOn, error) {
+	evtExtensions := evt.Context.GetExtensions()
+	if _, ok := evtExtensions[types.ExtensionDeletionTimestamp]; ok {
+		resourceID, err := cloudeventstypes.ToString(evtExtensions[types.ExtensionResourceID])
+		if err != nil {
+			return nil, fmt.Errorf("failed to get resourceid extension: %v", err)
+		}
+
+		namespace, name, err := cache.SplitMetaNamespaceKey(resourceID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid resourceID: %v", err)
+		}
+
+		deletionTimestamp, err := cloudeventstypes.ToTime(evtExtensions[types.ExtensionDeletionTimestamp])
+		if err != nil {
+			return nil, fmt.Errorf("failed to get deletiontimestamp, %v", err)
+		}
+
+		return &addonapiv1alpha1.ManagedClusterAddOn{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              name,
+				Namespace:         namespace,
+				DeletionTimestamp: &metav1.Time{Time: deletionTimestamp},
+			},
+		}, nil
+	}
+
 	addon := &addonapiv1alpha1.ManagedClusterAddOn{}
 	if err := evt.DataAs(addon); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal event data %s, %v", string(evt.Data()), err)
