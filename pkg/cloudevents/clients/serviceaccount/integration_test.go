@@ -3,7 +3,6 @@ package serviceaccount
 import (
 	"context"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -21,36 +20,11 @@ import (
 
 // tokenRequestService implements a service that handles token requests
 type tokenRequestService struct {
-	mu                   sync.RWMutex
-	tokenRequests        map[string]*authenticationv1.TokenRequest
 	handler              server.EventHandler
 	handleStatusUpdateFn func(context.Context, *cloudevents.Event) error
 }
 
-func (s *tokenRequestService) Get(ctx context.Context, resourceID string) (*cloudevents.Event, error) {
-	s.mu.RLock()
-	tokenReq, ok := s.tokenRequests[resourceID]
-	s.mu.RUnlock()
-	if !ok {
-		return nil, nil
-	}
-
-	codec := NewTokenRequestCodec()
-	eventType := cetypes.CloudEventsType{
-		CloudEventsDataType: TokenRequestDataType,
-		SubResource:         cetypes.SubResourceStatus,
-		Action:              cetypes.UpdateRequestAction,
-	}
-
-	evt, err := codec.Encode("test-source", eventType, tokenReq)
-	if err != nil {
-		return nil, err
-	}
-
-	return evt, nil
-}
-
-func (s *tokenRequestService) List(listOpts cetypes.ListOptions) ([]*cloudevents.Event, error) {
+func (s *tokenRequestService) List(_ context.Context, listOpts cetypes.ListOptions) ([]*cloudevents.Event, error) {
 	return nil, nil
 }
 
@@ -71,15 +45,23 @@ func (s *tokenRequestService) HandleStatusUpdate(ctx context.Context, evt *cloud
 		ExpirationTimestamp: metav1.Time{Time: time.Now().Add(1 * time.Hour)},
 	}
 
-	s.mu.Lock()
-	s.tokenRequests[string(tokenReq.UID)] = tokenReq
-	s.mu.Unlock()
-
 	// Notify the handler that we have a response ready
 	if s.handler == nil {
 		return nil
 	}
-	return s.handler.OnCreate(ctx, TokenRequestDataType, string(tokenReq.UID))
+
+	eventType := cetypes.CloudEventsType{
+		CloudEventsDataType: TokenRequestDataType,
+		SubResource:         cetypes.SubResourceSpec,
+		Action:              cetypes.UpdateRequestAction,
+	}
+
+	createEvt, err := codec.Encode("test-source", eventType, tokenReq)
+	if err != nil {
+		return err
+	}
+
+	return s.handler.HandleEvent(ctx, createEvt)
 }
 
 func (s *tokenRequestService) RegisterHandler(_ context.Context, handler server.EventHandler) {
@@ -95,9 +77,7 @@ func TestCreateToken_Integration(t *testing.T) {
 	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
 
 	// Create and register the token request service
-	svc := &tokenRequestService{
-		tokenRequests: make(map[string]*authenticationv1.TokenRequest),
-	}
+	svc := &tokenRequestService{}
 	grpcEventServer.RegisterService(context.Background(), TokenRequestDataType, svc)
 
 	// Start listening
@@ -172,7 +152,6 @@ func TestCreateToken_Timeout(t *testing.T) {
 
 	// Create a service that receives but never responds
 	svc := &tokenRequestService{
-		tokenRequests: make(map[string]*authenticationv1.TokenRequest),
 		handleStatusUpdateFn: func(ctx context.Context, evt *cloudevents.Event) error {
 			// Just receive but don't respond
 			return nil
@@ -231,9 +210,7 @@ func TestCreateToken_MultipleRequests(t *testing.T) {
 	grpcEventServer := grpcserver.NewGRPCBroker(grpcserver.NewBrokerOptions())
 	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
 
-	svc := &tokenRequestService{
-		tokenRequests: make(map[string]*authenticationv1.TokenRequest),
-	}
+	svc := &tokenRequestService{}
 	grpcEventServer.RegisterService(context.Background(), TokenRequestDataType, svc)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

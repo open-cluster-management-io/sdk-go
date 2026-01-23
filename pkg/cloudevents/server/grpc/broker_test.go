@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"errors"
 	"net"
 	"testing"
 
@@ -26,16 +25,8 @@ type testService struct {
 	handler server.EventHandler
 }
 
-func (s *testService) Get(ctx context.Context, resourceID string) (*cloudevents.Event, error) {
-	evt, ok := s.evts[resourceID]
-	if !ok {
-		return nil, errors.New("not found")
-	}
-	return evt, nil
-}
-
 // List the cloudEvent from the service
-func (s *testService) List(listOpts cetypes.ListOptions) ([]*cloudevents.Event, error) {
+func (s *testService) List(_ context.Context, listOpts cetypes.ListOptions) ([]*cloudevents.Event, error) {
 	evts := make([]*cloudevents.Event, 0, len(s.evts))
 	for _, evt := range s.evts {
 		evts = append(evts, evt)
@@ -56,7 +47,7 @@ func (s *testService) RegisterHandler(_ context.Context, handler server.EventHan
 
 func (s *testService) create(evt *cloudevents.Event) error {
 	s.evts[evt.ID()] = evt
-	return s.handler.OnCreate(context.TODO(), dataType, evt.ID())
+	return s.handler.HandleEvent(context.TODO(), evt)
 }
 
 func TestServer(t *testing.T) {
