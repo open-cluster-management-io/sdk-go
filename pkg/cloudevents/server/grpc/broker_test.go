@@ -133,3 +133,227 @@ func TestServer(t *testing.T) {
 		t.Error("received event is different")
 	}
 }
+
+// TestSubscriptionHeaderImmediateSend verifies that the subscription ID header
+// is sent immediately upon subscription, preventing the "got 0 headers" error.
+func TestSubscriptionHeaderImmediateSend(t *testing.T) {
+	grpcServerOptions := []grpc.ServerOption{}
+	grpcServer := grpc.NewServer(grpcServerOptions...)
+	defer grpcServer.Stop()
+
+	grpcEventServer := NewGRPCBroker(NewBrokerOptions())
+	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
+
+	svc := &testService{evts: make(map[string]*cloudevents.Event)}
+	grpcEventServer.RegisterService(context.Background(), dataType, svc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	t.Cleanup(func() {
+		grpcServer.GracefulStop()
+		_ = lis.Close()
+	})
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			t.Errorf("failed to serve: %v", err)
+		}
+	}()
+
+	grpcClientOptions := grpccli.NewGRPCOptions()
+	grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
+	agentOption := grpcv2.NewAgentOptions(grpcClientOptions, "cluster1", "agent1", dataType)
+
+	// Test that connection and subscription work without "got 0 headers" error
+	if err := agentOption.CloudEventsTransport.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+
+	if err := agentOption.CloudEventsTransport.Subscribe(ctx); err != nil {
+		t.Fatalf("failed to subscribe, expected header to be sent immediately: %v", err)
+	}
+}
+
+// TestReconnectionScenario simulates a client restart (disconnect and reconnect)
+// to verify that subscription headers are properly sent on reconnection.
+func TestReconnectionScenario(t *testing.T) {
+	grpcServerOptions := []grpc.ServerOption{}
+	grpcServer := grpc.NewServer(grpcServerOptions...)
+	defer grpcServer.Stop()
+
+	grpcEventServer := NewGRPCBroker(NewBrokerOptions())
+	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
+
+	svc := &testService{evts: make(map[string]*cloudevents.Event)}
+	grpcEventServer.RegisterService(context.Background(), dataType, svc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	t.Cleanup(func() {
+		grpcServer.GracefulStop()
+		_ = lis.Close()
+	})
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			t.Errorf("failed to serve: %v", err)
+		}
+	}()
+
+	grpcClientOptions := grpccli.NewGRPCOptions()
+	grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
+
+	// First connection and subscription
+	agentOption := grpcv2.NewAgentOptions(grpcClientOptions, "cluster1", "agent1", dataType)
+	if err := agentOption.CloudEventsTransport.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+
+	if err := agentOption.CloudEventsTransport.Subscribe(ctx); err != nil {
+		t.Fatalf("failed to subscribe on first connection: %v", err)
+	}
+
+	// Simulate client restart by closing and reconnecting
+	if err := agentOption.CloudEventsTransport.Close(ctx); err != nil {
+		t.Fatalf("failed to close: %v", err)
+	}
+
+	// Create a new transport for reconnection
+	grpcClientOptions2 := grpccli.NewGRPCOptions()
+	grpcClientOptions2.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
+	agentOption2 := grpcv2.NewAgentOptions(grpcClientOptions2, "cluster1", "agent1", dataType)
+
+	// Reconnect
+	if err := agentOption2.CloudEventsTransport.Connect(ctx); err != nil {
+		t.Fatalf("failed to reconnect: %v", err)
+	}
+
+	// This should not fail with "got 0 headers" error
+	if err := agentOption2.CloudEventsTransport.Subscribe(ctx); err != nil {
+		t.Fatalf("failed to subscribe after reconnection: %v", err)
+	}
+}
+
+// TestConcurrentSubscriptions verifies that multiple clients can subscribe
+// simultaneously without header race conditions.
+func TestConcurrentSubscriptions(t *testing.T) {
+	grpcServerOptions := []grpc.ServerOption{}
+	grpcServer := grpc.NewServer(grpcServerOptions...)
+	defer grpcServer.Stop()
+
+	grpcEventServer := NewGRPCBroker(NewBrokerOptions())
+	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
+
+	svc := &testService{evts: make(map[string]*cloudevents.Event)}
+	grpcEventServer.RegisterService(context.Background(), dataType, svc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	t.Cleanup(func() {
+		grpcServer.GracefulStop()
+		_ = lis.Close()
+	})
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			t.Errorf("failed to serve: %v", err)
+		}
+	}()
+
+	// Create and subscribe multiple clients concurrently
+	numClients := 10
+	errCh := make(chan error, numClients)
+
+	for i := 0; i < numClients; i++ {
+		go func(clientID int) {
+			grpcClientOptions := grpccli.NewGRPCOptions()
+			grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
+			agentOption := grpcv2.NewAgentOptions(grpcClientOptions, "cluster1", "agent1", dataType)
+
+			if err := agentOption.CloudEventsTransport.Connect(ctx); err != nil {
+				errCh <- err
+				return
+			}
+
+			if err := agentOption.CloudEventsTransport.Subscribe(ctx); err != nil {
+				errCh <- err
+				return
+			}
+
+			errCh <- nil
+		}(i)
+	}
+
+	// Wait for all clients to complete
+	for i := 0; i < numClients; i++ {
+		if err := <-errCh; err != nil {
+			t.Errorf("client %d failed: %v", i, err)
+		}
+	}
+}
+
+// TestMultipleRapidReconnections simulates rapid reconnection scenarios
+// that could trigger the race condition.
+func TestMultipleRapidReconnections(t *testing.T) {
+	grpcServerOptions := []grpc.ServerOption{}
+	grpcServer := grpc.NewServer(grpcServerOptions...)
+	defer grpcServer.Stop()
+
+	grpcEventServer := NewGRPCBroker(NewBrokerOptions())
+	pbv1.RegisterCloudEventServiceServer(grpcServer, grpcEventServer)
+
+	svc := &testService{evts: make(map[string]*cloudevents.Event)}
+	grpcEventServer.RegisterService(context.Background(), dataType, svc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	t.Cleanup(func() {
+		grpcServer.GracefulStop()
+		_ = lis.Close()
+	})
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			t.Errorf("failed to serve: %v", err)
+		}
+	}()
+
+	// Perform multiple rapid reconnections
+	for i := 0; i < 5; i++ {
+		grpcClientOptions := grpccli.NewGRPCOptions()
+		grpcClientOptions.Dialer = &grpccli.GRPCDialer{URL: lis.Addr().String()}
+		agentOption := grpcv2.NewAgentOptions(grpcClientOptions, "cluster1", "agent1", dataType)
+
+		if err := agentOption.CloudEventsTransport.Connect(ctx); err != nil {
+			t.Fatalf("reconnection %d: failed to connect: %v", i, err)
+		}
+
+		if err := agentOption.CloudEventsTransport.Subscribe(ctx); err != nil {
+			t.Fatalf("reconnection %d: failed to subscribe: %v", i, err)
+		}
+
+		if err := agentOption.CloudEventsTransport.Close(ctx); err != nil {
+			t.Fatalf("reconnection %d: failed to close: %v", i, err)
+		}
+	}
+}

@@ -124,34 +124,28 @@ func (bkr *GRPCBroker) Publish(ctx context.Context, pubReq *pbv1.PublishRequest)
 	return &emptypb.Empty{}, nil
 }
 
-// register registers a subscriber and return client id and error channel.
-func (bkr *GRPCBroker) register(ctx context.Context,
+// registerSubscriber registers a subscriber with a pre-generated ID.
+// The subscription header must already be sent before calling this function.
+func (bkr *GRPCBroker) registerSubscriber(ctx context.Context,
+	id string,
 	dataType types.CloudEventsDataType,
 	subReq *pbv1.SubscriptionRequest,
-	subServer pbv1.CloudEventService_SubscribeServer,
-	handler resourceHandler) (string, error) {
+	handler resourceHandler) error {
 	logger := klog.FromContext(ctx)
 
 	bkr.mu.Lock()
 	defer bkr.mu.Unlock()
 
-	id := uuid.NewString()
+	logger.Info("registering subscriber", "id", id, "clusterName", subReq.ClusterName, "dataType", dataType)
+
 	bkr.subscribers[id] = &subscriber{
 		clusterName: subReq.ClusterName,
 		dataType:    dataType,
 		handler:     handler,
 	}
 
-	// Signal subscriber is registered
-	if err := subServer.SendHeader(metadata.Pairs(constants.GRPCSubscriptionIDKey, id)); err != nil {
-		logger.Error(err, "failed to send subscription header, unregister subscriber", "subID", id)
-		delete(bkr.subscribers, id)
-		return "", err
-	}
-	logger.V(4).Info("register a subscriber", "id", id, "clusterName", subReq.ClusterName, "dataType", dataType)
 	metrics.IncGRPCCESubscribersMetric(subReq.ClusterName, dataType.String())
-
-	return id, nil
+	return nil
 }
 
 // unregister a subscriber by id
@@ -181,10 +175,17 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		return fmt.Errorf("invalid subscription request: invalid data type %v", err)
 	}
 
+	// Generate subscription ID and send header IMMEDIATELY, before any other operations
+	// This ensures the client receives the header as soon as possible after the stream is established
+	subID := uuid.NewString()
+	if err := subServer.SendHeader(metadata.Pairs(constants.GRPCSubscriptionIDKey, subID)); err != nil {
+		return fmt.Errorf("failed to send subscription header for subID %s: %w", subID, err)
+	}
+
 	subCtx, cancel := context.WithCancel(subServer.Context())
 	defer cancel()
 
-	logger := klog.FromContext(subCtx).WithValues("clusterName", subReq.ClusterName)
+	logger := klog.FromContext(subCtx).WithValues("clusterName", subReq.ClusterName, "subID", subID)
 
 	// TODO make the channel size configurable
 	eventCh := make(chan *pbv1.CloudEvent, 100)
@@ -194,6 +195,35 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 		heartbeater = heartbeat.NewHeartbeater(bkr.heartbeatCheckInterval, 10)
 	}
 	sendErrCh := make(chan error, 1)
+
+	// Register the subscriber with the ID we already created and sent in the header
+	err = bkr.registerSubscriber(klog.NewContext(subCtx, logger), subID, *dataType, subReq, func(handlerCtx context.Context, subID string, evt *cloudevents.Event) error {
+		// convert the cloudevents.Event to pbv1.CloudEvent
+		// WARNING: don't use "pbEvt, err := pb.ToProto(evt)" to convert cloudevent to protobuf
+		pbEvt := &pbv1.CloudEvent{}
+		if err := grpcprotocol.WritePBMessage(handlerCtx, binding.ToMessage(evt), pbEvt); err != nil {
+			return fmt.Errorf("failed to convert cloudevent to protobuf for resource(%s): %v", evt.ID(), err)
+		}
+
+		// send the cloudevent to the subscriber
+		klog.FromContext(handlerCtx).V(4).Info("sending the event to spec subscribers",
+			"subID", subID, "eventType", evt.Type(), "extensions", evt.Extensions())
+		select {
+		case eventCh <- pbEvt:
+		case <-subCtx.Done():
+			// The context of the stream has been canceled or completed.
+			// This could happen if:
+			// - The client closed the connection or canceled the stream.
+			// - The server closed the stream, potentially due to a shutdown.
+			// No error is returned here because the stream closure is expected.
+			return nil
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 
 	// send events
 	// The grpc send is not concurrency safe and non-blocking, see: https://github.com/grpc/grpc-go/blob/v1.75.1/stream.go#L1571
@@ -237,34 +267,6 @@ func (bkr *GRPCBroker) Subscribe(subReq *pbv1.SubscriptionRequest, subServer pbv
 			}
 		}
 	}()
-
-	subID, err := bkr.register(klog.NewContext(subCtx, logger), *dataType, subReq, subServer, func(handlerCtx context.Context, subID string, evt *cloudevents.Event) error {
-		// convert the cloudevents.Event to pbv1.CloudEvent
-		// WARNING: don't use "pbEvt, err := pb.ToProto(evt)" to convert cloudevent to protobuf
-		pbEvt := &pbv1.CloudEvent{}
-		if err := grpcprotocol.WritePBMessage(handlerCtx, binding.ToMessage(evt), pbEvt); err != nil {
-			return fmt.Errorf("failed to convert cloudevent to protobuf for resource(%s): %v", evt.ID(), err)
-		}
-
-		// send the cloudevent to the subscriber
-		logger.V(4).Info("sending the event to spec subscribers",
-			"subID", subID, "eventType", evt.Type(), "extensions", evt.Extensions())
-		select {
-		case eventCh <- pbEvt:
-		case <-subCtx.Done():
-			// The context of the stream has been canceled or completed.
-			// This could happen if:
-			// - The client closed the connection or canceled the stream.
-			// - The server closed the stream, potentially due to a shutdown.
-			// No error is returned here because the stream closure is expected.
-			return nil
-		}
-
-		return nil
-	})
-	if err != nil {
-		return err
-	}
 
 	if heartbeater != nil {
 		go heartbeater.Start(subCtx)
