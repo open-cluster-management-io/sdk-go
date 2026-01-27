@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
@@ -28,22 +29,20 @@ func NewResourceService(statusHandler ResourceStatusHandler, serverStore *store.
 	}
 }
 
-func (s *ResourceService) Get(_ context.Context, resourceID string) (*cloudevents.Event, error) {
-	resource, err := s.serverStore.Get(resourceID)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.codec.Encode(resource.Source, types.CloudEventsType{
-		CloudEventsDataType: payload.ManifestBundleEventDataType,
-	}, resource)
-}
-
-func (s *ResourceService) List(listOpts types.ListOptions) ([]*cloudevents.Event, error) {
+func (s *ResourceService) List(_ context.Context, listOpts types.ListOptions) ([]*cloudevents.Event, error) {
 	resources := s.serverStore.List(listOpts.ClusterName)
 	events := make([]*cloudevents.Event, 0, len(resources))
 	for _, resource := range resources {
-		evt, err := s.codec.Encode(resource.Source, types.CloudEventsType{}, resource)
+		action := types.UpdateRequestAction
+		if !resource.DeletionTimestamp.IsZero() {
+			action = types.DeleteRequestAction
+		}
+
+		evt, err := s.codec.Encode(resource.Source, types.CloudEventsType{
+			CloudEventsDataType: payload.ManifestBundleEventDataType,
+			SubResource:         types.SubResourceSpec,
+			Action:              action,
+		}, resource)
 		if err != nil {
 			return nil, err
 		}
@@ -53,7 +52,7 @@ func (s *ResourceService) List(listOpts types.ListOptions) ([]*cloudevents.Event
 	return events, nil
 }
 
-func (s *ResourceService) HandleStatusUpdate(ctx context.Context, evt *cloudevents.Event) error {
+func (s *ResourceService) HandleStatusUpdate(_ context.Context, evt *cloudevents.Event) error {
 	resource, err := s.codec.Decode(evt)
 	if err != nil {
 		return err
@@ -67,9 +66,21 @@ func (s *ResourceService) RegisterHandler(_ context.Context, handler server.Even
 }
 
 func (s *ResourceService) UpdateResourceSpec(resource *store.Resource) error {
+	action := types.UpdateRequestAction
 	if !resource.DeletionTimestamp.IsZero() {
-		return s.handler.OnDelete(context.Background(), payload.ManifestBundleEventDataType, resource.ResourceID)
+		action = types.DeleteRequestAction
 	}
 
-	return s.handler.OnUpdate(context.Background(), payload.ManifestBundleEventDataType, resource.ResourceID)
+	evt, err := s.codec.Encode(resource.Source, types.CloudEventsType{
+		CloudEventsDataType: payload.ManifestBundleEventDataType,
+		SubResource:         types.SubResourceSpec,
+		Action:              action,
+	}, resource)
+	if err != nil {
+		return err
+	}
+	if s.handler == nil {
+		return errors.New("event handler not registered")
+	}
+	return s.handler.HandleEvent(context.Background(), evt)
 }

@@ -207,11 +207,7 @@ func newMockWorkService() *mockWorkService {
 	return &mockWorkService{}
 }
 
-func (s *mockWorkService) Get(ctx context.Context, resourceID string) (*cloudevents.Event, error) {
-	return nil, nil
-}
-
-func (s *mockWorkService) List(listOpts cetypes.ListOptions) ([]*cloudevents.Event, error) {
+func (s *mockWorkService) List(_ context.Context, listOpts cetypes.ListOptions) ([]*cloudevents.Event, error) {
 	return nil, nil
 }
 
