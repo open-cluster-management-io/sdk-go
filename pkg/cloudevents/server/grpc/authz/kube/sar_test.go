@@ -2,10 +2,12 @@ package sar
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	authv1 "k8s.io/api/authorization/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
@@ -15,20 +17,163 @@ import (
 	workv1 "open-cluster-management.io/api/work/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/cluster"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/lease"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/serviceaccount"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
+	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/server/grpc/authn"
 	"open-cluster-management.io/sdk-go/pkg/server/grpc/authz"
 )
 
+func TestSARAuthorizeRequest(t *testing.T) {
+	type testCase struct {
+		name         string
+		request      *pbv1.PublishRequest
+		userCtx      func() context.Context
+		allow        func(sar *authv1.SubjectAccessReview) bool
+		expectErr    bool
+		expectDenied bool
+	}
+
+	clusterObj := &clusterv1.ManagedCluster{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ManagedCluster",
+			APIVersion: "cluster.open-cluster-management.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cluster",
+		},
+	}
+
+	clusterData, _ := json.Marshal(clusterObj)
+
+	testCases := []testCase{
+		{
+			name: "allowed for cluster creation with resource name from payload",
+			request: &pbv1.PublishRequest{
+				Event: &pbv1.CloudEvent{
+					SpecVersion: "1.0",
+					Id:          "test-id",
+					Source:      "test-source",
+					Type:        "cluster.open-cluster-management.io.v1.managedclusters.spec.create_request",
+					Attributes: map[string]*pbv1.CloudEventAttributeValue{
+						"ce-clustername": {
+							Attr: &pbv1.CloudEventAttributeValue_CeString{
+								CeString: "test-cluster",
+							},
+						},
+					},
+					Data: &pbv1.CloudEvent_BinaryData{
+						BinaryData: clusterData,
+					},
+				},
+			},
+			userCtx: func() context.Context {
+				return context.WithValue(context.Background(), authn.ContextUserKey, "test-user")
+			},
+			allow: func(sar *authv1.SubjectAccessReview) bool {
+				if sar.Spec.User != "test-user" {
+					return false
+				}
+
+				if sar.Spec.ResourceAttributes.Group != clusterv1.SchemeGroupVersion.Group ||
+					sar.Spec.ResourceAttributes.Resource != "managedclusters" ||
+					sar.Spec.ResourceAttributes.Name != "test-cluster" ||
+					sar.Spec.ResourceAttributes.Namespace != "test-cluster" {
+					return false
+				}
+
+				if sar.Spec.ResourceAttributes.Verb != "create" {
+					return false
+				}
+
+				return true
+			},
+			expectErr:    false,
+			expectDenied: false,
+		},
+		{
+			name: "denied for cluster creation",
+			request: &pbv1.PublishRequest{
+				Event: &pbv1.CloudEvent{
+					SpecVersion: "1.0",
+					Id:          "test-id",
+					Source:      "test-source",
+					Type:        "cluster.open-cluster-management.io.v1.managedclusters.spec.create_request",
+					Attributes: map[string]*pbv1.CloudEventAttributeValue{
+						"ce-clustername": {
+							Attr: &pbv1.CloudEventAttributeValue_CeString{
+								CeString: "test-cluster",
+							},
+						},
+					},
+					Data: &pbv1.CloudEvent_BinaryData{
+						BinaryData: clusterData,
+					},
+				},
+			},
+			userCtx: func() context.Context {
+				return context.WithValue(context.Background(), authn.ContextUserKey, "test-user")
+			},
+			allow: func(sar *authv1.SubjectAccessReview) bool {
+				return false
+			},
+			expectErr:    true,
+			expectDenied: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+
+			client.Fake.PrependReactor(
+				"create",
+				"subjectaccessreviews",
+				func(action clienttesting.Action) (bool, runtime.Object, error) {
+					createAction, ok := action.(clienttesting.CreateAction)
+					if !ok {
+						t.Fatalf("unexpected action %T", action)
+					}
+
+					sarObj := createAction.GetObject()
+					sar, ok := sarObj.(*authv1.SubjectAccessReview)
+					if !ok {
+						t.Fatalf("unexpected object %T", sarObj)
+					}
+
+					return true, &authv1.SubjectAccessReview{Status: authv1.SubjectAccessReviewStatus{Allowed: tc.allow(sar)}}, nil
+				},
+			)
+
+			auth := NewSARAuthorizer(client)
+
+			decision, err := auth.AuthorizeRequest(tc.userCtx(), tc.request)
+			if tc.expectErr && err == nil {
+				t.Errorf("expected error, got nil")
+			}
+			if !tc.expectErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !tc.expectErr && decision != authz.DecisionAllow {
+				t.Errorf("expected DecisionAllow, got %v", decision)
+			}
+			if tc.expectDenied && decision != authz.DecisionDeny {
+				t.Errorf("expected DecisionDeny, got %v", decision)
+			}
+		})
+	}
+}
+
 func TestSARAuthorize(t *testing.T) {
 	type testCase struct {
-		name       string
-		cluster    string
-		eventsType types.CloudEventsType
-		userCtx    func() context.Context
-		allow      func(sar *authv1.SubjectAccessReview) bool
-		expectErr  bool
+		name         string
+		cluster      string
+		resourceName string
+		eventsType   types.CloudEventsType
+		userCtx      func() context.Context
+		allow        func(sar *authv1.SubjectAccessReview) bool
+		expectErr    bool
 	}
 
 	testCases := []testCase{
@@ -56,6 +201,70 @@ func TestSARAuthorize(t *testing.T) {
 				}
 
 				if sar.Spec.ResourceAttributes.Verb != "create" {
+					return false
+				}
+
+				return true
+			},
+			expectErr: false,
+		},
+		{
+			name:         "allowed for service account token creation",
+			cluster:      "cluster1",
+			resourceName: "test-sa",
+			eventsType: types.CloudEventsType{
+				CloudEventsDataType: serviceaccount.TokenRequestDataType,
+				SubResource:         types.SubResourceSpec,
+				Action:              types.CreateRequestAction,
+			},
+			userCtx: func() context.Context {
+				return context.WithValue(context.Background(), authn.ContextUserKey, "test")
+			},
+			allow: func(sar *authv1.SubjectAccessReview) bool {
+				if sar.Spec.User != "test" {
+					return false
+				}
+
+				if sar.Spec.ResourceAttributes.Group != "" ||
+					sar.Spec.ResourceAttributes.Resource != "serviceaccounts" ||
+					sar.Spec.ResourceAttributes.Subresource != "token" ||
+					sar.Spec.ResourceAttributes.Name != "test-sa" ||
+					sar.Spec.ResourceAttributes.Namespace != "cluster1" {
+					return false
+				}
+
+				if sar.Spec.ResourceAttributes.Verb != "create" {
+					return false
+				}
+
+				return true
+			},
+			expectErr: false,
+		},
+		{
+			name:    "allowed for service account token subscription",
+			cluster: "cluster1",
+			eventsType: types.CloudEventsType{
+				CloudEventsDataType: serviceaccount.TokenRequestDataType,
+				SubResource:         types.SubResourceSpec,
+				Action:              types.WatchRequestAction,
+			},
+			userCtx: func() context.Context {
+				return context.WithValue(context.Background(), authn.ContextUserKey, "test")
+			},
+			allow: func(sar *authv1.SubjectAccessReview) bool {
+				if sar.Spec.User != "test" {
+					return false
+				}
+
+				if sar.Spec.ResourceAttributes.Group != "" ||
+					sar.Spec.ResourceAttributes.Resource != "serviceaccounts" ||
+					sar.Spec.ResourceAttributes.Subresource != "token" ||
+					sar.Spec.ResourceAttributes.Namespace != "cluster1" {
+					return false
+				}
+
+				if sar.Spec.ResourceAttributes.Verb != "subscribe" {
 					return false
 				}
 
@@ -198,7 +407,12 @@ func TestSARAuthorize(t *testing.T) {
 
 			auth := NewSARAuthorizer(client)
 
-			decision, err := auth.authorize(tc.userCtx(), tc.cluster, tc.eventsType)
+			metaObj := metav1.ObjectMeta{}
+			if tc.resourceName != "" {
+				metaObj.Name = tc.resourceName
+			}
+
+			decision, err := auth.authorize(tc.userCtx(), tc.cluster, tc.eventsType, metaObj)
 			if tc.expectErr && err == nil {
 				t.Errorf("expected error, got nil")
 			}
