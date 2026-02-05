@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	workv1informers "open-cluster-management.io/api/client/work/informers/externalversions/work/v1"
+	workv1 "open-cluster-management.io/api/work/v1"
 
 	clientoptions "open-cluster-management.io/sdk-go/pkg/cloudevents/clients/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"
@@ -47,6 +48,7 @@ func StartManifestWorkSourceClient(
 	ctx context.Context,
 	sourceID string,
 	config any,
+	works ...*workv1.ManifestWork,
 ) (*work.ClientHolder, workv1informers.ManifestWorkInformer, error) {
 	clientID := fmt.Sprintf("%s-%s", sourceID, rand.String(5))
 	watcherStore := workstore.NewSourceInformerWatcherStore(ctx)
@@ -64,6 +66,12 @@ func StartManifestWorkSourceClient(
 	watcherStore.SetInformer(informer.Informer())
 
 	go informer.Informer().Run(ctx.Done())
+
+	for _, work := range works {
+		if err := watcherStore.Add(work); err != nil {
+			return nil, nil, err
+		}
+	}
 
 	return clientHolder, informer, nil
 }
