@@ -31,6 +31,9 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 		var clusterName string
 		var workNamePrefix string
 
+		var work1UID, work2UID string
+		var work1Name, work2Name string
+
 		ginkgo.BeforeEach(func() {
 			ctx, cancel = context.WithCancel(context.Background())
 			sourceID = fmt.Sprintf("mw-resync-%s", rand.String(5))
@@ -45,8 +48,8 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			<-time.After(time.Second)
 
 			// add two works in the agent cache
-			work1Name := fmt.Sprintf("%s-1", workNamePrefix)
-			work1UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work1Name)
+			work1Name = fmt.Sprintf("%s-1", workNamePrefix)
+			work1UID = utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work1Name)
 			work1 := util.NewManifestWorkWithStatus(clusterName, work1Name)
 			work1.UID = apitypes.UID(work1UID)
 			work1.Generation = 1
@@ -54,8 +57,8 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			work1.Annotations = map[string]string{common.CloudEventsDataTypeAnnotationKey: payload.ManifestBundleEventDataType.String()}
 			gomega.Expect(watchStore.Add(work1)).ToNot(gomega.HaveOccurred())
 
-			work2Name := fmt.Sprintf("%s-2", workNamePrefix)
-			work2UID := utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work2Name)
+			work2Name = fmt.Sprintf("%s-2", workNamePrefix)
+			work2UID = utils.UID(sourceID, common.ManifestWorkGR.String(), clusterName, work2Name)
 			work2 := util.NewManifestWorkWithStatus(clusterName, work2Name)
 			work2.UID = apitypes.UID(work2UID)
 			work2.Generation = 1
@@ -72,25 +75,22 @@ var _ = ginkgo.Describe("ManifestWork Clients Test - Resync", func() {
 			cancel()
 		})
 
-		ginkgo.It("resync manifestworks with manifestwork source client", func() {
+		ginkgo.It("resync manifestworks status with manifestwork source client", func() {
 
 			mqttOptions := util.NewMQTTSourceOptionsWithSourceBroadcast(mqttBrokerHost, sourceID)
 
-			// simulate a source client restart, recover two works
-			sourceClientHolder, _, err := source.StartManifestWorkSourceClient(ctx, sourceID, mqttOptions)
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(
+			// simulate a source client restart, recover two existed works
+			ginkgo.By("start the source client with two works")
+			work1 := util.NewManifestWork(clusterName, work1Name, true)
+			work1.UID = apitypes.UID(work1UID)
+			work2 := util.NewManifestWork(clusterName, work2Name, true)
+			work2.UID = apitypes.UID(work2UID)
+			sourceClientHolder, _, err := source.StartManifestWorkSourceClient(
 				ctx,
-				util.NewManifestWork(clusterName, fmt.Sprintf("%s-1", workNamePrefix), true),
-				metav1.CreateOptions{},
-			)
-			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-
-			_, err = sourceClientHolder.ManifestWorks(clusterName).Create(
-				ctx,
-				util.NewManifestWork(clusterName, fmt.Sprintf("%s-2", workNamePrefix), true),
-				metav1.CreateOptions{},
+				sourceID,
+				mqttOptions,
+				work1,
+				work2,
 			)
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
 

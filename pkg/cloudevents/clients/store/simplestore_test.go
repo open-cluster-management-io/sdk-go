@@ -7,11 +7,11 @@ import (
 
 	coordv1 "k8s.io/api/coordination/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
 func TestHandleReceivedResource(t *testing.T) {
-	// identity := "test"
 	store := NewSimpleStore[*coordv1.Lease]()
 	if err := store.Add(&coordv1.Lease{
 		ObjectMeta: metav1.ObjectMeta{
@@ -23,6 +23,7 @@ func TestHandleReceivedResource(t *testing.T) {
 	}
 	if err := store.Add(&coordv1.Lease{
 		ObjectMeta: metav1.ObjectMeta{
+			UID:       types.UID("1234"),
 			Name:      "deletion",
 			Namespace: "test",
 		},
@@ -88,6 +89,7 @@ func TestHandleReceivedResource(t *testing.T) {
 			action: watch.Deleted,
 			received: &coordv1.Lease{
 				ObjectMeta: metav1.ObjectMeta{
+					UID:               types.UID("1234"),
 					Name:              "deletion",
 					Namespace:         "test",
 					DeletionTimestamp: &metav1.Time{Time: time.Now()},
