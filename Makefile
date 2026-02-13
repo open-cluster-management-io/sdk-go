@@ -18,8 +18,7 @@ GO_TEST_FLAGS :=-race
 GO_LD_FLAGS:=
 
 verify-gocilint:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6
-	${GOPATH}/bin/golangci-lint run --timeout=3m ./...
+	@./ci/lint/run-lint.sh
 
 verify-govet:
 	go vet -mod=vendor ./...

@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"time"
+
 	"k8s.io/apimachinery/pkg/util/rand"
+
 	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	workv1 "open-cluster-management.io/api/work/v1"
-	"time"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/options"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work"

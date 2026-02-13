@@ -7,6 +7,7 @@ import (
 	cloudeventstypes "github.com/cloudevents/sdk-go/v2/types"
 
 	"k8s.io/apimachinery/pkg/runtime"
+
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
