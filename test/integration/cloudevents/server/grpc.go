@@ -291,7 +291,7 @@ func decode(evt *cloudevents.Event) (*store.Resource, error) {
 		resource.DeletionTimestamp = &metav1.Time{Time: deletionTimestamp}
 	} else {
 		var objMap map[string]interface{}
-		if err := json.Unmarshal(manifestBundle.Manifests[0].RawExtension.Raw, &objMap); err != nil {
+		if err := json.Unmarshal(manifestBundle.Manifests[0].Raw, &objMap); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal raw extension to object: %v", err)
 		}
 		resource.Spec = unstructured.Unstructured{Object: objMap}

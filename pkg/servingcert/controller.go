@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
 	"open-cluster-management.io/sdk-go/pkg/basecontroller/factory"
 	"open-cluster-management.io/sdk-go/pkg/certrotation"
 )
@@ -131,8 +132,10 @@ func (c *ServingCertController) Start(ctx context.Context) {
 	signingSecretInformerFT := newOnTermInformer(c.signingRotation.Name)
 	c.signingRotation.Lister = signingSecretInformerFT.Core().V1().Secrets().Lister()
 
-	secretInformerFTs := []informers.SharedInformerFactory{signingSecretInformerFT}
-	secretInformers := []factory.Informer{signingSecretInformerFT.Core().V1().Secrets().Informer()}
+	secretInformerFTs := make([]informers.SharedInformerFactory, 0, 1+len(c.targetRotations))
+	secretInformerFTs = append(secretInformerFTs, signingSecretInformerFT)
+	secretInformers := make([]factory.Informer, 0, 1+len(c.targetRotations))
+	secretInformers = append(secretInformers, signingSecretInformerFT.Core().V1().Secrets().Informer())
 
 	for index := range c.targetRotations {
 		targetSecretInformerFT := newOnTermInformer(c.targetRotations[index].Name)
