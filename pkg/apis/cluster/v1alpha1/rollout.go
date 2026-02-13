@@ -590,6 +590,9 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 }
 
 func decisionGroupsToGroupKeys(decisionsGroup []clusterv1alpha1.MandatoryDecisionGroup) []clusterv1beta1sdk.GroupKey {
+	if len(decisionsGroup) == 0 {
+		return nil
+	}
 	result := make([]clusterv1beta1sdk.GroupKey, 0, len(decisionsGroup))
 	for _, d := range decisionsGroup {
 		gk := clusterv1beta1sdk.GroupKey{}
