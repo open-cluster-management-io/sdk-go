@@ -20,6 +20,7 @@ set -e
 
 # Resolve the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REMOTE_CONFIG_URL="https://raw.githubusercontent.com/stolostron/sdk-go/main/ci/lint"
 CONFIG_CACHE_DIR="${GOLANGCI_CONFIG_DIR:-/tmp/golangci-lint-config}"
 
 # Global variables set by detect_versions / install_lint
@@ -142,8 +143,13 @@ get_config() {
     CONFIG_PATH="${CONFIG_CACHE_DIR}/golangci-v2.yml"
 
     if [[ ! -f "$CONFIG_PATH" ]] || [[ "${GOLANGCI_UPDATE_CONFIG:-false}" == "true" ]]; then
-        echo "Copying config: golangci-v2.yml"
-        cp "${SCRIPT_DIR}/golangci-v2.yml" "$CONFIG_PATH"
+        if [[ -f "${SCRIPT_DIR}/golangci-v2.yml" ]]; then
+            echo "Copying config from local: ${SCRIPT_DIR}/golangci-v2.yml"
+            cp "${SCRIPT_DIR}/golangci-v2.yml" "$CONFIG_PATH"
+        else
+            echo "Downloading config: golangci-v2.yml"
+            curl -sSfL "${REMOTE_CONFIG_URL}/golangci-v2.yml" -o "$CONFIG_PATH"
+        fi
     else
         echo "Using cached config: $CONFIG_PATH"
     fi

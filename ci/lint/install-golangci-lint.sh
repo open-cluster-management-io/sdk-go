@@ -21,6 +21,7 @@ set -eo pipefail
 
 # Resolve the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REMOTE_CONFIG_URL="https://raw.githubusercontent.com/stolostron/sdk-go/main/ci/lint"
 
 # Check if Go is available
 if ! command -v go &>/dev/null; then
@@ -229,14 +230,17 @@ LOCAL_CONFIG=".golangci.yml"
 
 # Copy config file if not exists or if user wants to update
 copy_config() {
-    if [[ ! -f "${CONFIG_SOURCE}" ]]; then
-        echo "Warning: Config source not found at ${CONFIG_SOURCE}"
-        echo "You may need to create ${LOCAL_CONFIG} manually or use -c flag"
-        return 1
+    if [[ -f "${CONFIG_SOURCE}" ]]; then
+        echo "Copying golangci-lint v2 config from ${CONFIG_SOURCE}..."
+        cp "${CONFIG_SOURCE}" "${LOCAL_CONFIG}"
+    else
+        echo "Downloading golangci-lint v2 config from remote..."
+        if ! curl -sfL "${REMOTE_CONFIG_URL}/${CONFIG_FILE}" -o "${LOCAL_CONFIG}"; then
+            echo "Warning: Failed to download config from ${REMOTE_CONFIG_URL}/${CONFIG_FILE}"
+            echo "You may need to create ${LOCAL_CONFIG} manually or use -c flag"
+            return 1
+        fi
     fi
-
-    echo "Copying golangci-lint v2 config from ${CONFIG_SOURCE}..."
-    cp "${CONFIG_SOURCE}" "${LOCAL_CONFIG}"
     echo "Configuration saved to ${LOCAL_CONFIG}"
 }
 
