@@ -20,7 +20,7 @@ set -e
 
 # Resolve the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REMOTE_CONFIG_URL="https://raw.githubusercontent.com/stolostron/sdk-go/main/ci/lint"
+REMOTE_CONFIG_URL="https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/main/ci/lint"
 CONFIG_CACHE_DIR="${GOLANGCI_CONFIG_DIR:-/tmp/golangci-lint-config}"
 
 # Global variables set by detect_versions / install_lint

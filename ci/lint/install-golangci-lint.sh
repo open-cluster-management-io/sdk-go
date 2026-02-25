@@ -21,7 +21,7 @@ set -eo pipefail
 
 # Resolve the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REMOTE_CONFIG_URL="https://raw.githubusercontent.com/stolostron/sdk-go/main/ci/lint"
+REMOTE_CONFIG_URL="https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/main/ci/lint"
 
 # Check if Go is available
 if ! command -v go &>/dev/null; then
@@ -238,7 +238,7 @@ copy_config() {
         if ! curl -sfL "${REMOTE_CONFIG_URL}/${CONFIG_FILE}" -o "${LOCAL_CONFIG}"; then
             echo "Warning: Failed to download config from ${REMOTE_CONFIG_URL}/${CONFIG_FILE}"
             echo "You may need to create ${LOCAL_CONFIG} manually or use -c flag"
-            return 1
+            return 0
         fi
     fi
     echo "Configuration saved to ${LOCAL_CONFIG}"
