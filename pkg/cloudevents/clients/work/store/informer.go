@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
 	workv1 "open-cluster-management.io/api/work/v1"
 
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"

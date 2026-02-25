@@ -1,0 +1,101 @@
+# golangci-lint v2.x configuration
+# Compatible with golangci-lint v2.0.0+
+# Documentation: https://golangci-lint.run/docs/configuration/
+# Migration guide: https://golangci-lint.run/docs/product/migration-guide/
+
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  # Use 'none' as default and explicitly enable linters
+  # Options: none, standard, all, fast
+  default: none
+
+  enable:
+    # Default/standard linters
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck  # includes gosimple and stylecheck
+    - unused
+
+    # Code style
+    - misspell
+    - unconvert
+    - unparam
+    - nakedret
+    - prealloc
+    - copyloopvar  # replaces exportloopref in v2
+    - revive
+
+  settings:
+    misspell:
+      locale: US
+
+    nakedret:
+      max-func-lines: 30
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+
+  # Exclusions configuration (v2 style)
+  exclusions:
+    # Use presets for common exclusions
+    # Options: comments, std-error-handling, common-false-positives, legacy
+    presets:
+      - comments
+      - std-error-handling
+
+    # Generated files handling: strict, lax, or disable
+    generated: strict
+
+    rules:
+      # Exported type names that stutter (e.g., grpc.GRPCServer) cannot be renamed
+      # without breaking external consumers of this SDK.
+      - linters: [revive]
+        text: "exported: type name will be used as"
+      # Exported functions returning unexported types are part of the public API
+      # and cannot be changed without breaking external consumers.
+      - linters: [revive]
+        text: "unexported-return: exported func"
+      # Package names (common, utils, util) cannot be renamed without breaking
+      # import paths for external consumers.
+      - linters: [revive]
+        text: "avoid meaningless package names"
+
+    # Paths to exclude from all linting
+    paths:
+      - _test\.go
+      - ^e2e/
+      - zz_generated\.deepcopy\.go
+
+# Formatters are separate from linters in v2
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+  settings:
+    goimports:
+      local-prefixes: open-cluster-management.io

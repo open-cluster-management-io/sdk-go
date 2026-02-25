@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
+
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/payload"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
