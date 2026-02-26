@@ -9,7 +9,7 @@ Add this to your `Makefile`:
 ```makefile
 .PHONY: lint
 lint:
-	@curl -sSL https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/main/ci/lint/run-lint.sh | bash
+	@bash -o pipefail -c 'curl -fsSL https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/main/ci/lint/run-lint.sh | bash'
 ```
 
 That's it! The script will:
