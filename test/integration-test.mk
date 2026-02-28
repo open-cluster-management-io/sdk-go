@@ -1,5 +1,6 @@
 ENSURE_ENVTEST_SCRIPT := ./ci/envtest/ensure-envtest.sh
-ENSURE_ENVTEST_SCRIPT_URL := https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/main/ci/envtest/ensure-envtest.sh
+ENSURE_ENVTEST_SCRIPT_REF ?= <sdk-go-version> # e.g. v0.15.0
+ENSURE_ENVTEST_SCRIPT_URL := https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/$(ENSURE_ENVTEST_SCRIPT_REF)/ci/envtest/ensure-envtest.sh
 
 # Resolve envtest: use local script if available, otherwise download from remote
 ENVTEST_SCRIPT_CMD = $(if $(wildcard $(ENSURE_ENVTEST_SCRIPT)),$(ENSURE_ENVTEST_SCRIPT),curl -fsSL $(ENSURE_ENVTEST_SCRIPT_URL) | bash)
