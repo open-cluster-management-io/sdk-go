@@ -28,17 +28,17 @@ clean: clean-integration-test
 integration: envtest-setup test-cloudevents-integration test-basecontroller-integration test-servingcertcontroller-integration
 .PHONY: integration
 
-test-cloudevents-integration:
+test-cloudevents-integration: envtest-setup
 	go test -c ./test/integration/cloudevents
 	./cloudevents.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast -v=5
 .PHONY: test-cloudevents-integration
 
-test-basecontroller-integration:
+test-basecontroller-integration: envtest-setup
 	go test -c ./test/integration/basecontroller -o ./basecontroller.test
 	./basecontroller.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
 .PHONY: test-basecontroller-integration
 
-test-servingcertcontroller-integration:
+test-servingcertcontroller-integration: envtest-setup
 	go test -c ./test/integration/servingcertcontroller -o ./servingcertcontroller.test
 	./servingcertcontroller.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
 .PHONY: test-servingcertcontroller-integration
