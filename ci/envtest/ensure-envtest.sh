@@ -28,7 +28,7 @@
 # Environment variables:
 #   ENVTEST_K8S_VERSION    - Override auto-detected K8s version (e.g. "1.34.1")
 #   ENVTEST_SETUP_VERSION  - Override auto-detected setup-envtest branch (e.g. "release-0.22")
-#   ENVTEST_BIN_DIR        - Directory for envtest binaries (default: /tmp/envtest/bin)
+#   ENVTEST_BIN_DIR        - Directory for envtest binaries (default: .bin/envtest)
 #
 ###############################################################################
 
@@ -190,9 +190,11 @@ main() {
 
     k8s_version=$(detect_k8s_version)
     setup_version=$(detect_setup_envtest_version)
-    bin_dir="${ENVTEST_BIN_DIR:-/tmp/envtest/bin}"
+    bin_dir="${ENVTEST_BIN_DIR:-.bin/envtest}"
 
     mkdir -p "${bin_dir}"
+    # Resolve to absolute path (required by GOBIN)
+    bin_dir="$(cd "${bin_dir}" && pwd)"
 
     install_setup_envtest "${setup_version}" "${bin_dir}"
     ensure_binaries "${k8s_version}" "${bin_dir}"
