@@ -7,8 +7,7 @@ This directory contains a script to set up the [envtest](https://pkg.go.dev/sigs
 Add this to your `Makefile` as a reusable prerequisite target:
 
 ```makefile
-ENSURE_ENVTEST_SCRIPT_REF ?= <sdk-go-version> # e.g. v0.15.0, find the latest tag at https://github.com/open-cluster-management-io/sdk-go/tags
-ENSURE_ENVTEST_SCRIPT := https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/$(ENSURE_ENVTEST_SCRIPT_REF)/ci/envtest/ensure-envtest.sh
+ENSURE_ENVTEST_SCRIPT := https://raw.githubusercontent.com/open-cluster-management-io/sdk-go/main/ci/envtest/ensure-envtest.sh
 
 # Reusable target — add as a prerequisite to any target that needs envtest binaries
 .PHONY: envtest-setup
