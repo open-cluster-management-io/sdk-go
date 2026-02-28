@@ -92,7 +92,7 @@ This ensures the script never fails due to missing envtest binaries, while still
 |----------|---------|-------------|
 | `ENVTEST_K8S_VERSION` | auto-detected from `go.mod` | Override the K8s version for envtest binaries (e.g. `1.34.1`) |
 | `ENVTEST_SETUP_VERSION` | auto-detected from `go.mod` | Override the setup-envtest branch (e.g. `release-0.22`) |
-| `ENVTEST_BIN_DIR` | `/tmp/envtest/bin` | Directory where setup-envtest and binaries are stored |
+| `ENVTEST_BIN_DIR` | `.bin/envtest` | Directory where setup-envtest and binaries are stored (project-local) |
 
 ### Override Examples
 
@@ -142,7 +142,9 @@ ENVTEST_K8S_VERSION=1.34.1 ENVTEST_SETUP_VERSION=release-0.22 ./ci/envtest/ensur
 
 **Cause**: Network issues or the setup-envtest binary server is unavailable.
 
-**Solution**: The script caches binaries in `ENVTEST_BIN_DIR`. If the binaries already exist, subsequent runs will skip downloading. Consider caching this directory in CI.
+**Solution**: The script caches binaries in `ENVTEST_BIN_DIR` (default: `.bin/envtest`). If the binaries already exist, subsequent runs will skip downloading. Consider caching this directory in CI.
+
+> **Note**: Make sure `.bin/` is in your `.gitignore` to avoid committing downloaded binaries.
 
 ### 4. "Access denied" from storage.googleapis.com
 
