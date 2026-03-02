@@ -352,6 +352,10 @@ func TestPatchLabelAnnotations(t *testing.T) {
 
 func newManagedClusterWithFinalizer(finalizers ...string) *clusterv1.ManagedCluster {
 	return &clusterv1.ManagedCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "cluster.open-cluster-management.io/v1",
+			Kind:       "ManagedCluster",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test",
 			Finalizers: finalizers,
@@ -361,6 +365,10 @@ func newManagedClusterWithFinalizer(finalizers ...string) *clusterv1.ManagedClus
 
 func newManagedClusterWithLabelAnnotations(labels map[string]string, annotations map[string]string) *clusterv1.ManagedCluster {
 	return &clusterv1.ManagedCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "cluster.open-cluster-management.io/v1",
+			Kind:       "ManagedCluster",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        "test",
 			Labels:      labels,
@@ -371,6 +379,10 @@ func newManagedClusterWithLabelAnnotations(labels map[string]string, annotations
 
 func newManagedClusterWithTaint(taints ...clusterv1.Taint) *clusterv1.ManagedCluster {
 	return &clusterv1.ManagedCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "cluster.open-cluster-management.io/v1",
+			Kind:       "ManagedCluster",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test",
 		},
@@ -382,6 +394,10 @@ func newManagedClusterWithTaint(taints ...clusterv1.Taint) *clusterv1.ManagedClu
 
 func newManagedClusterWithConditions(conds ...metav1.Condition) *clusterv1.ManagedCluster {
 	return &clusterv1.ManagedCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "cluster.open-cluster-management.io/v1",
+			Kind:       "ManagedCluster",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test",
 		},
