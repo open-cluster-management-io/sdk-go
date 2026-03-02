@@ -90,7 +90,7 @@ detect_k8s_version() {
 # Minimum setup-envtest version that uses the GitHub releases index.
 # Older versions rely on the deprecated GCS bucket (kubebuilder-tools),
 # which is no longer accessible.
-MIN_SETUP_ENVTEST_MINOR=19
+MIN_SETUP_ENVTEST_VERSION="release-0.19"
 
 detect_setup_envtest_version() {
     if [[ -n "${ENVTEST_SETUP_VERSION:-}" ]]; then
@@ -118,15 +118,18 @@ detect_setup_envtest_version() {
     local major minor
     major=$(echo "${cr_version}" | sed 's/^v//' | cut -d. -f1)
     minor=$(echo "${cr_version}" | cut -d. -f2)
+    local setup_version="release-${major}.${minor}"
 
     # Enforce minimum version to avoid deprecated GCS download source
-    if (( major == 0 && minor < MIN_SETUP_ENVTEST_MINOR )); then
-        log "Detected setup-envtest version from go.mod (controller-runtime ${cr_version}): release-${major}.${minor}"
-        log "Upgrading to release-0.${MIN_SETUP_ENVTEST_MINOR} (release-${major}.${minor} uses deprecated GCS bucket)"
-        minor=${MIN_SETUP_ENVTEST_MINOR}
-    fi
+    local min_major min_minor
+    min_major=$(echo "${MIN_SETUP_ENVTEST_VERSION}" | sed 's/^release-//' | cut -d. -f1)
+    min_minor=$(echo "${MIN_SETUP_ENVTEST_VERSION}" | sed 's/^release-//' | cut -d. -f2)
 
-    local setup_version="release-${major}.${minor}"
+    if (( major < min_major || (major == min_major && minor < min_minor) )); then
+        log "Detected setup-envtest version from go.mod (controller-runtime ${cr_version}): ${setup_version}"
+        log "Upgrading to ${MIN_SETUP_ENVTEST_VERSION} (${setup_version} uses deprecated GCS bucket)"
+        setup_version="${MIN_SETUP_ENVTEST_VERSION}"
+    fi
 
     log "Detected setup-envtest version from go.mod (controller-runtime ${cr_version}): ${setup_version}"
     echo "${setup_version}"
