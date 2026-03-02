@@ -145,11 +145,11 @@ ENVTEST_K8S_VERSION=1.34.1 ENVTEST_SETUP_VERSION=release-0.22 ./ci/envtest/ensur
 
 > **Note**: Make sure `_output/` is in your `.gitignore` to avoid committing downloaded binaries.
 
-### 4. "Access denied" from storage.googleapis.com
+### 4. "Access denied" or "401 Unauthorized" from storage.googleapis.com
 
-**Cause**: You are using the old `kubebuilder-tools` download method which has been deprecated.
+**Cause**: Older versions of `setup-envtest` (before `release-0.19`) download envtest binaries from the deprecated GCS bucket (`kubebuilder-tools`), which is no longer accessible.
 
-**Solution**: Switch to this script. It uses `setup-envtest` which downloads from the correct, actively maintained source.
+**Solution**: The script automatically enforces a minimum `setup-envtest` version of `release-0.19`, which uses the [GitHub releases index](https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/master/envtest-releases.yaml) instead. No action is needed — even projects using older `controller-runtime` versions (e.g., `v0.17.x`) will automatically use a compatible `setup-envtest`.
 
 ---
 
