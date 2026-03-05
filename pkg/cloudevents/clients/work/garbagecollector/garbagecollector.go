@@ -132,7 +132,11 @@ func (gc *GarbageCollector) startMonitors(ctx context.Context, logger klog.Logge
 	logger.Info("Starting monitors")
 	gc.monitors = make(monitors)
 	// add monitor for manifestwork
-	gc.monitors[workapiv1.SchemeGroupVersion.WithResource("manifestworks")] = &monitor{
+	gc.monitors[schema.GroupVersionResource{
+		Group:    workapiv1.GroupName,
+		Version:  workapiv1.GroupVersion.Version,
+		Resource: "manifestworks",
+	}] = &monitor{
 		Controller:          gc.workInformer.Informer().GetController(),
 		SharedIndexInformer: gc.workInformer.Informer(),
 	}
