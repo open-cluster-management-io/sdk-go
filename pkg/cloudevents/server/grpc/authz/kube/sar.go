@@ -242,7 +242,7 @@ func toSubjectAccessReview(clusterName string, user string, groups []string, eve
 
 		return nil, fmt.Errorf("unsupported action %s", verb)
 	case payload.ManifestBundleEventDataType:
-		sar.Spec.ResourceAttributes.Group = workv1.SchemeGroupVersion.Group
+		sar.Spec.ResourceAttributes.Group = workv1.GroupName
 		sar.Spec.ResourceAttributes.Resource = "manifestworks"
 		return sar, nil
 	default:
