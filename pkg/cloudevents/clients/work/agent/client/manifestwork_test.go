@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,8 +15,55 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/work/store"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 )
+
+// mockCloudEventsClient is a mock implementation of CloudEventsClient for testing
+type mockCloudEventsClient struct {
+	mu             sync.Mutex
+	publishedWorks []*workv1.ManifestWork
+	publishedTypes []types.CloudEventsType
+	publishError   error
+	subscribedCh   chan struct{}
+}
+
+func (m *mockCloudEventsClient) Resync(ctx context.Context, clusterName string) error {
+	return nil
+}
+
+func (m *mockCloudEventsClient) Publish(ctx context.Context, eventType types.CloudEventsType, work *workv1.ManifestWork) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.publishError != nil {
+		return m.publishError
+	}
+
+	m.publishedWorks = append(m.publishedWorks, work.DeepCopy())
+	m.publishedTypes = append(m.publishedTypes, eventType)
+	return nil
+}
+
+func (m *mockCloudEventsClient) Subscribe(ctx context.Context, handlers ...generic.ResourceHandler[*workv1.ManifestWork]) {
+	// No-op for testing
+}
+
+func (m *mockCloudEventsClient) SubscribedChan() <-chan struct{} {
+	if m.subscribedCh == nil {
+		m.subscribedCh = make(chan struct{})
+		close(m.subscribedCh) // Already subscribed for testing
+	}
+	return m.subscribedCh
+}
+
+func (m *mockCloudEventsClient) getPublishedWorks() []*workv1.ManifestWork {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]*workv1.ManifestWork{}, m.publishedWorks...)
+}
 
 func TestVersionCompare(t *testing.T) {
 	tests := []struct {
@@ -130,18 +179,16 @@ func TestVersionCompare(t *testing.T) {
 func TestManifestWorkAgentClient_Get(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		watcher.Stop()
-	}()
+	defer watcher.Stop()
 
 	go func() {
 		ch := watcher.ResultChan()
@@ -183,18 +230,16 @@ func TestManifestWorkAgentClient_Get(t *testing.T) {
 func TestManifestWorkAgentClient_List(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		watcher.Stop()
-	}()
+	defer watcher.Stop()
 
 	go func() {
 		ch := watcher.ResultChan()
@@ -230,7 +275,10 @@ func TestManifestWorkAgentClient_List(t *testing.T) {
 
 func TestManifestWorkAgentClient_Watch(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Test Watch
@@ -242,7 +290,11 @@ func TestManifestWorkAgentClient_Watch(t *testing.T) {
 
 func TestManifestWorkAgentClient_UnsupportedMethods(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	work := &workv1.ManifestWork{
@@ -253,27 +305,27 @@ func TestManifestWorkAgentClient_UnsupportedMethods(t *testing.T) {
 	}
 
 	// Test Create - should return error
-	_, err := client.Create(context.Background(), work, metav1.CreateOptions{})
+	_, err := client.Create(ctx, work, metav1.CreateOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
 
 	// Test Update - should return error
-	_, err = client.Update(context.Background(), work, metav1.UpdateOptions{})
+	_, err = client.Update(ctx, work, metav1.UpdateOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
 
 	// Test UpdateStatus - should return error
-	_, err = client.UpdateStatus(context.Background(), work, metav1.UpdateOptions{})
+	_, err = client.UpdateStatus(ctx, work, metav1.UpdateOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
 
 	// Test Delete - should return error
-	err = client.Delete(context.Background(), "test-work", metav1.DeleteOptions{})
+	err = client.Delete(ctx, "test-work", metav1.DeleteOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
 
 	// Test DeleteCollection - should return error
-	err = client.DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{})
+	err = client.DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
 }
@@ -281,7 +333,10 @@ func TestManifestWorkAgentClient_UnsupportedMethods(t *testing.T) {
 func TestManifestWorkAgentClient_Patch_WorkNotFound(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	patchData := []byte(`{"metadata":{"labels":{"test":"label"}}}`)
@@ -295,18 +350,16 @@ func TestManifestWorkAgentClient_Patch_WorkNotFound(t *testing.T) {
 func TestManifestWorkAgentClient_Patch_UnsupportedSubresource(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		watcher.Stop()
-	}()
+	defer watcher.Stop()
 
 	go func() {
 		ch := watcher.ResultChan()
@@ -346,18 +399,16 @@ func TestManifestWorkAgentClient_Patch_UnsupportedSubresource(t *testing.T) {
 func TestManifestWorkAgentClient_Patch_ResourceVersionConflict(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		watcher.Stop()
-	}()
+	defer watcher.Stop()
 
 	go func() {
 		ch := watcher.ResultChan()
@@ -412,18 +463,16 @@ func TestManifestWorkAgentClient_Patch_ResourceVersionConflict(t *testing.T) {
 func TestManifestWorkAgentClient_Patch_InvalidPatch(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		watcher.Stop()
-	}()
+	defer watcher.Stop()
 
 	go func() {
 		ch := watcher.ResultChan()
@@ -462,18 +511,16 @@ func TestManifestWorkAgentClient_Patch_InvalidPatch(t *testing.T) {
 func TestManifestWorkAgentClient_Patch_MissingDataTypeAnnotation(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		watcher.Stop()
-	}()
+	defer watcher.Stop()
 
 	go func() {
 		ch := watcher.ResultChan()
@@ -509,8 +556,11 @@ func TestManifestWorkAgentClient_Patch_MissingDataTypeAnnotation(t *testing.T) {
 
 func TestManifestWorkAgentClient_SetNamespace(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
-	client := NewManifestWorkAgentClient("", watcherStore, nil)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "new-cluster", watcherStore, nil)
 	assert.Equal(t, "", client.namespace)
 
 	client.SetNamespace("new-cluster")
@@ -520,18 +570,16 @@ func TestManifestWorkAgentClient_SetNamespace(t *testing.T) {
 func TestManifestWorkAgentClient_ConcurrentPatches(t *testing.T) {
 	watcherStore := store.NewAgentInformerWatcherStore()
 
-	client := NewManifestWorkAgentClient("test-cluster", watcherStore, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, nil)
 	client.SetNamespace("test-cluster")
 
 	// Start consuming events to prevent blocking
-	watcher, err := watcherStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
 	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		watcher.Stop()
-	}()
+	defer watcher.Stop()
 
 	go func() {
 		ch := watcher.ResultChan()
@@ -587,4 +635,223 @@ func TestManifestWorkAgentClient_ConcurrentPatches(t *testing.T) {
 
 	// If we get here without panics or data races, the mutex is working
 	t.Log("Concurrent patches completed successfully (mutex working)")
+}
+
+func TestManifestWorkAgentClient_PeriodicDeletionCheck(t *testing.T) {
+	watcherStore := store.NewAgentInformerWatcherStore()
+	mockClient := &mockCloudEventsClient{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, mockClient)
+	client.SetNamespace("test-cluster")
+
+	// Start consuming events to prevent blocking
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
+	require.NoError(t, err)
+	defer watcher.Stop()
+
+	go func() {
+		ch := watcher.ResultChan()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-ch:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
+
+	// Create a work with deletion timestamp and no finalizers
+	now := metav1.Now()
+	work := &workv1.ManifestWork{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-work-to-delete",
+			Namespace:         "test-cluster",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{}, // No finalizers
+			Annotations: map[string]string{
+				"cloudevents.open-cluster-management.io/datatype": "io.open-cluster-management.works.v1alpha1.manifests",
+			},
+		},
+	}
+
+	err = watcherStore.Add(work)
+	require.NoError(t, err)
+
+	// Wait for at least one deletion check cycle to complete
+	// The check runs every 2 seconds, so we wait a bit longer
+	time.Sleep(workDeletionCheckInterval + 1*time.Second)
+
+	// Verify that the work was published with deletion status
+	publishedWorks := mockClient.getPublishedWorks()
+	require.Greater(t, len(publishedWorks), 0, "Expected at least one work to be published")
+
+	// Find the published work with our name
+	var foundWork *workv1.ManifestWork
+	for _, pw := range publishedWorks {
+		if pw.Name == "test-work-to-delete" {
+			foundWork = pw
+			break
+		}
+	}
+	require.NotNil(t, foundWork, "Expected to find the deleted work in published works")
+
+	// Verify the deletion condition was set
+	var deletedCondition *metav1.Condition
+	for i := range foundWork.Status.Conditions {
+		if foundWork.Status.Conditions[i].Type == common.ResourceDeleted {
+			deletedCondition = &foundWork.Status.Conditions[i]
+			break
+		}
+	}
+	require.NotNil(t, deletedCondition, "Expected Deleted condition to be set")
+	assert.Equal(t, metav1.ConditionTrue, deletedCondition.Status)
+	assert.Equal(t, "ManifestsDeleted", deletedCondition.Reason)
+
+	// Verify the work was removed from the store
+	_, exists, err := watcherStore.Get(ctx, "test-cluster", "test-work-to-delete")
+	require.NoError(t, err)
+	assert.False(t, exists, "Expected work to be deleted from store")
+}
+
+func TestManifestWorkAgentClient_PeriodicDeletionCheck_WorkWithFinalizers(t *testing.T) {
+	watcherStore := store.NewAgentInformerWatcherStore()
+	mockClient := &mockCloudEventsClient{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, mockClient)
+	client.SetNamespace("test-cluster")
+
+	// Start consuming events to prevent blocking
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
+	require.NoError(t, err)
+	defer watcher.Stop()
+
+	go func() {
+		ch := watcher.ResultChan()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-ch:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
+
+	// Create a work with deletion timestamp but WITH finalizers
+	now := metav1.Now()
+	work := &workv1.ManifestWork{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-work-with-finalizers",
+			Namespace:         "test-cluster",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{"test-finalizer"}, // Has finalizers
+			Annotations: map[string]string{
+				"cloudevents.open-cluster-management.io/datatype": "io.open-cluster-management.works.v1alpha1.manifests",
+			},
+		},
+	}
+
+	err = watcherStore.Add(work)
+	require.NoError(t, err)
+
+	// Wait for at least one deletion check cycle
+	time.Sleep(workDeletionCheckInterval + 1*time.Second)
+
+	// Verify that the work was NOT published (because it has finalizers)
+	publishedWorks := mockClient.getPublishedWorks()
+	for _, pw := range publishedWorks {
+		assert.NotEqual(t, "test-work-with-finalizers", pw.Name, "Work with finalizers should not be deleted")
+	}
+
+	// Verify the work is still in the store
+	_, exists, err := watcherStore.Get(ctx, "test-cluster", "test-work-with-finalizers")
+	require.NoError(t, err)
+	assert.True(t, exists, "Work with finalizers should still exist in store")
+}
+
+func TestManifestWorkAgentClient_PeriodicDeletionCheck_WorkWithoutDeletionTimestamp(t *testing.T) {
+	watcherStore := store.NewAgentInformerWatcherStore()
+	mockClient := &mockCloudEventsClient{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, mockClient)
+	client.SetNamespace("test-cluster")
+
+	// Start consuming events to prevent blocking
+	watcher, err := watcherStore.GetWatcher(ctx, "", metav1.ListOptions{})
+	require.NoError(t, err)
+	defer watcher.Stop()
+
+	go func() {
+		ch := watcher.ResultChan()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-ch:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
+
+	// Create a work WITHOUT deletion timestamp
+	work := &workv1.ManifestWork{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-work-normal",
+			Namespace: "test-cluster",
+			Annotations: map[string]string{
+				"cloudevents.open-cluster-management.io/datatype": "io.open-cluster-management.works.v1alpha1.manifests",
+			},
+		},
+	}
+
+	err = watcherStore.Add(work)
+	require.NoError(t, err)
+
+	// Wait for at least one deletion check cycle
+	time.Sleep(workDeletionCheckInterval + 1*time.Second)
+
+	// Verify that the work was NOT published (because it has no deletion timestamp)
+	publishedWorks := mockClient.getPublishedWorks()
+	for _, pw := range publishedWorks {
+		assert.NotEqual(t, "test-work-normal", pw.Name, "Normal work should not be deleted")
+	}
+
+	// Verify the work is still in the store
+	_, exists, err := watcherStore.Get(ctx, "test-cluster", "test-work-normal")
+	require.NoError(t, err)
+	assert.True(t, exists, "Normal work should still exist in store")
+}
+
+func TestManifestWorkAgentClient_PeriodicDeletionCheck_ContextCancellation(t *testing.T) {
+	watcherStore := store.NewAgentInformerWatcherStore()
+	mockClient := &mockCloudEventsClient{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	_ = NewManifestWorkAgentClient(ctx, "test-cluster", watcherStore, mockClient)
+
+	// Cancel the context immediately
+	cancel()
+
+	// Wait a bit to ensure the goroutine exits
+	time.Sleep(100 * time.Millisecond)
+
+	// The test succeeds if no goroutines panic or hang
+	t.Log("Context cancellation handled successfully")
 }
