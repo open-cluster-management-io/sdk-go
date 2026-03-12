@@ -17,16 +17,17 @@ The OCM SDK for Go provides essential building blocks for:
 
 ### CloudEvents Clients
 
-The SDK includes comprehensive CloudEvents-based clients for implementing event-driven communication between hub clusters and managed clusters. This supports the Event Based ManifestWork architecture.
+The SDK includes comprehensive CloudEvents-based clients for implementing event-driven communication between hub clusters and managed clusters.
 
 **Supported Protocols:**
 - MQTT Protocol/Driver
-- gRPC Protocol/Driver  
+- gRPC Protocol/Driver
+- Google Cloud Pub/Sub Protocol/Driver
 
 **Key Features:**
 - Generic CloudEvents clients for custom resources
-- Specialized ManifestWork clients
-- Source and agent client implementations
+- Specialized kube style clients, e.g. ManifestWork, etc
+- Protocol-agnostic design with pluggable transports
 - Automatic reconnection handling
 - Resource synchronization capabilities
 
@@ -61,53 +62,10 @@ Common utilities for OCM development:
 - **Testing Utilities**: Helper functions and mocks for testing OCM components
 - **Serving Certificates**: Certificate management for webhooks and APIs
 
-## Getting Started
-
-### Installation
+## Installation
 
 ```bash
 go get open-cluster-management.io/sdk-go
-```
-
-### Basic Usage
-
-#### CloudEvents Client Example
-
-```go
-import (
-    "open-cluster-management.io/sdk-go/pkg/cloudevents/generic"
-    "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/mqtt"
-)
-
-// Create a CloudEvents source client
-client, err := generic.NewCloudEventSourceClient[*YourResource](
-    ctx,
-    mqtt.NewSourceOptions(mqttConfig, "client-id", "source-id"),
-    resourceLister,
-    statusHashGetter,
-    resourceCodec,
-)
-
-// Subscribe to receive events
-client.Subscribe(ctx, resourceHandler)
-```
-
-#### ManifestWork Client Example
-
-```go
-import (
-    "open-cluster-management.io/sdk-go/pkg/cloudevents/work"
-    "open-cluster-management.io/sdk-go/pkg/cloudevents/work/codec"
-)
-
-// Build a ManifestWork client
-clientHolder, err := work.NewClientHolderBuilder(config).
-    WithClientID("controller-client").
-    WithSourceID("controller").
-    WithCodec(codec.NewManifestBundleCodec()).
-    NewSourceClientHolder(ctx)
-
-manifestWorkClient := clientHolder.ManifestWorks(namespace)
 ```
 
 ## Documentation
