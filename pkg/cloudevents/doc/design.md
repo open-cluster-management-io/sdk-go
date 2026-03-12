@@ -2,69 +2,88 @@
 
 ## Overview
 
-There two types of client implementations in the `cloudevents` directory.
+There are two types of client implementations in the `cloudevents` directory.
 
-- In `generic` directory, there are two clients [`CloudEventSourceClient`](../generic/sourceclient.go) and [`CloudEventAgentClient`](../generic/agentclient.go), they implement the [`CloudEventsClient`](../generic/interface.go) interface to resync/publish/subscribe [`ResourceObject`](../generic/interface.go) between sources and agents with cloudevents.
-- In `work` directory, there are two clients [`ManifestWorkSourceClient`](../work/source/client/manifestwork.go) and [`ManifestWorkAgentClient`](../work/agent/client/manifestwork.go), they are based on [`CloudEventSourceClient`](../generic/sourceclient.go) and [`CloudEventAgentClient`](../generic/agentclient.go) to implement the [`ManifestWorkInterface`](https://github.com/open-cluster-management-io/api/blob/main/client/work/clientset/versioned/typed/work/v1/manifestwork.go#L24), these clients are used for applying `ManifestWork` and retrieving `ManifestWork` status between source and work agent.
+- In `generic` directory, there are two clients [`CloudEventSourceClient`](../generic/clients/sourceclient.go) and [`CloudEventAgentClient`](../generic/clients/agentclient.go), they implement the [`CloudEventsClient`](../generic/interface.go) interface to resync/publish/subscribe [`ResourceObject`](../generic/interface.go) between sources and agents with cloudevents. These clients are built using [`GenericClientOptions`](../clients/options/generic.go).
+- In `work` directory, there are two client holders [`work.ClientHolder`](../clients/work/clientholder.go) that provide [`ManifestWorkSourceClient`](../clients/work/source/client/manifestwork.go) and [`ManifestWorkAgentClient`](../clients/work/agent/client/manifestwork.go). They are based on [`CloudEventSourceClient`](../generic/clients/sourceclient.go) and [`CloudEventAgentClient`](../generic/clients/agentclient.go) to implement the [`ManifestWorkInterface`](https://github.com/open-cluster-management-io/api/blob/main/client/work/clientset/versioned/typed/work/v1/manifestwork.go#L24), these clients are used for applying `ManifestWork` and retrieving `ManifestWork` status between source and work agent.
 
 ## Generic CloudEvents Clients
 
-### CloudEventsOptions Interface
+### Building Clients with GenericClientOptions
 
-The [`CloudEventsOptions`](../generic/options/options.go) interface defines an option that provides cloudevents protocol to send/receive cloudevents based on different event protocol.
+The [`GenericClientOptions`](../clients/options/generic.go) is the primary way to build cloudevents clients. It accepts:
+- A protocol configuration (MQTT, gRPC, or PubSub options)
+- A codec for encoding/decoding resources
+- A client ID
+- Source-specific or agent-specific parameters (source ID or cluster name)
+- A watcher store for caching and watching resources
 
-For each event protocol, it needs to implement the `CloudEventsSourceOptions` and `CloudEventsAgentOptions`, the 
-`CloudEventsSourceOptions` will be used for building cloudevents source client and the `CloudEventsAgentOptions` will be used for building cloudevents agent client.
+The `GenericClientOptions` provides two methods:
+- `SourceClient(ctx)` - builds and returns a `CloudEventSourceClient` with automatic subscription and resync
+- `AgentClient(ctx)` - builds and returns a `CloudEventAgentClient` with automatic subscription and resync
 
-Currently, the MQTT, gRPC and PubSub are implemented.
+### CloudEventTransport Interface
+
+The [`CloudEventTransport`](../generic/options/options.go) interface defines a transport that sends/receives cloudevents based on different event protocols.
+
+The transport handles:
+- Connection management (`Connect`, `Close`)
+- Sending events (`Send`)
+- Subscribing to topics/services (`Subscribe`)
+- Receiving events (`Receive`)
+- Error notification (`ErrorChan`)
+
+Currently, MQTT, gRPC and Pub/Sub transports are implemented.
 
 ```mermaid
 classDiagram
-class CloudEventsOptions {
+class CloudEventTransport {
     <<interface>>
-    WithContext()
-    Protocol()
+    Connect(ctx)
+    Send(ctx, event)
+    Subscribe(ctx)
+    Receive(ctx, handler)
+    Close(ctx)
     ErrorChan()
 }
 
 class CloudEventsSourceOptions{
+    CloudEventTransport
     SourceID
+    EventRateLimit
 }
 
 class CloudEventsAgentOptions{
+    CloudEventTransport
     AgentID
     ClusterName
+    EventRateLimit
 }
 
-CloudEventsOptions <|-- CloudEventsSourceOptions
-CloudEventsOptions <|-- CloudEventsAgentOptions
+CloudEventTransport <|.. mqttTransport
+CloudEventTransport <|.. grpcTransport
+CloudEventTransport <|.. pubsubTransport
 
-CloudEventsSourceOptions <|.. mqttSourceOptions
-CloudEventsAgentOptions <|.. mqttAgentOptions
-
-CloudEventsSourceOptions <|.. grpcSourceOptions
-CloudEventsAgentOptions <|.. grpcAgentOptions
-
-CloudEventsSourceOptions <|.. pubsubSourceOptions
-CloudEventsAgentOptions <|.. pubsubAgentOptions
+CloudEventTransport <--o CloudEventsSourceOptions
+CloudEventTransport <--o CloudEventsAgentOptions
 ```
 
 ### CloudEventsClient Interface
 
 The [`CloudEventsClient`](../generic/interface.go) interface defines a client that resync/publish/subscribe [`ResourceObject`](../generic/interface.go) between sources and agents with cloudevents, the [`ResourceObject`](../generic/interface.go) interface defines an object that can be published/subscribed by `CloudEventsClient`.
 
-The [`CloudEventSourceClient`](../generic/sourceclient.go) and [`CloudEventAgentClient`](../generic/agentclient.go) implement the `CloudEventsClient` interface for source and agent.
+The [`CloudEventSourceClient`](../generic/clients/sourceclient.go) and [`CloudEventAgentClient`](../generic/clients/agentclient.go) implement the `CloudEventsClient` interface for source and agent.
 
-These two clients are based on [`baseClient`](../generic/baseclient.go), the `baseClient` use the given `CloudEventsOptions` to build cloudevents client to publish/subscribe resources and handle the cloudevents client reconnect, when the cloudevents client reconnect happened, the `baseClient` will send a signal to the reconnect channel.
+These two clients are based on [`baseClient`](../generic/clients/baseclient.go), the `baseClient` uses the given `CloudEventTransport` to publish/subscribe resources and handle transport errors. When the transport is successfully subscribed, the `baseClient` sends a signal to the subscribed channel, allowing the caller to trigger resync operations.
 
 ```mermaid
 classDiagram
 class CloudEventsClient {
     <<interface>>
-    Resync()
-    Publish()
-    Subscribe()
-    ReconnectedChan()
+    Resync(ctx, clusterNameOrSourceID)
+    Publish(ctx, eventType, obj)
+    Subscribe(ctx, handlers)
+    SubscribedChan()
 }
 
 CloudEventsClient <|.. CloudEventSourceClient
@@ -74,24 +93,30 @@ baseClient <|-- CloudEventSourceClient
 baseClient <|-- CloudEventAgentClient
 ```
 
-The `CloudEventSourceClient` depends on the following objects
+The `CloudEventSourceClient` is built through `GenericClientOptions.SourceClient()` and depends on the following objects:
 
-- A `CloudEventsSourceOptions`, it provides a cloudevents protocol that will be used by `CloudEventSourceClient` to build the cloudevent client.
-- A lister that implements the [`Lister`](../generic/interface.go) interface, it is used to list the `ResourceObject` that are maintained by source when resync happens.
-- A `StatusHashGetter` function, it is used to calculate the hash of resource status, this function will be invoked when a source client send resync request to agent.
-- Codecs that implements the [`Codec`](../generic/interface.go) interface, they are used to encode/decode the `ResourceObject`/`cloudevents.Event` to `cloudevents.Event`/`ResourceObject`.
+- A `CloudEventsSourceOptions`, it provides a `CloudEventTransport` that will be used by `CloudEventSourceClient` to send/receive cloudevents.
+- A lister (created from `ClientWatcherStore`), it is used to list the `ResourceObject` that are maintained by source when resync happens.
+- A `StatusHashGetter` function, it is used to calculate the hash of resource status, this function will be invoked when a source client sends resync request to agent.
+- A codec that implements the [`Codec`](../generic/interface.go) interface, it is used to encode/decode the `ResourceObject`/`cloudevents.Event` to `cloudevents.Event`/`ResourceObject`.
 
 ```mermaid
 classDiagram
 class Codec {
     <<interface>>
-    Encode()
-    Decode()
+    EventDataType()
+    Encode(source, eventType, obj)
+    Decode(event)
 }
 
 class Lister {
     <<interface>>
-    List()
+    List(ctx, options)
+}
+
+class ClientWatcherStore {
+    <<interface>>
+    ListAll(ctx)
 }
 
 CloudEventsSourceOptions<..CloudEventSourceClient
@@ -101,26 +126,33 @@ StatusHashGetter<..CloudEventSourceClient
 
 Codec <|.. SourceCodec
 Lister <|.. SourceLister
+ClientWatcherStore ..> SourceLister : creates
 ```
 
-The `CloudEventAgentClient` depends on the following objects
+The `CloudEventAgentClient` is built through `GenericClientOptions.AgentClient()` and depends on the following objects:
 
-- A `CloudEventsAgentOptions`, it provides a cloudevents protocol that will be used by `CloudEventAgentClient` to build the cloudevent client.
-- A lister that implements the [`Lister`](../generic/interface.go) interface, it is used to list the `ResourceObject` that are maintained by agent when resync happens.
-- A `StatusHashGetter` function, it is used to calculate the hash of resource status, this function will be invoked when an agent client responses the source resync request.
-- Codecs that implements the [`Codec`](../generic/interface.go) interface, they are used to encode/decode the `ResourceObject`/`cloudevents.Event` to `cloudevents.Event`/`ResourceObject`.
+- A `CloudEventsAgentOptions`, it provides a `CloudEventTransport` that will be used by `CloudEventAgentClient` to send/receive cloudevents.
+- A lister (created from `ClientWatcherStore`), it is used to list the `ResourceObject` that are maintained by agent when resync happens.
+- A `StatusHashGetter` function, it is used to calculate the hash of resource status, this function will be invoked when an agent client responds to the source resync request.
+- A codec that implements the [`Codec`](../generic/interface.go) interface, it is used to encode/decode the `ResourceObject`/`cloudevents.Event` to `cloudevents.Event`/`ResourceObject`.
 
 ```mermaid
 classDiagram
 class Codec {
     <<interface>>
-    Encode()
-    Decode()
+    EventDataType()
+    Encode(source, eventType, obj)
+    Decode(event)
 }
 
 class Lister {
     <<interface>>
-    List()
+    List(ctx, options)
+}
+
+class ClientWatcherStore {
+    <<interface>>
+    ListAll(ctx)
 }
 
 CloudEventsAgentOptions<..CloudEventAgentClient
@@ -130,54 +162,65 @@ StatusHashGetter<..CloudEventAgentClient
 
 Codec <|.. AgentCodec
 Lister <|.. AgentLister
+ClientWatcherStore ..> AgentLister : creates
 ```
 
 **Note**: to resync the resource status, the `StatusHashGetter` function should be same for `CloudEventSourceClient` and `CloudEventAgentClient`
 
 #### CloudEventsClient Resync Resources
 
-1. source resync resource status from agent
+The resync process is triggered automatically after the client successfully subscribes to the broker. The `GenericClientOptions.SourceClient()` and `GenericClientOptions.AgentClient()` methods handle this automatically by listening to the `SubscribedChan()` and triggering a resync when the signal is received.
+
+1. Source resync resource status from agent
 
 ```mermaid
 sequenceDiagram
 
 Source->>Broker: Subscribe to broker
+Note right of Source: SubscribedChan receives signal
 Agent-->>Broker: Subscribe to broker
+Note right of Agent: SubscribedChan receives signal
 Note right of Source: list the resources from source
 Note right of Source: calc the hash of the listed resource status
 Source->>Broker: Send a resync request with resource status hash list
-Broker->>Agent: publish the source resync request
+Broker->>Agent: Publish the source resync request
 Note right of Agent: list the resources from agent
 Note right of Agent: compare the status hash with source's
-Agent-->>Broker: send the status changed resource
-Broker->>Source: publish the resource status
+Agent-->>Broker: Send the status changed resources
+Broker->>Source: Publish the resource status
 Note right of Source: sync the resource status
 ```
 
-2. agent resync resource from source
+2. Agent resync resources from source
 
 ```mermaid
 sequenceDiagram
 
 Agent->>Broker: Subscribe to broker
+Note right of Agent: SubscribedChan receives signal
 Source-->>Broker: Subscribe to broker
+Note right of Source: SubscribedChan receives signal
 Note right of Agent: list the resources from agent
 Note right of Agent: retrieve the resource version
 Agent->>Broker: Send a resync request with resource version list
-Broker->>Source: publish the agent resync request
+Broker->>Source: Publish the agent resync request
 Note right of Source: list the resources from source
 Note right of Source: compare the resource version with agent's
-Source-->>Broker: send the version changed resources
+Source-->>Broker: Send the version changed resources
 opt If the resource is deleting or not found in source
-    Source-->>Broker: send the deleting request
+    Source-->>Broker: Send the deleting request
 end
-Broker->>Agent: publish the resource
-Note right of Agent: sync the resource
+Broker->>Agent: Publish the resources
+Note right of Agent: sync the resources
 ```
 
 ## ManifestWork CloudEvents Clients
 
-There are two clients [`ManifestWorkSourceClient`](../work/source/client/manifestwork.go) and [`ManifestWorkAgentClient`](../work/agent/client/manifestwork.go), both of them implement the [`ManifestWorkInterface`](https://github.com/open-cluster-management-io/api/blob/main/client/work/clientset/versioned/typed/work/v1/manifestwork.go#L24).
+There are two clients [`ManifestWorkSourceClient`](../clients/work/source/client/manifestwork.go) and [`ManifestWorkAgentClient`](../clients/work/agent/client/manifestwork.go), both of them implement the [`ManifestWorkInterface`](https://github.com/open-cluster-management-io/api/blob/main/client/work/clientset/versioned/typed/work/v1/manifestwork.go#L24).
+
+These clients are created and managed by [`work.ClientHolder`](../clients/work/clientholder.go), which provides:
+- `NewSourceClientHolder(ctx, opt)` - builds a source client holder with ManifestWork source client
+- `NewAgentClientHolder(ctx, opt)` - builds an agent client holder with ManifestWork agent client
 
 ```mermaid
 classDiagram
@@ -185,102 +228,102 @@ class ManifestWorkInterface {
     <<interface>>
 }
 
+class ClientHolder {
+    WorkInterface()
+    ManifestWorks(namespace)
+}
+
 ManifestWorkInterface <|.. ManifestWorkAgentClient
 ManifestWorkInterface <|.. ManifestWorkSourceClient
+
+ClientHolder o-- ManifestWorkAgentClient
+ClientHolder o-- ManifestWorkSourceClient
 ```
 
 ### ManifestWorkSourceClient
 
-The `ManifestWorkSourceClient` is used for source part, it depends on [`CloudEventSourceClient`](../generic/sourceclient.go) and [`WorkClientWatcherStore`](../work/store/interface.go).
+The `ManifestWorkSourceClient` is used for source part, it depends on [`CloudEventSourceClient`](../generic/clients/sourceclient.go) and [`ClientWatcherStore`](../clients/store/interface.go).
 
-The `ManifestWorkSourceClient` uses `CloudEventSourceClient` to 
-- publish the manifestworks and status resync request from a source to the agent
-- subscribe to the agent to receive the manifestworks status
+The `ManifestWorkSourceClient` uses `CloudEventSourceClient` to:
+- Publish the manifestworks and status resync request from a source to the agent
+- Subscribe to the agent to receive the manifestworks status
 
-For source part, there are two `WorkClientWatcherStore` implementations
-- [`SourceLocalWatcherStore`](../work/store/local.go), this store has a local cache as its store and callback [`ListLocalWorksFunc`](../work/store/local.go) to initialize its store when creating this store, the `ManifestWorkSourceClient` use this store to
-  - get/list manifestworks from the local store
-  - add/update/delete the manifestworks with the local store
-  - get a [`watcher`](../work/store/base.go) that is provided by this store
-  - handle the manifestworks status received from agent and send the received manifestworks status to the watcher
-- [`SourceInformerWatcherStore`](../work/store/informer.go), this store uses a given `ManifestWorkInformer`'s store as its store, the `ManifestWorkSourceClient` use this store to
-  - get/list manifestworks from the given informer store
-  - add/update/delete the manifestworks with the given informer store
-  - get a [`watcher`](../work/store/base.go) that is provided by this store
-  - handle the manifestworks status received from agent and send the received manifestworks status to the watcher
+For source part, the [`SourceInformerWatcherStore`](../clients/work/store/informer.go) is the recommended store implementation. This store integrates with a Kubernetes informer's store, and the `ManifestWorkSourceClient` uses this store to:
+- Get/list manifestworks from the given informer store
+- Add/update/delete the manifestworks with the given informer store
+- Get a [`watcher`](../clients/store/watcher.go) that is provided by this store
+- Handle the manifestworks status received from agent and send the received manifestworks status to the watcher
 
-**Note**: It is recommended to use a `SourceInformerWatcherStore` building a `ManifestWorkSourceClient` against an informer and use `SourceLocalWatcherStore` building a `ManifestWorkSourceClient` that does not depend on an informer. If using a `ManifestWorkSourceClient` with `SourceLocalWatcherStore` to build an informer, there will be two caches for manifestworks, it will increase memory usage.
+The `SourceInformerWatcherStore` is extended from [`baseSourceStore`](../clients/work/store/base.go), the `baseSourceStore` implements the `HandleReceivedResource` method. When the `ManifestWorkSourceClient` starts, it subscribes to broker(agent) with this handler function. When the `ManifestWorkSourceClient` receives the manifestworks status from agent, it calls this handler to handle the manifestworks status update.
 
-Both of these two stores are extended from [`baseSourceStore`](../work/store/base.go), the `baseSourceStore` implements the `HandleReceivedWork`, when the `ManifestWorkSourceClient` starts, it subscribe to broker(agent) with this handler function. When the `ManifestWorkSourceClient` received the manifestworks status from agent, it callback this handler to handle the manifestworks status update.
-
-The `baseSourceStore` is also extended from [`baseStore`](../work/store/base.go) that implements the `Get`, `List`and `ListAll` to get/list manifestworks from the store.
+The `baseSourceStore` is also extended from [`BaseClientWatchStore`](../clients/store/base.go) that implements the `Get`, `List` and `ListAll` methods to get/list manifestworks from the store.
 
 ```mermaid
 classDiagram
-class WorkClientWatcherStore{
+class ClientWatcherStore{
     <<interface>>
-    GetWatcher()
-    HandleReceivedWork()
-    Add()
-    Update()
-    Delete()
-    List()
-    ListAll()
-    Get()
+    GetWatcher(ctx, namespace, opts)
+    HandleReceivedResource(ctx, resource)
+    Add(resource)
+    Update(resource)
+    Delete(resource)
+    List(ctx, namespace, opts)
+    ListAll(ctx)
+    Get(ctx, namespace, name)
     HasInitiated()
 }
 
 CloudEventSourceClient<..ManifestWorkSourceClient
-WorkClientWatcherStore<..ManifestWorkSourceClient
+ClientWatcherStore<..ManifestWorkSourceClient
 
-WorkClientWatcherStore<|..SourceLocalWatcherStore
-WorkClientWatcherStore<|..SourceInformerWatcherStore
+ClientWatcherStore<|..SourceInformerWatcherStore
 
-baseStore <|-- baseSourceStore
+BaseClientWatchStore <|-- baseSourceStore
 
-baseSourceStore<|--SourceLocalWatcherStore
 baseSourceStore<|--SourceInformerWatcherStore
 ```
 
 ### ManifestWorkAgentClient
 
-The `ManifestWorkAgentClient` depends on [`CloudEventAgentClient`](../generic/agentclient.go) and [`WorkClientWatcherStore`](../work/store/interface.go).
+The `ManifestWorkAgentClient` depends on [`CloudEventAgentClient`](../generic/clients/agentclient.go) and [`ClientWatcherStore`](../clients/store/interface.go).
 
-The `ManifestWorkAgentClient` use `CloudEventAgentClient` to
-- publish the manifestworks status and spec resync request from agent to source
-- subscribe to source to receive the manifestworks
+The `ManifestWorkAgentClient` uses `CloudEventAgentClient` to:
+- Publish the manifestworks status and spec resync request from agent to source
+- Subscribe to source to receive the manifestworks
 
-For agent part, the [`AgentInformerWatcherStore`](../work/store/informer.go) implements the `WorkClientWatcherStore`, it uses a given `ManifestWorkInformer`'s store as its store. The `ManifestWorkAgentClient` use this store to
-- get/list manifestworks from the given informer store
-- add/update/delete the manifestworks with the given informer store
-- get a [`watcher`](../work/store/base.go) that is provided by this store
-- handle the manifestworks received from source and send the received manifestworks to the watcher
+For agent part, the [`AgentInformerWatcherStore`](../clients/work/store/informer.go) implements the `ClientWatcherStore`. The `ManifestWorkAgentClient` uses this store to:
+- Get/list manifestworks from the store
+- Add/update/delete the manifestworks with the store
+- Get a [`watcher`](../clients/store/watcher.go) that is provided by this store
+- Handle the manifestworks received from source and send the received manifestworks to the watcher
 
-A developer need create a `ManifestWorkInformer` and pass the informer store to `AgentInformerWatcherStore` and start the informer before using the `ManifestWorkAgentClient` with `AgentInformerWatcherStore`.
+The `AgentInformerWatcherStore` maintains its own versioning for resources and provides watch capability through the watcher.
 
-The `AgentInformerWatcherStore` is extended from `baseStore`.
+A developer needs to create a `ManifestWorkInformer` and start the informer when using the `ManifestWorkAgentClient` with `AgentInformerWatcherStore`.
+
+The `AgentInformerWatcherStore` is extended from the generic [`AgentInformerWatcherStore`](../clients/store/informer.go) in the store package.
 
 ```mermaid
 classDiagram
-class WorkClientWatcherStore{
+class ClientWatcherStore{
     <<interface>>
-    GetWatcher()
-    HandleReceivedWork()
-    Add()
-    Update()
-    Delete()
-    List()
-    ListAll()
-    Get()
+    GetWatcher(ctx, namespace, opts)
+    HandleReceivedResource(ctx, resource)
+    Add(resource)
+    Update(resource)
+    Delete(resource)
+    List(ctx, namespace, opts)
+    ListAll(ctx)
+    Get(ctx, namespace, name)
     HasInitiated()
 }
 
 CloudEventAgentClient<..ManifestWorkAgentClient
-WorkClientWatcherStore<..ManifestWorkAgentClient
+ClientWatcherStore<..ManifestWorkAgentClient
 
-WorkClientWatcherStore<|..AgentInformerWatcherStore
+ClientWatcherStore<|..AgentInformerWatcherStore
 
-baseStore <|-- AgentInformerWatcherStore
+BaseClientWatchStore <|-- AgentInformerWatcherStore
 ```
 
 ### Create/Update/Delete a manifestwork from source to agent
@@ -288,20 +331,23 @@ baseStore <|-- AgentInformerWatcherStore
 ```mermaid
 sequenceDiagram
 
-Controller->>WorkClientWatcherStore: Initialize a SourceLocalWatcherStore with ListLocalWorksFunc
-opt
-    Controller-->>WorkClientWatcherStore: Initialize a SourceInformerWatcherStore with informer store
-end
-Controller->>ManifestWorkSourceClient: Build the client with the source store
-ManifestWorkSourceClient->>Broker: Subscribe to broker with store's HandleReceivedWork
+Controller->>SourceInformerWatcherStore: Initialize a SourceInformerWatcherStore
+Controller->>GenericClientOptions: Create with config, codec, clientID, sourceID, and store
+GenericClientOptions->>work.ClientHolder: NewSourceClientHolder(ctx, opt)
+work.ClientHolder->>ManifestWorkSourceClient: Create ManifestWorkSourceClient
+ManifestWorkSourceClient->>Broker: Subscribe to broker with store's HandleReceivedResource
+Note right of ManifestWorkSourceClient: Automatic subscription and resync
 
-Agent->>AgentInformerWatcherStore: Initialize the agent store with informer store
-Agent->>ManifestWorkAgentClient: Build the client with the agent store
-ManifestWorkAgentClient-->>Broker: Subscribe to broker with store's HandleReceivedWork
+Agent->>AgentInformerWatcherStore: Initialize the agent store
+Agent->>GenericClientOptions: Create with config, codec, clientID, clusterName, and store
+GenericClientOptions->>work.ClientHolder: NewAgentClientHolder(ctx, opt)
+work.ClientHolder->>ManifestWorkAgentClient: Create ManifestWorkAgentClient
+ManifestWorkAgentClient-->>Broker: Subscribe to broker with store's HandleReceivedResource
+Note right of ManifestWorkAgentClient: Automatic subscription and resync
 
 Controller->>ManifestWorkSourceClient: Create/Update a manifestwork
 ManifestWorkSourceClient->>Broker: Publish a create/update event
-ManifestWorkSourceClient-->>WorkClientWatcherStore: Create/Update the manifestwork in store
+ManifestWorkSourceClient-->>SourceInformerWatcherStore: Create/Update the manifestwork in store
 
 Broker->>ManifestWorkAgentClient: Send the create/update event
 ManifestWorkAgentClient-->>AgentInformerWatcherStore: Create/Update manifestwork in store
@@ -312,22 +358,22 @@ ManifestWorkAgentClient-->>Broker: Publish a status update event
 ManifestWorkAgentClient-->>AgentInformerWatcherStore: Update the manifestwork status in store
 
 Broker-->>ManifestWorkSourceClient: Send the status updated event
-ManifestWorkSourceClient-->>WorkClientWatcherStore: Update the manifestwork status in store
-WorkClientWatcherStore-->>Controller: Notify the manifestwork status is updated by watcher
+ManifestWorkSourceClient-->>SourceInformerWatcherStore: Update the manifestwork status in store
+SourceInformerWatcherStore-->>Controller: Notify the manifestwork status is updated by watcher
 
 Controller->>ManifestWorkSourceClient: Delete a manifestwork
 ManifestWorkSourceClient->>Broker: Publish an update event to mark the manifestwork deleting
-ManifestWorkSourceClient-->>WorkClientWatcherStore: Mark the manifestwork deleting in store
+ManifestWorkSourceClient-->>SourceInformerWatcherStore: Mark the manifestwork deleting in store
 
 Broker->>ManifestWorkAgentClient: Send the update event
 ManifestWorkAgentClient-->>AgentInformerWatcherStore: Mark the manifestwork deleting in store
 AgentInformerWatcherStore-->>Agent: Notify the manifestwork is deleting by watcher
 
-Agent->>ManifestWorkAgentClient: Remove the manifestwork finalizers 
+Agent->>ManifestWorkAgentClient: Remove the manifestwork finalizers
 ManifestWorkAgentClient-->>Broker: Publish a deleted status update event
 ManifestWorkAgentClient-->>AgentInformerWatcherStore: Delete the manifestwork from store
 
 Broker-->>ManifestWorkSourceClient: Send the deleted status updated event
-ManifestWorkSourceClient-->>WorkClientWatcherStore: Delete the manifestwork status from store
-WorkClientWatcherStore-->>Controller: Notify the manifestwork is deleted by watcher
+ManifestWorkSourceClient-->>SourceInformerWatcherStore: Delete the manifestwork status from store
+SourceInformerWatcherStore-->>Controller: Notify the manifestwork is deleted by watcher
 ```
