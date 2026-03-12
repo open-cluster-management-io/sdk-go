@@ -9,6 +9,14 @@ run:
   timeout: 5m
   modules-download-mode: readonly
 
+# Disable issue count limits to prevent non-deterministic results.
+# By default, golangci-lint limits issues per linter (50) and same-text issues (3),
+# randomly dropping excess issues which causes flaky CI results.
+# Reference: https://github.com/golangci/golangci-lint/issues/5218
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
 linters:
   # Use 'none' as default and explicitly enable linters
   # Options: none, standard, all, fast
@@ -83,6 +91,11 @@ linters:
       # import paths for external consumers.
       - linters: [revive]
         text: "avoid meaningless package names"
+      # The revive var-naming rule for stdlib package name conflicts is
+      # non-deterministic in golangci-lint due to concurrent analysis.
+      # Reference: https://github.com/golangci/golangci-lint/issues/3476
+      - linters: [revive]
+        text: "avoid package names that conflict with"
 
     # Paths to exclude from all linting
     paths:
