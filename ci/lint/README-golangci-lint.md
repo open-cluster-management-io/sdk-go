@@ -94,6 +94,57 @@ To upgrade golangci-lint:
 
 **Solution**: The script skips download if the correct version is already installed. Consider caching the binary or using an internal artifact server.
 
+### 3. Revive Linter Non-Deterministic Results (Flaky CI)
+
+**Problem**: The `revive` linter's `var-naming` rule for detecting Go stdlib package name
+conflicts produces non-deterministic results — the same code with the same golangci-lint
+version may pass or fail across different runs.
+
+**Root cause**: golangci-lint runs multiple linters concurrently. Revive rules that analyze
+across files are sensitive to file processing order, which depends on goroutine scheduling
+and is inherently non-deterministic.
+
+**How we discovered this**: During [PR #212](https://github.com/open-cluster-management-io/sdk-go/pull/212)
+(Switch grpc addon client to v1beta1), the `revive` linter intermittently reported
+`var-naming: avoid package names that conflict with Go standard library package names` on
+`pkg/cloudevents/clients/errors/errors.go`. The same code would fail in one CI run and pass
+in the next, which was confirmed through local testing (5 consecutive runs with cache cleared
+produced different results).
+
+**Solution** (applied in [PR #214](https://github.com/open-cluster-management-io/sdk-go/pull/214)):
+
+1. **Exclude the flaky rule** (direct fix) — Added an exclusion for
+   `"avoid package names that conflict with"` in the `golangci-v2.yml` config. This directly
+   prevents the non-deterministic `var-naming` rule from causing CI failures. This is the same
+   approach used by [kubernetes-sigs/kueue](https://github.com/kubernetes-sigs/kueue/issues/5948)
+   and [kubernetes-sigs/cluster-api-provider-ibmcloud](https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/issues/2458).
+
+2. **Disable issue count limits** (preventive) — Set `max-issues-per-linter: 0` and
+   `max-same-issues: 0`. This is not directly related to the PR #212 issue, but addresses a
+   separate source of flakiness: by default, golangci-lint limits issues per linter (50) and
+   same-text issues (3), randomly dropping excess issues which can cause different runs to
+   report different subsets of issues.
+
+**Upstream references**:
+- [golangci-lint #3476](https://github.com/golangci/golangci-lint/issues/3476) — Revive's `confusing-naming` inconsistent due to file processing order
+- [golangci-lint #840](https://github.com/golangci/golangci-lint/issues/840) — Nondeterministic linting, same code fails 2/5 runs (affected Istio)
+- [golangci-lint #1513](https://github.com/golangci/golangci-lint/issues/1513) — Same code produces different output hashes each run
+- [golangci-lint #5218](https://github.com/golangci/golangci-lint/issues/5218) — Issue count limits cause non-deterministic filtering
+
+---
+
+## Customized Exclusion Rules
+
+The `golangci-v2.yml` config includes several exclusion rules tailored for this SDK project.
+Below is the rationale for each:
+
+| Exclusion | Reason |
+|-----------|--------|
+| `exported: type name will be used as` | Stuttering type names (e.g., `grpc.GRPCServer`) cannot be renamed without breaking external consumers |
+| `unexported-return: exported func` | Exported functions returning unexported types are part of the public API |
+| `avoid meaningless package names` | Package names like `common`, `utils` cannot be renamed without breaking import paths |
+| `avoid package names that conflict with` | Non-deterministic in golangci-lint due to concurrent analysis (see Known Issue #3 above) |
+
 ---
 
 ## References
