@@ -3,6 +3,7 @@ package pubsub
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"cloud.google.com/go/pubsub/v2"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -135,13 +136,18 @@ func (o *pubsubTransport) Send(ctx context.Context, evt cloudevents.Event) error
 func (o *pubsubTransport) Receive(ctx context.Context, fn options.ReceiveHandlerFn) error {
 	errChan := make(chan error)
 
+	// Use a mutex to ensure sequential processing across both subscribers.
+	// This prevents race conditions when concurrent events for the same
+	// resource arrive on different subscriptions.
+	var mu sync.Mutex
+
 	// start the subscriber for spec/status updates
-	go o.receiveFromSubscriber(ctx, o.subscriber, fn, errChan)
+	go o.receiveFromSubscriber(ctx, o.subscriber, fn, &mu, errChan)
 
 	// start the resync subscriber for resync events
-	go o.receiveFromSubscriber(ctx, o.resyncSubscriber, fn, errChan)
+	go o.receiveFromSubscriber(ctx, o.resyncSubscriber, fn, &mu, errChan)
 
-	// Return the error from either subscriber (including context cancellation).
+	// Return the first error from either subscriber (including context cancellation).
 	// We return errors directly instead of writing to the transport errorChan because
 	// Pub/Sub client has internal retry logic for transient errors. Only non-retryable
 	// errors or context cancellation will be returned here.
@@ -149,22 +155,32 @@ func (o *pubsubTransport) Receive(ctx context.Context, fn options.ReceiveHandler
 }
 
 // receiveFromSubscriber handles receiving messages from a subscriber.
+// It uses a mutex to ensure sequential processing across all subscribers.
 func (o *pubsubTransport) receiveFromSubscriber(
 	ctx context.Context,
 	subscriber *pubsub.Subscriber,
 	fn options.ReceiveHandlerFn,
+	mu *sync.Mutex,
 	errChan chan<- error,
 ) {
 	logger := klog.FromContext(ctx)
 	err := subscriber.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 		evt, err := Decode(msg)
 		if err != nil {
-			// also send ACK on decode error since redelivery won't fix it.
+			// ACK decode errors immediately since redelivery won't fix them.
 			logger.Error(err, "failed to decode pubsub message")
-		} else {
-			fn(ctx, evt)
+			msg.Ack()
+			return
 		}
-		// send ACK after all receiver handlers complete.
+
+		// Lock to ensure sequential processing across both subscribers.
+		// This prevents race conditions when concurrent events for the same
+		// resource arrive on different subscriptions.
+		mu.Lock()
+		defer mu.Unlock()
+		fn(ctx, evt)
+
+		// ACK after successful processing.
 		msg.Ack()
 	})
 
