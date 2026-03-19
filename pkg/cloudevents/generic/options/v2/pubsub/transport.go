@@ -3,7 +3,6 @@ package pubsub
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"cloud.google.com/go/pubsub/v2"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -18,6 +17,13 @@ import (
 )
 
 var _ options.CloudEventTransport = &pubsubTransport{}
+
+// messageWork represents a message to be processed sequentially by the worker.
+type messageWork struct {
+	ctx  context.Context
+	evt  cloudevents.Event
+	done chan struct{} // Signals when processing is complete
+}
 
 // pubsubTransport is a CloudEventTransport implementation for Pub/Sub.
 type pubsubTransport struct {
@@ -136,16 +142,19 @@ func (o *pubsubTransport) Send(ctx context.Context, evt cloudevents.Event) error
 func (o *pubsubTransport) Receive(ctx context.Context, fn options.ReceiveHandlerFn) error {
 	errChan := make(chan error)
 
-	// Use a mutex to ensure sequential processing across both subscribers.
-	// This prevents race conditions when concurrent events for the same
-	// resource arrive on different subscriptions.
-	var mu sync.Mutex
+	// use a buffered channel to queue incoming messages from both subscriptions.
+	workChan := make(chan messageWork, 10)
+
+	// start a single worker goroutine to process messages sequentially.
+	// to ensure that events for the same resource are processed in order,
+	// preventing race conditions when concurrent events arrive on different subscriptions.
+	go o.processMessages(ctx, fn, workChan)
 
 	// start the subscriber for spec/status updates
-	go o.receiveFromSubscriber(ctx, o.subscriber, fn, &mu, errChan)
+	go o.receiveFromSubscriber(ctx, o.subscriber, workChan, errChan)
 
 	// start the resync subscriber for resync events
-	go o.receiveFromSubscriber(ctx, o.resyncSubscriber, fn, &mu, errChan)
+	go o.receiveFromSubscriber(ctx, o.resyncSubscriber, workChan, errChan)
 
 	// Return the first error from either subscriber (including context cancellation).
 	// We return errors directly instead of writing to the transport errorChan because
@@ -154,17 +163,42 @@ func (o *pubsubTransport) Receive(ctx context.Context, fn options.ReceiveHandler
 	return <-errChan
 }
 
+// processMessages reads from workChan and processes messages one at a time to ensure sequential event processing.
+func (o *pubsubTransport) processMessages(
+	ctx context.Context,
+	fn options.ReceiveHandlerFn,
+	workChan <-chan messageWork,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			// context canceled - stop processing
+			return
+		case work, ok := <-workChan:
+			if !ok {
+				// channel closed - stop processing
+				return
+			}
+
+			// process the event
+			fn(work.ctx, work.evt)
+
+			// signal completion so the Receive callback can Ack the message
+			close(work.done)
+		}
+	}
+}
+
 // receiveFromSubscriber handles receiving messages from a subscriber.
-// It uses a mutex to ensure sequential processing across all subscribers.
 func (o *pubsubTransport) receiveFromSubscriber(
 	ctx context.Context,
 	subscriber *pubsub.Subscriber,
-	fn options.ReceiveHandlerFn,
-	mu *sync.Mutex,
+	workChan chan<- messageWork,
 	errChan chan<- error,
 ) {
 	logger := klog.FromContext(ctx)
-	err := subscriber.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+	err := subscriber.Receive(ctx, func(msgCtx context.Context, msg *pubsub.Message) {
+		// decode the message first
 		evt, err := Decode(msg)
 		if err != nil {
 			// ACK decode errors immediately since redelivery won't fix them.
@@ -173,15 +207,28 @@ func (o *pubsubTransport) receiveFromSubscriber(
 			return
 		}
 
-		// Lock to ensure sequential processing across both subscribers.
-		// This prevents race conditions when concurrent events for the same
-		// resource arrive on different subscriptions.
-		mu.Lock()
-		defer mu.Unlock()
-		fn(ctx, evt)
+		// create a work item with a completion signal
+		work := messageWork{
+			ctx:  msgCtx,
+			evt:  evt,
+			done: make(chan struct{}),
+		}
 
-		// ACK after successful processing.
-		msg.Ack()
+		// queue the work for sequential processing
+		select {
+		case workChan <- work:
+			// block until the worker processes the message,
+			// to ensures we respect Pub/Sub flow control by only Ack'ing
+			// after the handler completes, while still using a queue-based
+			// approach for sequential processing instead of a mutex.
+			<-work.done
+
+			// now that processing is complete, Ack the message.
+			msg.Ack()
+		case <-ctx.Done():
+			// context canceled - nack the message so it can be redelivered
+			msg.Nack()
+		}
 	})
 
 	// The Pub/Sub client's Receive call automatically retries on retryable errors.
