@@ -79,8 +79,8 @@ func GetDefaultTLSConfig() *TLSConfig {
 	}
 }
 
-// TLSConfigFromFlags creates TLS config from command-line flags
-func TLSConfigFromFlags(minVersion, cipherSuites string) (*TLSConfig, error) {
+// ConfigFromFlags creates TLS config from command-line flags
+func ConfigFromFlags(minVersion, cipherSuites string) (*TLSConfig, error) {
 	if minVersion == "" && cipherSuites == "" {
 		return nil, nil // No flags provided
 	}
@@ -110,8 +110,8 @@ func TLSConfigFromFlags(minVersion, cipherSuites string) (*TLSConfig, error) {
 	return cfg, nil
 }
 
-// TLSVersionToString converts a TLS version constant to its string representation
-func TLSVersionToString(version uint16) string {
+// VersionToString converts a TLS version constant to its string representation
+func VersionToString(version uint16) string {
 	switch version {
 	case tls.VersionTLS10:
 		return "VersionTLS10"
@@ -142,9 +142,9 @@ func CipherSuitesToString(suites []uint16) string {
 	return strings.Join(names, ",")
 }
 
-// TLSConfigToFunc returns a function that applies the TLS configuration to a tls.Config.
+// ConfigToFunc returns a function that applies the TLS configuration to a tls.Config.
 // It is suitable for use with controller-runtime's TLSOpts (webhook/metrics servers).
-func TLSConfigToFunc(tlsCfg *TLSConfig) func(*tls.Config) {
+func ConfigToFunc(tlsCfg *TLSConfig) func(*tls.Config) {
 	return func(config *tls.Config) {
 		config.MinVersion = tlsCfg.MinVersion
 		if tlsCfg.MinVersion == tls.VersionTLS13 {

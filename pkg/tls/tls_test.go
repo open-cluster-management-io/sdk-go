@@ -14,7 +14,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func TestTLSConfigFromFlags(t *testing.T) {
+func TestConfigFromFlags(t *testing.T) {
 	cases := []struct {
 		name         string
 		minVersion   string
@@ -114,7 +114,7 @@ func TestTLSConfigFromFlags(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := TLSConfigFromFlags(tc.minVersion, tc.cipherSuites)
+			cfg, err := ConfigFromFlags(tc.minVersion, tc.cipherSuites)
 
 			if tc.expectError {
 				if err == nil {
@@ -150,7 +150,7 @@ func TestTLSConfigFromFlags(t *testing.T) {
 	}
 }
 
-func TestTLSVersionToString(t *testing.T) {
+func TestVersionToString(t *testing.T) {
 	cases := []struct {
 		name     string
 		version  uint16
@@ -185,7 +185,7 @@ func TestTLSVersionToString(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := TLSVersionToString(tc.version)
+			result := VersionToString(tc.version)
 			if result != tc.expected {
 				t.Errorf("expected %s, got %s", tc.expected, result)
 			}
@@ -243,7 +243,7 @@ func TestCipherSuitesToString(t *testing.T) {
 	}
 }
 
-func TestTLSConfigToFunc(t *testing.T) {
+func TestConfigToFunc(t *testing.T) {
 	cases := []struct {
 		name                string
 		tlsCfg              *TLSConfig
@@ -300,7 +300,7 @@ func TestTLSConfigToFunc(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := &tls.Config{}
-			fn := TLSConfigToFunc(tc.tlsCfg)
+			fn := ConfigToFunc(tc.tlsCfg)
 			fn(config)
 
 			if config.MinVersion != tc.expectMinVersion {

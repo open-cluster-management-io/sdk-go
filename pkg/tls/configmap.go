@@ -47,7 +47,7 @@ func StartTLSConfigMapWatcher(ctx context.Context, client kubernetes.Interface, 
 	}
 
 	initData := map[string]string{
-		ConfigMapKeyMinVersion:   TLSVersionToString(tlsCfg.MinVersion),
+		ConfigMapKeyMinVersion:   VersionToString(tlsCfg.MinVersion),
 		ConfigMapKeyCipherSuites: CipherSuitesToString(tlsCfg.CipherSuites),
 	}
 
