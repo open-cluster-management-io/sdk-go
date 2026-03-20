@@ -44,7 +44,7 @@ func NewConfigMapWatcher(client kubernetes.Interface, namespace, configMapName s
 		namespace:     namespace,
 		configMapName: configMapName,
 		cancelFunc:    cancelFunc,
-		initialHash:   HashConfigMapData(initData),
+		initialHash:   hashConfigMapData(initData),
 	}
 }
 
@@ -144,9 +144,9 @@ func (w *ConfigMapWatcher) triggerRestart() {
 	}
 }
 
-// HashConfigMapData creates a deterministic string representation of a ConfigMap's data map.
+// hashConfigMapData creates a deterministic string representation of a ConfigMap's data map.
 // Keys and values are quoted so that neither can contain the separators used here.
-func HashConfigMapData(data map[string]string) string {
+func hashConfigMapData(data map[string]string) string {
 	if len(data) == 0 {
 		return ""
 	}
@@ -167,5 +167,5 @@ func hashConfigMap(cm *corev1.ConfigMap) string {
 	if cm == nil {
 		return ""
 	}
-	return HashConfigMapData(cm.Data)
+	return hashConfigMapData(cm.Data)
 }
