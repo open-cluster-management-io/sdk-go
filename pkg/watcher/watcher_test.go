@@ -13,6 +13,10 @@ import (
 const (
 	testNamespace     = "test-ns"
 	testConfigMapName = "test-cm"
+
+	// noEventWait is how long "no trigger expected" tests wait before declaring success.
+	// Kept generous enough to avoid flakiness under loaded CI.
+	noEventWait = 500 * time.Millisecond
 )
 
 func newCM(data map[string]string) *corev1.ConfigMap {
@@ -140,7 +144,7 @@ func TestStart_AddFunc_NoInitData_SetsBaseline(t *testing.T) {
 	select {
 	case <-triggered:
 		t.Error("onChangeFunc triggered unexpectedly when no initData was provided")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(noEventWait):
 		// expected: no trigger
 	}
 }
@@ -165,7 +169,7 @@ func TestStart_AddFunc_MatchingInitData_NoTrigger(t *testing.T) {
 	select {
 	case <-triggered:
 		t.Error("onChangeFunc triggered unexpectedly when initData matched CM")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(noEventWait):
 		// expected: no trigger
 	}
 }
@@ -223,7 +227,7 @@ func TestStart_UpdateFunc_SameData_NoTrigger(t *testing.T) {
 	select {
 	case <-triggered:
 		t.Error("onChangeFunc triggered unexpectedly on no-op update")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(noEventWait):
 		// expected
 	}
 }
@@ -318,7 +322,7 @@ func TestStart_WrongConfigMapName_Ignored(t *testing.T) {
 	select {
 	case <-triggered:
 		t.Error("onChangeFunc triggered for a CM with a different name")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(noEventWait):
 		// expected
 	}
 }
@@ -331,19 +335,29 @@ func TestStart_CancelFuncCalledWhenNoOnChangeFunc(t *testing.T) {
 	client := fake.NewClientset(cm)
 
 	cancelCalled := make(chan struct{}, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	cancelWrapper := func() { cancelCalled <- struct{}{} }
+	// Use a dedicated context for the watcher so that cancelWrapper cancelling it
+	// does not race with the test's own timeout select case.
+	watcherCtx, watcherCancel := context.WithCancel(context.Background())
+	defer watcherCancel()
+	cancelWrapper := func() {
+		watcherCancel()
+		select {
+		case cancelCalled <- struct{}{}:
+		default:
+		}
+	}
 
 	w := NewConfigMapWatcher(client, testNamespace, testConfigMapName, cancelWrapper, data)
 	// Do NOT call SetOnChangeFunc — cancelFunc should be the fallback.
 
-	if err := w.Start(ctx); err != nil {
+	if err := w.Start(watcherCtx); err != nil {
 		t.Fatalf("Start returned error: %v", err)
 	}
 
 	updated := newCM(map[string]string{"k": "new-value"})
-	_, err := client.CoreV1().ConfigMaps(testNamespace).Update(ctx, updated, metav1.UpdateOptions{})
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer updateCancel()
+	_, err := client.CoreV1().ConfigMaps(testNamespace).Update(updateCtx, updated, metav1.UpdateOptions{})
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -351,7 +365,7 @@ func TestStart_CancelFuncCalledWhenNoOnChangeFunc(t *testing.T) {
 	select {
 	case <-cancelCalled:
 		// expected
-	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
 		t.Error("timed out waiting for cancelFunc to be called")
 	}
 }

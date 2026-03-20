@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,6 +28,7 @@ type ConfigMapWatcher struct {
 	configMapName string
 	cancelFunc    context.CancelFunc
 	initialHash   string
+	initOnce      sync.Once
 	onChangeFunc  func()
 }
 
@@ -78,13 +80,19 @@ func (w *ConfigMapWatcher) Start(ctx context.Context) error {
 				return
 			}
 			cmHash := hashConfigMap(cm)
-			if w.initialHash == "" {
-				// No CM existed at startup; treat this as the baseline.
-				w.initialHash = cmHash
-				logger.V(4).Info("ConfigMap added, initial hash set", "configmap", cm.Name, "hash", cmHash)
-			} else if cmHash != w.initialHash {
-				// CM existed at startup (initData was provided) but changed in the window
-				// between the initial load and the watcher starting. Restart to apply it.
+			var needsRestart bool
+			w.initOnce.Do(func() {
+				if w.initialHash == "" {
+					// No CM existed at startup; treat this as the baseline.
+					w.initialHash = cmHash
+					logger.V(4).Info("ConfigMap added, initial hash set", "configmap", cm.Name, "hash", cmHash)
+				} else if cmHash != w.initialHash {
+					// CM existed at startup (initData was provided) but changed in the window
+					// between the initial load and the watcher starting. Restart to apply it.
+					needsRestart = true
+				}
+			})
+			if needsRestart {
 				logger.Info("ConfigMap differs from initial config, restarting",
 					"configmap", cm.Name,
 					"initialHash", w.initialHash,
@@ -112,7 +120,19 @@ func (w *ConfigMapWatcher) Start(ctx context.Context) error {
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			cm := obj.(*corev1.ConfigMap)
+			cm, ok := obj.(*corev1.ConfigMap)
+			if !ok {
+				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+				if !ok {
+					logger.Error(nil, "Unexpected object type in DeleteFunc", "type", fmt.Sprintf("%T", obj))
+					return
+				}
+				cm, ok = tombstone.Obj.(*corev1.ConfigMap)
+				if !ok {
+					logger.Error(nil, "Tombstone contained unexpected object type", "type", fmt.Sprintf("%T", tombstone.Obj))
+					return
+				}
+			}
 			if cm.Name != w.configMapName {
 				return
 			}
