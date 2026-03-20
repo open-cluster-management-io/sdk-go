@@ -34,4 +34,3 @@ var cipherMap = map[string]uint16{
 	"AES256-SHA":   tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 	"DES-CBC3-SHA": tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
 }
-
