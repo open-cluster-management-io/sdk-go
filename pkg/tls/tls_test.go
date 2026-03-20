@@ -307,14 +307,24 @@ func TestConfigToFunc(t *testing.T) {
 				t.Errorf("expected MinVersion %d, got %d", tc.expectMinVersion, config.MinVersion)
 			}
 
-			if tc.expectMaxVersion > 0 && config.MaxVersion != tc.expectMaxVersion {
-				t.Errorf("expected MaxVersion %d, got %d", tc.expectMaxVersion, config.MaxVersion)
+			if tc.expectMaxVersion > 0 {
+				if config.MaxVersion != tc.expectMaxVersion {
+					t.Errorf("expected MaxVersion %d, got %d", tc.expectMaxVersion, config.MaxVersion)
+				}
+			} else {
+				if config.MaxVersion != 0 {
+					t.Errorf("expected MaxVersion 0 (unset), got %d", config.MaxVersion)
+				}
 			}
 
 			if tc.expectCipherSuites {
 				if len(config.CipherSuites) != tc.expectedCipherCount {
 					t.Errorf("expected %d cipher suites, got %d",
 						tc.expectedCipherCount, len(config.CipherSuites))
+				}
+			} else {
+				if len(config.CipherSuites) != 0 {
+					t.Errorf("expected no cipher suites, got %d", len(config.CipherSuites))
 				}
 			}
 		})
@@ -535,12 +545,16 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 
 	t.Run("ConfigMap not found falls back to defaults", func(t *testing.T) {
 		client := fake.NewClientset()
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		// Use a generous timeout: w.Start blocks until cache sync before returning.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		changeCalled := false
+		changed := make(chan struct{}, 1)
 		onChangeFn := func() {
-			changeCalled = true
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
 		}
 
 		cfg, err := StartTLSConfigMapWatcher(ctx, client, namespace, onChangeFn)
@@ -561,11 +575,47 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 			t.Errorf("expected nil CipherSuites for defaults, got %v", cfg.CipherSuites)
 		}
 
-		// Give the watcher a moment to start
-		time.Sleep(50 * time.Millisecond)
-
-		if changeCalled {
+		select {
+		case <-changed:
 			t.Errorf("onChangeFn should not be called when ConfigMap doesn't exist")
+		case <-time.After(500 * time.Millisecond):
+			// expected: no trigger
+		}
+	})
+
+	t.Run("ConfigMap created with non-defaults triggers restart when no CM at startup", func(t *testing.T) {
+		client := fake.NewClientset()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		changed := make(chan struct{}, 1)
+		onChangeFn := func() {
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
+		}
+
+		_, err := StartTLSConfigMapWatcher(ctx, client, namespace, onChangeFn)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Create CM with TLS 1.3 — differs from seeded default TLS 1.2, must trigger.
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: ConfigMapName, Namespace: namespace},
+			Data:       map[string]string{ConfigMapKeyMinVersion: "VersionTLS13"},
+		}
+		_, err = client.CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("failed to create ConfigMap: %v", err)
+		}
+
+		select {
+		case <-changed:
+			// expected
+		case <-ctx.Done():
+			t.Errorf("onChangeFn should be called when CM created with non-default TLS version")
 		}
 	})
 
@@ -581,12 +631,16 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 			},
 		}
 		client := fake.NewClientset(cm)
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		// Use a generous timeout: w.Start blocks until cache sync before returning.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		changeCalled := false
+		changed := make(chan struct{}, 1)
 		onChangeFn := func() {
-			changeCalled = true
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
 		}
 
 		cfg, err := StartTLSConfigMapWatcher(ctx, client, namespace, onChangeFn)
@@ -607,11 +661,11 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 			t.Errorf("expected 1 cipher suite, got %d", len(cfg.CipherSuites))
 		}
 
-		// Give the watcher a moment to start
-		time.Sleep(50 * time.Millisecond)
-
-		if changeCalled {
+		select {
+		case <-changed:
 			t.Errorf("onChangeFn should not be called initially")
+		case <-time.After(500 * time.Millisecond):
+			// expected: no trigger
 		}
 	})
 
@@ -629,10 +683,12 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		changeCalled := false
+		changed := make(chan struct{}, 1)
 		onChangeFn := func() {
-			changeCalled = true
-			cancel() // Cancel context to stop the watcher
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
 		}
 
 		cfg, err := StartTLSConfigMapWatcher(ctx, client, namespace, onChangeFn)
@@ -645,9 +701,6 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 			t.Fatal("expected non-nil config")
 		}
 
-		// Wait for the informer to sync
-		time.Sleep(200 * time.Millisecond)
-
 		// Update the ConfigMap
 		updatedCM := cm.DeepCopy()
 		updatedCM.Data[ConfigMapKeyMinVersion] = "VersionTLS13"
@@ -657,10 +710,10 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 			t.Errorf("failed to update ConfigMap: %v", err)
 		}
 
-		// Wait for the event to be processed
-		time.Sleep(500 * time.Millisecond)
-
-		if !changeCalled {
+		select {
+		case <-changed:
+			// expected
+		case <-ctx.Done():
 			t.Errorf("onChangeFn should be called when ConfigMap is updated")
 		}
 	})
@@ -679,10 +732,12 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		changeCalled := false
+		changed := make(chan struct{}, 1)
 		onChangeFn := func() {
-			changeCalled = true
-			cancel() // Cancel context to stop the watcher
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
 		}
 
 		cfg, err := StartTLSConfigMapWatcher(ctx, client, namespace, onChangeFn)
@@ -695,19 +750,16 @@ func TestStartTLSConfigMapWatcher(t *testing.T) {
 			t.Fatal("expected non-nil config")
 		}
 
-		// Wait for the informer to sync
-		time.Sleep(200 * time.Millisecond)
-
 		// Delete the ConfigMap
 		err = client.CoreV1().ConfigMaps(namespace).Delete(ctx, ConfigMapName, metav1.DeleteOptions{})
 		if err != nil {
 			t.Errorf("failed to delete ConfigMap: %v", err)
 		}
 
-		// Wait for the event to be processed
-		time.Sleep(500 * time.Millisecond)
-
-		if !changeCalled {
+		select {
+		case <-changed:
+			// expected
+		case <-ctx.Done():
 			t.Errorf("onChangeFn should be called when ConfigMap is deleted")
 		}
 	})

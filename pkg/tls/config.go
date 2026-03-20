@@ -144,7 +144,12 @@ func CipherSuitesToString(suites []uint16) string {
 
 // ConfigToFunc returns a function that applies the TLS configuration to a tls.Config.
 // It is suitable for use with controller-runtime's TLSOpts (webhook/metrics servers).
+// If tlsCfg is nil (e.g. returned by ConfigFromFlags when no flags are set), the
+// returned function is a no-op that leaves the tls.Config unchanged.
 func ConfigToFunc(tlsCfg *TLSConfig) func(*tls.Config) {
+	if tlsCfg == nil {
+		return func(*tls.Config) {}
+	}
 	return func(config *tls.Config) {
 		config.MinVersion = tlsCfg.MinVersion
 		if tlsCfg.MinVersion == tls.VersionTLS13 {
