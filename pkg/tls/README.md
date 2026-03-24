@@ -4,9 +4,6 @@ Helpers for loading, parsing, and applying TLS profile configuration in OCM comp
 TLS settings (minimum version and cipher suites) are stored in a well-known ConfigMap
 (`ocm-tls-profile`) and optionally propagated via command-line flags.
 
-Related: [`pkg/watcher`](../watcher/) provides the generic ConfigMap watcher used internally
-by `StartTLSConfigMapWatcher`.
-
 ## ConfigMap format
 
 ```yaml
