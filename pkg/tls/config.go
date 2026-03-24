@@ -7,10 +7,10 @@ import (
 )
 
 const (
-	// ConfigMapName is the name of the ConfigMap containing TLS profile settings
+	// ConfigMapName is the well-known name of the ConfigMap containing TLS profile settings.
 	ConfigMapName = "ocm-tls-profile"
 
-	// ConfigMapKeyMinVersion is the ConfigMap key for minimum TLS version
+	// ConfigMapKeyMinVersion is the ConfigMap key for the minimum TLS version.
 	ConfigMapKeyMinVersion = "minTLSVersion"
 
 	// ConfigMapKeyCipherSuites is the ConfigMap key for cipher suites
