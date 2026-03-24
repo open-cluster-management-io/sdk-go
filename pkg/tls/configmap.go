@@ -160,6 +160,10 @@ func parseTLSConfigFromConfigMap(cm *corev1.ConfigMap) (*TLSConfig, error) {
 		cipherSuites, unsupported := parseCipherSuites(cipherSuitesStr)
 		if len(unsupported) > 0 {
 			klog.Warningf("Unsupported cipher suites in ConfigMap %s/%s: %v", cm.Namespace, cm.Name, unsupported)
+			if len(cipherSuites) == 0 {
+				return nil, fmt.Errorf("invalid cipherSuites in ConfigMap %s/%s: no supported cipher suites found",
+					cm.Namespace, cm.Name)
+			}
 		}
 		cfg.CipherSuites = cipherSuites
 	}

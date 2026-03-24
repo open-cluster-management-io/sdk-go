@@ -451,6 +451,23 @@ func TestLoadTLSConfigFromConfigMap(t *testing.T) {
 			expectedLen: 1, // Only the valid cipher
 		},
 		{
+			name: "ConfigMap with all unsupported ciphers returns error",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion:   "VersionTLS12",
+						ConfigMapKeyCipherSuites: "UNKNOWN-CIPHER-1,UNKNOWN-CIPHER-2",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError: true,
+		},
+		{
 			name: "ConfigMap with empty minVersion defaults to TLS 1.2",
 			setupClient: func() *fake.Clientset {
 				cm := &corev1.ConfigMap{
