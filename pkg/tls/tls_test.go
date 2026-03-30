@@ -143,7 +143,7 @@ func TestConfigFromFlags(t *testing.T) {
 				t.Errorf("expected MinVersion %d, got %d", tc.expectedMin, cfg.MinVersion)
 			}
 
-			if tc.expectedLen > 0 && len(cfg.CipherSuites) != tc.expectedLen {
+			if len(cfg.CipherSuites) != tc.expectedLen {
 				t.Errorf("expected %d cipher suites, got %d", tc.expectedLen, len(cfg.CipherSuites))
 			}
 		})
@@ -535,7 +535,7 @@ func TestLoadTLSConfigFromConfigMap(t *testing.T) {
 				t.Errorf("expected MinVersion %d, got %d", tc.expectedMin, cfg.MinVersion)
 			}
 
-			if tc.expectedLen > 0 && len(cfg.CipherSuites) != tc.expectedLen {
+			if len(cfg.CipherSuites) != tc.expectedLen {
 				t.Errorf("expected %d cipher suites, got %d", tc.expectedLen, len(cfg.CipherSuites))
 			}
 		})

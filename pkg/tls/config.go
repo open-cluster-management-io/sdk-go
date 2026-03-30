@@ -122,6 +122,8 @@ func GetDefaultTLSConfig() *TLSConfig {
 
 // ConfigFromFlags creates TLS config from command-line flags
 func ConfigFromFlags(minVersion, cipherSuites string) (*TLSConfig, error) {
+	minVersion = strings.TrimSpace(minVersion)
+	cipherSuites = strings.TrimSpace(cipherSuites)
 	if minVersion == "" && cipherSuites == "" {
 		return nil, nil // No flags provided
 	}
