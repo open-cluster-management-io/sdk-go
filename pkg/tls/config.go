@@ -44,7 +44,7 @@ func parseTLSVersion(version string) (uint16, error) {
 	}
 }
 
-// parseCipherSuites converts OpenSSL-style cipher names to Go crypto/tls constants.
+// parseCipherSuites converts IANA cipher suite names to Go crypto/tls constants.
 // Returns a list of cipher suite IDs and a list of unsupported cipher names.
 func parseCipherSuites(cipherString string) ([]uint16, []string) {
 	if strings.TrimSpace(cipherString) == "" {
@@ -126,7 +126,7 @@ func VersionToString(version uint16) string {
 	}
 }
 
-// CipherSuitesToString converts cipher suite IDs back to OpenSSL-style names
+// CipherSuitesToString converts cipher suite IDs back to IANA names
 func CipherSuitesToString(suites []uint16) string {
 	if len(suites) == 0 {
 		return ""
@@ -160,11 +160,11 @@ func ConfigToFunc(tlsCfg *TLSConfig) func(*tls.Config) {
 	}
 }
 
-// cipherIDToName converts a cipher suite ID to its OpenSSL-style name
+// cipherIDToName converts a cipher suite ID to its IANA name.
 func cipherIDToName(id uint16) string {
-	for name, suiteID := range cipherMap {
-		if suiteID == id {
-			return name
+	for _, s := range append(tls.CipherSuites(), tls.InsecureCipherSuites()...) {
+		if s.ID == id {
+			return s.Name
 		}
 	}
 	return ""

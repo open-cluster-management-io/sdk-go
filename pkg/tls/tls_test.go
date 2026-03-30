@@ -69,7 +69,7 @@ func TestConfigFromFlags(t *testing.T) {
 		{
 			name:         "valid single cipher",
 			minVersion:   "VersionTLS12",
-			cipherSuites: "ECDHE-RSA-AES128-GCM-SHA256",
+			cipherSuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 			expectError:  false,
 			expectedMin:  tls.VersionTLS12,
 			expectedLen:  1,
@@ -77,7 +77,7 @@ func TestConfigFromFlags(t *testing.T) {
 		{
 			name:         "valid multiple ciphers",
 			minVersion:   "VersionTLS12",
-			cipherSuites: "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256",
+			cipherSuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 			expectError:  false,
 			expectedMin:  tls.VersionTLS12,
 			expectedLen:  2,
@@ -91,13 +91,13 @@ func TestConfigFromFlags(t *testing.T) {
 		{
 			name:         "mixed valid and invalid ciphers",
 			minVersion:   "VersionTLS12",
-			cipherSuites: "ECDHE-RSA-AES128-GCM-SHA256,INVALID-CIPHER",
+			cipherSuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,INVALID-CIPHER",
 			expectError:  true,
 		},
 		{
 			name:         "only cipher suites without version defaults to TLS 1.2",
 			minVersion:   "",
-			cipherSuites: "ECDHE-RSA-AES128-GCM-SHA256",
+			cipherSuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 			expectError:  false,
 			expectedMin:  tls.VersionTLS12,
 			expectedLen:  1,
@@ -105,7 +105,7 @@ func TestConfigFromFlags(t *testing.T) {
 		{
 			name:         "cipher suites with whitespace",
 			minVersion:   "VersionTLS12",
-			cipherSuites: " ECDHE-RSA-AES128-GCM-SHA256 , ECDHE-ECDSA-AES128-GCM-SHA256 ",
+			cipherSuites: " TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 , TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 ",
 			expectError:  false,
 			expectedMin:  tls.VersionTLS12,
 			expectedLen:  2,
@@ -212,7 +212,7 @@ func TestCipherSuitesToString(t *testing.T) {
 		{
 			name:     "single cipher",
 			suites:   []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
-			expected: "ECDHE-RSA-AES128-GCM-SHA256",
+			expected: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 		},
 		{
 			name: "multiple ciphers",
@@ -220,7 +220,7 @@ func TestCipherSuitesToString(t *testing.T) {
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			},
-			expected: "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256",
+			expected: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 		},
 		{
 			name: "unknown cipher ID skipped",
@@ -229,7 +229,7 @@ func TestCipherSuitesToString(t *testing.T) {
 				0x9999, // unknown cipher
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			},
-			expected: "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256",
+			expected: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 		},
 	}
 
@@ -387,7 +387,7 @@ func TestLoadTLSConfigFromConfigMap(t *testing.T) {
 					},
 					Data: map[string]string{
 						ConfigMapKeyMinVersion:   "VersionTLS12",
-						ConfigMapKeyCipherSuites: "ECDHE-RSA-AES128-GCM-SHA256",
+						ConfigMapKeyCipherSuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 					},
 				}
 				return fake.NewClientset(cm)
@@ -441,7 +441,7 @@ func TestLoadTLSConfigFromConfigMap(t *testing.T) {
 					},
 					Data: map[string]string{
 						ConfigMapKeyMinVersion:   "VersionTLS12",
-						ConfigMapKeyCipherSuites: "ECDHE-RSA-AES128-GCM-SHA256,UNKNOWN-CIPHER",
+						ConfigMapKeyCipherSuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,UNKNOWN-CIPHER",
 					},
 				}
 				return fake.NewClientset(cm)
@@ -888,12 +888,12 @@ func TestParseCipherSuites(t *testing.T) {
 		},
 		{
 			name:          "single valid cipher",
-			cipherString:  "ECDHE-RSA-AES128-GCM-SHA256",
+			cipherString:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 			expectedCount: 1,
 		},
 		{
 			name:          "multiple valid ciphers",
-			cipherString:  "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256",
+			cipherString:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 			expectedCount: 2,
 		},
 		{
@@ -904,18 +904,18 @@ func TestParseCipherSuites(t *testing.T) {
 		},
 		{
 			name:                "mixed valid and unsupported",
-			cipherString:        "ECDHE-RSA-AES128-GCM-SHA256,UNKNOWN-CIPHER",
+			cipherString:        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,UNKNOWN-CIPHER",
 			expectedCount:       1,
 			expectedUnsupported: 1,
 		},
 		{
 			name:          "ciphers with whitespace",
-			cipherString:  " ECDHE-RSA-AES128-GCM-SHA256 , ECDHE-ECDSA-AES128-GCM-SHA256 ",
+			cipherString:  " TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 , TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 ",
 			expectedCount: 2,
 		},
 		{
 			name:          "empty entries in list",
-			cipherString:  "ECDHE-RSA-AES128-GCM-SHA256,,ECDHE-ECDSA-AES128-GCM-SHA256",
+			cipherString:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 			expectedCount: 2,
 		},
 	}
@@ -944,7 +944,7 @@ func TestCipherIDToName(t *testing.T) {
 		{
 			name:     "known cipher",
 			id:       tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			expected: "ECDHE-RSA-AES128-GCM-SHA256",
+			expected: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 		},
 		{
 			name:     "unknown cipher",
