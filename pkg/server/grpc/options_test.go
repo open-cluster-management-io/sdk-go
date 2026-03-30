@@ -240,6 +240,125 @@ func TestGRPCServerOptions_Validate_CertWatchInterval(t *testing.T) {
 	}
 }
 
+func TestApplyTLSFlags(t *testing.T) {
+	tests := []struct {
+		name              string
+		minVersion        string
+		cipherSuites      string
+		expectErr         bool
+		errorContains     string
+		expectedMinVer    uint16
+		expectedCiphers   []string
+	}{
+		{
+			name:           "valid min version override",
+			minVersion:     "VersionTLS13",
+			expectedMinVer: tls.VersionTLS13,
+		},
+		{
+			name:           "valid TLSv format",
+			minVersion:     "TLSv1.3",
+			expectedMinVer: tls.VersionTLS13,
+		},
+		{
+			name:            "valid cipher suite override",
+			cipherSuites:    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+			expectedMinVer:  tls.VersionTLS12,
+			expectedCiphers: []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"},
+		},
+		{
+			name:          "invalid min version",
+			minVersion:    "VersionTLS99",
+			expectErr:     true,
+			errorContains: "unknown TLS version",
+		},
+		{
+			name:          "unrecognized cipher name",
+			cipherSuites:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,BOGUS-CIPHER",
+			expectErr:     true,
+			errorContains: "unrecognized cipher suite",
+		},
+		{
+			name:           "both min version and ciphers",
+			minVersion:     "VersionTLS12",
+			cipherSuites:   "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			expectedMinVer: tls.VersionTLS12,
+			expectedCiphers: []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
+		},
+		{
+			name:           "empty strings are no-ops",
+			minVersion:     "",
+			cipherSuites:   "",
+			expectedMinVer: tls.VersionTLS12,
+		},
+		{
+			name:            "flags override config file values",
+			minVersion:      "VersionTLS13",
+			cipherSuites:    "TLS_AES_128_GCM_SHA256",
+			expectedMinVer:  tls.VersionTLS13,
+			expectedCiphers: []string{"TLS_AES_128_GCM_SHA256"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := NewGRPCServerOptions()
+
+			err := opts.ApplyTLSFlags(tt.minVersion, tt.cipherSuites)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Fatalf("expected error but got none")
+				}
+				if tt.errorContains != "" && !contains(err.Error(), tt.errorContains) {
+					t.Errorf("expected error to contain %q, got: %v", tt.errorContains, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if opts.TLSMinVersion != tt.expectedMinVer {
+				t.Errorf("expected TLSMinVersion %d, got %d", tt.expectedMinVer, opts.TLSMinVersion)
+			}
+
+			if len(tt.expectedCiphers) > 0 {
+				if len(opts.CipherSuites) != len(tt.expectedCiphers) {
+					t.Errorf("expected %d cipher suites, got %d", len(tt.expectedCiphers), len(opts.CipherSuites))
+				}
+				if len(opts.cipherSuiteIDs) != len(tt.expectedCiphers) {
+					t.Errorf("expected %d parsed cipher IDs, got %d", len(tt.expectedCiphers), len(opts.cipherSuiteIDs))
+				}
+			}
+		})
+	}
+}
+
+func TestApplyTLSFlags_OverridesConfigFile(t *testing.T) {
+	opts := NewGRPCServerOptions()
+	// Simulate config file values
+	opts.TLSMinVersion = tls.VersionTLS12
+	opts.CipherSuites = []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"}
+
+	// Flags override
+	err := opts.ApplyTLSFlags("VersionTLS13", "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if opts.TLSMinVersion != tls.VersionTLS13 {
+		t.Errorf("expected TLSMinVersion TLS 1.3, got %d", opts.TLSMinVersion)
+	}
+	if len(opts.CipherSuites) != 2 {
+		t.Errorf("expected 2 cipher suites, got %d", len(opts.CipherSuites))
+	}
+	if len(opts.cipherSuiteIDs) != 2 {
+		t.Errorf("expected 2 parsed cipher IDs, got %d", len(opts.cipherSuiteIDs))
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
 		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))

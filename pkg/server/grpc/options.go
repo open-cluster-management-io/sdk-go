@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -115,27 +116,67 @@ func (o *GRPCServerOptions) Validate() error {
 		return fmt.Errorf("cert_watch_interval (%v) must be greater than 30 seconds", o.CertWatchInterval)
 	}
 
-	// Parse cipher suite IANA names into uint16 IDs.
-	if len(o.CipherSuites) > 0 {
-		secure := tls.CipherSuites()
-		insecure := tls.InsecureCipherSuites()
-		ids := make([]uint16, 0, len(o.CipherSuites))
-		for _, name := range o.CipherSuites {
-			if id, ok := findCipherSuiteID(name, secure); ok {
-				ids = append(ids, id)
-				continue
-			}
-			if id, ok := findCipherSuiteID(name, insecure); ok {
-				klog.Warningf("Cipher suite %s is insecure and should not be used in production", name)
-				ids = append(ids, id)
-				continue
-			}
-			return fmt.Errorf("unrecognized cipher suite: %s", name)
-		}
-		o.cipherSuiteIDs = ids
-	}
+	return o.validateCipherSuites()
+}
 
+// ApplyTLSFlags overrides TLS settings loaded from the config file with values
+// from --tls-min-version and --tls-cipher-suites command-line flags.
+// Called after LoadGRPCServerOptions so flags take precedence over the config file.
+func (o *GRPCServerOptions) ApplyTLSFlags(minVersion, cipherSuites string) error {
+	if minVersion != "" {
+		ver, err := parseTLSVersion(minVersion)
+		if err != nil {
+			return fmt.Errorf("invalid --tls-min-version: %w", err)
+		}
+		o.TLSMinVersion = ver
+	}
+	if cipherSuites != "" {
+		o.CipherSuites = strings.Split(cipherSuites, ",")
+		for i := range o.CipherSuites {
+			o.CipherSuites[i] = strings.TrimSpace(o.CipherSuites[i])
+		}
+	}
+	return o.Validate()
+}
+
+// validateCipherSuites parses CipherSuites IANA names into uint16 IDs.
+func (o *GRPCServerOptions) validateCipherSuites() error {
+	if len(o.CipherSuites) == 0 {
+		return nil
+	}
+	secure := tls.CipherSuites()
+	insecure := tls.InsecureCipherSuites()
+	ids := make([]uint16, 0, len(o.CipherSuites))
+	for _, name := range o.CipherSuites {
+		if id, ok := findCipherSuiteID(name, secure); ok {
+			ids = append(ids, id)
+			continue
+		}
+		if id, ok := findCipherSuiteID(name, insecure); ok {
+			klog.Warningf("Cipher suite %s is insecure and should not be used in production", name)
+			ids = append(ids, id)
+			continue
+		}
+		return fmt.Errorf("unrecognized cipher suite: %s", name)
+	}
+	o.cipherSuiteIDs = ids
 	return nil
+}
+
+// parseTLSVersion converts a TLS version string to the corresponding crypto/tls constant.
+func parseTLSVersion(version string) (uint16, error) {
+	switch strings.TrimSpace(version) {
+	case "VersionTLS10", "TLSv1.0":
+		return tls.VersionTLS10, nil
+	case "VersionTLS11", "TLSv1.1":
+		return tls.VersionTLS11, nil
+	case "VersionTLS12", "TLSv1.2":
+		return tls.VersionTLS12, nil
+	case "VersionTLS13", "TLSv1.3":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("unknown TLS version: %s", version)
+	}
 }
 
 func findCipherSuiteID(name string, suites []*tls.CipherSuite) (uint16, bool) {
