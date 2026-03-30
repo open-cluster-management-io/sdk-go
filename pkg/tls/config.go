@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"strings"
+
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -45,11 +47,16 @@ func parseTLSVersion(version string) (uint16, error) {
 }
 
 // parseCipherSuites converts IANA cipher suite names to Go crypto/tls constants.
-// Returns a list of cipher suite IDs and a list of unsupported cipher names.
+// Secure ciphers (tls.CipherSuites) are accepted silently. Insecure ciphers
+// (tls.InsecureCipherSuites) are accepted but logged as a warning.
+// Returns a list of cipher suite IDs and a list of unrecognized cipher names.
 func parseCipherSuites(cipherString string) ([]uint16, []string) {
 	if strings.TrimSpace(cipherString) == "" {
 		return nil, nil
 	}
+
+	secureSuites := tls.CipherSuites()
+	insecureSuites := tls.InsecureCipherSuites()
 
 	cipherNames := strings.Split(cipherString, ",")
 	cipherSuites := make([]uint16, 0, len(cipherNames))
@@ -61,14 +68,29 @@ func parseCipherSuites(cipherString string) ([]uint16, []string) {
 			continue
 		}
 
-		if suite, ok := cipherMap[name]; ok {
-			cipherSuites = append(cipherSuites, suite)
-		} else {
-			unsupported = append(unsupported, name)
+		if id, ok := findCipherID(name, secureSuites); ok {
+			cipherSuites = append(cipherSuites, id)
+			continue
 		}
+		if id, ok := findCipherID(name, insecureSuites); ok {
+			klog.Warningf("Cipher suite %s is insecure and should not be used in production", name)
+			cipherSuites = append(cipherSuites, id)
+			continue
+		}
+		unsupported = append(unsupported, name)
 	}
 
 	return cipherSuites, unsupported
+}
+
+// findCipherID looks up a cipher suite by IANA name in the given list.
+func findCipherID(name string, suites []*tls.CipherSuite) (uint16, bool) {
+	for _, s := range suites {
+		if s.Name == name {
+			return s.ID, true
+		}
+	}
+	return 0, false
 }
 
 // GetDefaultTLSConfig returns a TLS config with safe defaults (TLS 1.2)

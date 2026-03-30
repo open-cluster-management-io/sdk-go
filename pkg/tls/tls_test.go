@@ -918,6 +918,16 @@ func TestParseCipherSuites(t *testing.T) {
 			cipherString:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 			expectedCount: 2,
 		},
+		{
+			name:          "insecure cipher accepted with warning",
+			cipherString:  "TLS_RSA_WITH_AES_128_GCM_SHA256",
+			expectedCount: 1,
+		},
+		{
+			name:          "mix of secure and insecure ciphers",
+			cipherString:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_AES_128_GCM_SHA256",
+			expectedCount: 2,
+		},
 	}
 
 	for _, tc := range cases {
