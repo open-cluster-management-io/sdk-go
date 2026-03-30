@@ -22,6 +22,38 @@ const (
 // defaultMinTLSVersion is the fallback when no TLS profile is configured
 const defaultMinTLSVersion = "VersionTLS12"
 
+// secureCiphersByName maps IANA names → IDs for ciphers in tls.CipherSuites().
+var secureCiphersByName map[string]uint16
+
+// insecureCiphersByName maps IANA names → IDs for ciphers in tls.InsecureCipherSuites().
+var insecureCiphersByName map[string]uint16
+
+// cipherNamesByID maps cipher suite IDs → IANA names for all known ciphers.
+var cipherNamesByID map[uint16]string
+
+func init() {
+	secure := tls.CipherSuites()
+	insecure := tls.InsecureCipherSuites()
+
+	secureCiphersByName = make(map[string]uint16, len(secure))
+	for _, s := range secure {
+		secureCiphersByName[s.Name] = s.ID
+	}
+
+	insecureCiphersByName = make(map[string]uint16, len(insecure))
+	for _, s := range insecure {
+		insecureCiphersByName[s.Name] = s.ID
+	}
+
+	cipherNamesByID = make(map[uint16]string, len(secure)+len(insecure))
+	for _, s := range secure {
+		cipherNamesByID[s.ID] = s.Name
+	}
+	for _, s := range insecure {
+		cipherNamesByID[s.ID] = s.Name
+	}
+}
+
 // TLSConfig represents parsed TLS configuration
 type TLSConfig struct {
 	MinVersion   uint16
@@ -55,9 +87,6 @@ func parseCipherSuites(cipherString string) ([]uint16, []string) {
 		return nil, nil
 	}
 
-	secureSuites := tls.CipherSuites()
-	insecureSuites := tls.InsecureCipherSuites()
-
 	cipherNames := strings.Split(cipherString, ",")
 	cipherSuites := make([]uint16, 0, len(cipherNames))
 	unsupported := make([]string, 0)
@@ -68,11 +97,11 @@ func parseCipherSuites(cipherString string) ([]uint16, []string) {
 			continue
 		}
 
-		if id, ok := findCipherID(name, secureSuites); ok {
+		if id, ok := secureCiphersByName[name]; ok {
 			cipherSuites = append(cipherSuites, id)
 			continue
 		}
-		if id, ok := findCipherID(name, insecureSuites); ok {
+		if id, ok := insecureCiphersByName[name]; ok {
 			klog.Warningf("Cipher suite %s is insecure and should not be used in production", name)
 			cipherSuites = append(cipherSuites, id)
 			continue
@@ -81,16 +110,6 @@ func parseCipherSuites(cipherString string) ([]uint16, []string) {
 	}
 
 	return cipherSuites, unsupported
-}
-
-// findCipherID looks up a cipher suite by IANA name in the given list.
-func findCipherID(name string, suites []*tls.CipherSuite) (uint16, bool) {
-	for _, s := range suites {
-		if s.Name == name {
-			return s.ID, true
-		}
-	}
-	return 0, false
 }
 
 // GetDefaultTLSConfig returns a TLS config with safe defaults (TLS 1.2)
@@ -184,10 +203,5 @@ func ConfigToFunc(tlsCfg *TLSConfig) func(*tls.Config) {
 
 // cipherIDToName converts a cipher suite ID to its IANA name.
 func cipherIDToName(id uint16) string {
-	for _, s := range append(tls.CipherSuites(), tls.InsecureCipherSuites()...) {
-		if s.ID == id {
-			return s.Name
-		}
-	}
-	return ""
+	return cipherNamesByID[id]
 }
