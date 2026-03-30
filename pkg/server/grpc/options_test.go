@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestLoadGRPCServerOptions(t *testing.T) {
@@ -173,12 +174,12 @@ connection_timeout: 90s
 				t.Fatalf("Unexpected error: %v", err)
 			}
 
-			if !cmp.Equal(opts, tc.expectedOpts) {
+			if !cmp.Equal(opts, tc.expectedOpts, cmpopts.IgnoreUnexported(GRPCServerOptions{})) {
 				t.Errorf("Loaded options do not match expected options.\nGot: %+v\nWant:%+v", opts, tc.expectedOpts)
 			}
 
 			if tc.checkDefaults {
-				if !cmp.Equal(opts, defaultOpts) {
+				if !cmp.Equal(opts, defaultOpts, cmpopts.IgnoreUnexported(GRPCServerOptions{})) {
 					t.Errorf("Expected default options, but got different values.\nGot: %+v\nWant:%+v", opts, defaultOpts)
 				}
 			}

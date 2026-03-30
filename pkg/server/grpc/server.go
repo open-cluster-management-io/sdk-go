@@ -110,6 +110,11 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 		MaxVersion:     b.options.TLSMaxVersion,
 	}
 
+	// TLS 1.3 cipher suites are not configurable in Go — only set for TLS 1.2 and below.
+	if len(b.options.cipherSuiteIDs) > 0 && b.options.TLSMinVersion < tls.VersionTLS13 {
+		tlsConfig.CipherSuites = b.options.cipherSuiteIDs
+	}
+
 	if b.options.ClientCAFile != "" {
 		certPool := x509.NewCertPool()
 		caPEM, err := os.ReadFile(b.options.ClientCAFile)

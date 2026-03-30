@@ -18,6 +18,7 @@ type GRPCServerOptions struct {
 	ClientCAFile            string        `json:"client_ca_file" yaml:"client_ca_file"`
 	TLSMinVersion           uint16        `json:"tls_min_version" yaml:"tls_min_version"`
 	TLSMaxVersion           uint16        `json:"tls_max_version" yaml:"tls_max_version"`
+	CipherSuites            []string      `json:"cipher_suites" yaml:"cipher_suites"`
 	ServerBindPort          string        `json:"server_bind_port" yaml:"server_bind_port"`
 	MaxConcurrentStreams    uint32        `json:"max_concurrent_streams" yaml:"max_concurrent_streams"`
 	MaxReceiveMessageSize   int           `json:"max_receive_message_size" yaml:"max_receive_message_size"`
@@ -31,6 +32,9 @@ type GRPCServerOptions struct {
 	ServerPingTimeout       time.Duration `json:"server_ping_timeout" yaml:"server_ping_timeout"`
 	PermitPingWithoutStream bool          `json:"permit_ping_without_stream" yaml:"permit_ping_without_stream"`
 	CertWatchInterval       time.Duration `json:"cert_watch_interval" yaml:"cert_watch_interval"`
+
+	// cipherSuiteIDs holds the parsed uint16 IDs from CipherSuites, populated by Validate().
+	cipherSuiteIDs []uint16
 }
 
 func LoadGRPCServerOptions(configPath string) (*GRPCServerOptions, error) {
@@ -110,5 +114,35 @@ func (o *GRPCServerOptions) Validate() error {
 	if o.CertWatchInterval <= 30*time.Second {
 		return fmt.Errorf("cert_watch_interval (%v) must be greater than 30 seconds", o.CertWatchInterval)
 	}
+
+	// Parse cipher suite IANA names into uint16 IDs.
+	if len(o.CipherSuites) > 0 {
+		secure := tls.CipherSuites()
+		insecure := tls.InsecureCipherSuites()
+		ids := make([]uint16, 0, len(o.CipherSuites))
+		for _, name := range o.CipherSuites {
+			if id, ok := findCipherSuiteID(name, secure); ok {
+				ids = append(ids, id)
+				continue
+			}
+			if id, ok := findCipherSuiteID(name, insecure); ok {
+				klog.Warningf("Cipher suite %s is insecure and should not be used in production", name)
+				ids = append(ids, id)
+				continue
+			}
+			return fmt.Errorf("unrecognized cipher suite: %s", name)
+		}
+		o.cipherSuiteIDs = ids
+	}
+
 	return nil
+}
+
+func findCipherSuiteID(name string, suites []*tls.CipherSuite) (uint16, bool) {
+	for _, s := range suites {
+		if s.Name == name {
+			return s.ID, true
+		}
+	}
+	return 0, false
 }
