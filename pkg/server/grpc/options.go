@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
+
+	pkgtls "open-cluster-management.io/sdk-go/pkg/tls"
 )
 
 type GRPCServerOptions struct {
@@ -124,7 +126,7 @@ func (o *GRPCServerOptions) Validate() error {
 // Called after LoadGRPCServerOptions so flags take precedence over the config file.
 func (o *GRPCServerOptions) ApplyTLSFlags(minVersion, cipherSuites string) error {
 	if minVersion != "" {
-		ver, err := parseTLSVersion(minVersion)
+		ver, err := pkgtls.ParseTLSVersion(minVersion)
 		if err != nil {
 			return fmt.Errorf("invalid --tls-min-version: %w", err)
 		}
@@ -139,51 +141,17 @@ func (o *GRPCServerOptions) ApplyTLSFlags(minVersion, cipherSuites string) error
 	return o.Validate()
 }
 
-// validateCipherSuites parses CipherSuites IANA names into uint16 IDs.
+// validateCipherSuites parses CipherSuites IANA names into uint16 IDs
+// using the shared pkg/tls parsing utilities.
 func (o *GRPCServerOptions) validateCipherSuites() error {
 	if len(o.CipherSuites) == 0 {
 		return nil
 	}
-	secure := tls.CipherSuites()
-	insecure := tls.InsecureCipherSuites()
-	ids := make([]uint16, 0, len(o.CipherSuites))
-	for _, name := range o.CipherSuites {
-		if id, ok := findCipherSuiteID(name, secure); ok {
-			ids = append(ids, id)
-			continue
-		}
-		if id, ok := findCipherSuiteID(name, insecure); ok {
-			klog.Warningf("Cipher suite %s is insecure and should not be used in production", name)
-			ids = append(ids, id)
-			continue
-		}
-		return fmt.Errorf("unrecognized cipher suite: %s", name)
+	cipherString := strings.Join(o.CipherSuites, ",")
+	ids, unsupported := pkgtls.ParseCipherSuites(cipherString)
+	if len(unsupported) > 0 {
+		return fmt.Errorf("unrecognized cipher suite: %s", unsupported[0])
 	}
 	o.cipherSuiteIDs = ids
 	return nil
-}
-
-// parseTLSVersion converts a TLS version string to the corresponding crypto/tls constant.
-func parseTLSVersion(version string) (uint16, error) {
-	switch strings.TrimSpace(version) {
-	case "VersionTLS10", "TLSv1.0":
-		return tls.VersionTLS10, nil
-	case "VersionTLS11", "TLSv1.1":
-		return tls.VersionTLS11, nil
-	case "VersionTLS12", "TLSv1.2":
-		return tls.VersionTLS12, nil
-	case "VersionTLS13", "TLSv1.3":
-		return tls.VersionTLS13, nil
-	default:
-		return 0, fmt.Errorf("unknown TLS version: %s", version)
-	}
-}
-
-func findCipherSuiteID(name string, suites []*tls.CipherSuite) (uint16, bool) {
-	for _, s := range suites {
-		if s.Name == name {
-			return s.ID, true
-		}
-	}
-	return 0, false
 }

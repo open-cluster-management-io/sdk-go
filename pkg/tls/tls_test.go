@@ -848,7 +848,7 @@ func TestParseTLSVersion(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := parseTLSVersion(tc.version)
+			result, err := ParseTLSVersion(tc.version)
 
 			if tc.expectError {
 				if err == nil {
@@ -932,7 +932,7 @@ func TestParseCipherSuites(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			suites, unsupported := parseCipherSuites(tc.cipherString)
+			suites, unsupported := ParseCipherSuites(tc.cipherString)
 
 			if len(suites) != tc.expectedCount {
 				t.Errorf("expected %d cipher suites, got %d", tc.expectedCount, len(suites))

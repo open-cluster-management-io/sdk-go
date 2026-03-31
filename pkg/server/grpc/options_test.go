@@ -242,13 +242,13 @@ func TestGRPCServerOptions_Validate_CertWatchInterval(t *testing.T) {
 
 func TestApplyTLSFlags(t *testing.T) {
 	tests := []struct {
-		name              string
-		minVersion        string
-		cipherSuites      string
-		expectErr         bool
-		errorContains     string
-		expectedMinVer    uint16
-		expectedCiphers   []string
+		name            string
+		minVersion      string
+		cipherSuites    string
+		expectErr       bool
+		errorContains   string
+		expectedMinVer  uint16
+		expectedCiphers []string
 	}{
 		{
 			name:           "valid min version override",
@@ -279,10 +279,10 @@ func TestApplyTLSFlags(t *testing.T) {
 			errorContains: "unrecognized cipher suite",
 		},
 		{
-			name:           "both min version and ciphers",
-			minVersion:     "VersionTLS12",
-			cipherSuites:   "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-			expectedMinVer: tls.VersionTLS12,
+			name:            "both min version and ciphers",
+			minVersion:      "VersionTLS12",
+			cipherSuites:    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			expectedMinVer:  tls.VersionTLS12,
 			expectedCiphers: []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
 		},
 		{
@@ -293,10 +293,10 @@ func TestApplyTLSFlags(t *testing.T) {
 		},
 		{
 			name:            "flags override config file values",
-			minVersion:      "VersionTLS13",
-			cipherSuites:    "TLS_AES_128_GCM_SHA256",
-			expectedMinVer:  tls.VersionTLS13,
-			expectedCiphers: []string{"TLS_AES_128_GCM_SHA256"},
+			minVersion:      "VersionTLS12",
+			cipherSuites:    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+			expectedMinVer:  tls.VersionTLS12,
+			expectedCiphers: []string{"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"},
 		},
 	}
 
@@ -343,7 +343,8 @@ func TestApplyTLSFlags_OverridesConfigFile(t *testing.T) {
 	opts.CipherSuites = []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"}
 
 	// Flags override
-	err := opts.ApplyTLSFlags("VersionTLS13", "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384")
+	err := opts.ApplyTLSFlags("VersionTLS13",
+		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
