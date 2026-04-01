@@ -67,6 +67,10 @@ func (b *GRPCServer) WithStreamAuthorizer(authorizer authz.StreamAuthorizer) *GR
 }
 
 func (b *GRPCServer) Run(ctx context.Context) error {
+	if err := b.options.Validate(); err != nil {
+		return err
+	}
+
 	var grpcServerOptions []grpc.ServerOption
 	grpcServerOptions = append(grpcServerOptions, grpc.MaxRecvMsgSize(b.options.MaxReceiveMessageSize))
 	grpcServerOptions = append(grpcServerOptions, grpc.MaxSendMsgSize(b.options.MaxSendMessageSize))

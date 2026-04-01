@@ -242,13 +242,13 @@ func TestGRPCServerOptions_Validate_CertWatchInterval(t *testing.T) {
 
 func TestApplyTLSFlags(t *testing.T) {
 	tests := []struct {
-		name            string
-		minVersion      string
-		cipherSuites    string
-		expectErr       bool
-		errorContains   string
-		expectedMinVer  uint16
-		expectedCiphers []string
+		name                string
+		minVersion          string
+		cipherSuites        string
+		expectErr           bool
+		errorContains       string
+		expectedMinVer      uint16
+		expectedCipherCount int
 	}{
 		{
 			name:           "valid min version override",
@@ -261,10 +261,10 @@ func TestApplyTLSFlags(t *testing.T) {
 			expectedMinVer: tls.VersionTLS13,
 		},
 		{
-			name:            "valid cipher suite override",
-			cipherSuites:    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-			expectedMinVer:  tls.VersionTLS12,
-			expectedCiphers: []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"},
+			name:                "valid cipher suite override",
+			cipherSuites:        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+			expectedMinVer:      tls.VersionTLS12,
+			expectedCipherCount: 2,
 		},
 		{
 			name:          "invalid min version",
@@ -279,11 +279,11 @@ func TestApplyTLSFlags(t *testing.T) {
 			errorContains: "unrecognized cipher suite",
 		},
 		{
-			name:            "both min version and ciphers",
-			minVersion:      "VersionTLS12",
-			cipherSuites:    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-			expectedMinVer:  tls.VersionTLS12,
-			expectedCiphers: []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
+			name:                "both min version and ciphers",
+			minVersion:          "VersionTLS12",
+			cipherSuites:        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			expectedMinVer:      tls.VersionTLS12,
+			expectedCipherCount: 1,
 		},
 		{
 			name:           "empty strings are no-ops",
@@ -292,11 +292,11 @@ func TestApplyTLSFlags(t *testing.T) {
 			expectedMinVer: tls.VersionTLS12,
 		},
 		{
-			name:            "flags override config file values",
-			minVersion:      "VersionTLS12",
-			cipherSuites:    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-			expectedMinVer:  tls.VersionTLS12,
-			expectedCiphers: []string{"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"},
+			name:                "flags override config file values",
+			minVersion:          "VersionTLS12",
+			cipherSuites:        "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+			expectedMinVer:      tls.VersionTLS12,
+			expectedCipherCount: 1,
 		},
 	}
 
@@ -324,12 +324,9 @@ func TestApplyTLSFlags(t *testing.T) {
 				t.Errorf("expected TLSMinVersion %d, got %d", tt.expectedMinVer, opts.TLSMinVersion)
 			}
 
-			if len(tt.expectedCiphers) > 0 {
-				if len(opts.CipherSuites) != len(tt.expectedCiphers) {
-					t.Errorf("expected %d cipher suites, got %d", len(tt.expectedCiphers), len(opts.CipherSuites))
-				}
-				if len(opts.cipherSuiteIDs) != len(tt.expectedCiphers) {
-					t.Errorf("expected %d parsed cipher IDs, got %d", len(tt.expectedCiphers), len(opts.cipherSuiteIDs))
+			if tt.expectedCipherCount > 0 {
+				if len(opts.cipherSuiteIDs) != tt.expectedCipherCount {
+					t.Errorf("expected %d parsed cipher IDs, got %d", tt.expectedCipherCount, len(opts.cipherSuiteIDs))
 				}
 			}
 		})
@@ -340,7 +337,7 @@ func TestApplyTLSFlags_OverridesConfigFile(t *testing.T) {
 	opts := NewGRPCServerOptions()
 	// Simulate config file values
 	opts.TLSMinVersion = tls.VersionTLS12
-	opts.CipherSuites = []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"}
+	opts.CipherSuites = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
 
 	// Flags override
 	err := opts.ApplyTLSFlags("VersionTLS13",
@@ -351,9 +348,6 @@ func TestApplyTLSFlags_OverridesConfigFile(t *testing.T) {
 
 	if opts.TLSMinVersion != tls.VersionTLS13 {
 		t.Errorf("expected TLSMinVersion TLS 1.3, got %d", opts.TLSMinVersion)
-	}
-	if len(opts.CipherSuites) != 2 {
-		t.Errorf("expected 2 cipher suites, got %d", len(opts.CipherSuites))
 	}
 	if len(opts.cipherSuiteIDs) != 2 {
 		t.Errorf("expected 2 parsed cipher IDs, got %d", len(opts.cipherSuiteIDs))

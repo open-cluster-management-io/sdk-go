@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -21,7 +20,7 @@ type GRPCServerOptions struct {
 	ClientCAFile            string        `json:"client_ca_file" yaml:"client_ca_file"`
 	TLSMinVersion           uint16        `json:"tls_min_version" yaml:"tls_min_version"`
 	TLSMaxVersion           uint16        `json:"tls_max_version" yaml:"tls_max_version"`
-	CipherSuites            []string      `json:"cipher_suites" yaml:"cipher_suites"`
+	CipherSuites            string        `json:"cipher_suites" yaml:"cipher_suites"`
 	ServerBindPort          string        `json:"server_bind_port" yaml:"server_bind_port"`
 	MaxConcurrentStreams    uint32        `json:"max_concurrent_streams" yaml:"max_concurrent_streams"`
 	MaxReceiveMessageSize   int           `json:"max_receive_message_size" yaml:"max_receive_message_size"`
@@ -118,7 +117,7 @@ func (o *GRPCServerOptions) Validate() error {
 		return fmt.Errorf("cert_watch_interval (%v) must be greater than 30 seconds", o.CertWatchInterval)
 	}
 
-	return o.validateCipherSuites()
+	return o.parseCipherSuiteIDs()
 }
 
 // ApplyTLSFlags overrides TLS settings loaded from the config file with values
@@ -133,22 +132,18 @@ func (o *GRPCServerOptions) ApplyTLSFlags(minVersion, cipherSuites string) error
 		o.TLSMinVersion = ver
 	}
 	if cipherSuites != "" {
-		o.CipherSuites = strings.Split(cipherSuites, ",")
-		for i := range o.CipherSuites {
-			o.CipherSuites[i] = strings.TrimSpace(o.CipherSuites[i])
-		}
+		o.CipherSuites = cipherSuites
 	}
 	return o.Validate()
 }
 
-// validateCipherSuites parses CipherSuites IANA names into uint16 IDs
+// parseCipherSuiteIDs converts the CipherSuites IANA names into uint16 IDs
 // using the shared pkg/tls parsing utilities.
-func (o *GRPCServerOptions) validateCipherSuites() error {
-	if len(o.CipherSuites) == 0 {
+func (o *GRPCServerOptions) parseCipherSuiteIDs() error {
+	if o.CipherSuites == "" {
 		return nil
 	}
-	cipherString := strings.Join(o.CipherSuites, ",")
-	ids, unsupported := pkgtls.ParseCipherSuites(cipherString)
+	ids, unsupported := pkgtls.ParseCipherSuites(o.CipherSuites)
 	if len(unsupported) > 0 {
 		return fmt.Errorf("unrecognized cipher suite: %s", unsupported[0])
 	}
