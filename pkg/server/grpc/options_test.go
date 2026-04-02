@@ -56,8 +56,8 @@ cert_watch_interval: 60s
 				TLSCertFile:             "/test/tls.crt",
 				TLSKeyFile:              "/test/tls.key",
 				ClientCAFile:            "/test/ca.crt",
-				TLSMinVersion:           tls.VersionTLS12,
-				TLSMaxVersion:           tls.VersionTLS13,
+				TLSMinVersion:           "VersionTLS12",
+				TLSMaxVersion:           "VersionTLS13",
 				ServerBindPort:          "9999",
 				MaxConcurrentStreams:    100,
 				MaxReceiveMessageSize:   2048,
@@ -320,8 +320,8 @@ func TestApplyTLSFlags(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if opts.TLSMinVersion != tt.expectedMinVer {
-				t.Errorf("expected TLSMinVersion %d, got %d", tt.expectedMinVer, opts.TLSMinVersion)
+			if opts.tlsMinVersion != tt.expectedMinVer {
+				t.Errorf("expected TLSMinVersion %d, got %d", tt.expectedMinVer, opts.tlsMinVersion)
 			}
 
 			if tt.expectedCipherCount > 0 {
@@ -336,7 +336,7 @@ func TestApplyTLSFlags(t *testing.T) {
 func TestApplyTLSFlags_OverridesConfigFile(t *testing.T) {
 	opts := NewGRPCServerOptions()
 	// Simulate config file values
-	opts.TLSMinVersion = tls.VersionTLS12
+	opts.TLSMinVersion = "VersionTLS12"
 	opts.CipherSuites = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
 
 	// Flags override
@@ -346,8 +346,8 @@ func TestApplyTLSFlags_OverridesConfigFile(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if opts.TLSMinVersion != tls.VersionTLS13 {
-		t.Errorf("expected TLSMinVersion TLS 1.3, got %d", opts.TLSMinVersion)
+	if opts.tlsMinVersion != tls.VersionTLS13 {
+		t.Errorf("expected TLSMinVersion TLS 1.3, got %d", opts.tlsMinVersion)
 	}
 	if len(opts.cipherSuiteIDs) != 2 {
 		t.Errorf("expected 2 parsed cipher IDs, got %d", len(opts.cipherSuiteIDs))
