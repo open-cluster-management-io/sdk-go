@@ -67,6 +67,10 @@ func (b *GRPCServer) WithStreamAuthorizer(authorizer authz.StreamAuthorizer) *GR
 }
 
 func (b *GRPCServer) Run(ctx context.Context) error {
+	if err := b.options.Validate(); err != nil {
+		return err
+	}
+
 	var grpcServerOptions []grpc.ServerOption
 	grpcServerOptions = append(grpcServerOptions, grpc.MaxRecvMsgSize(b.options.MaxReceiveMessageSize))
 	grpcServerOptions = append(grpcServerOptions, grpc.MaxSendMsgSize(b.options.MaxSendMessageSize))
@@ -108,6 +112,11 @@ func (b *GRPCServer) Run(ctx context.Context) error {
 		GetCertificate: certWatcher.GetCertificate,
 		MinVersion:     b.options.TLSMinVersion,
 		MaxVersion:     b.options.TLSMaxVersion,
+	}
+
+	// TLS 1.3 cipher suites are not configurable in Go — only set for TLS 1.2 and below.
+	if len(b.options.cipherSuiteIDs) > 0 && b.options.TLSMinVersion < tls.VersionTLS13 {
+		tlsConfig.CipherSuites = b.options.cipherSuiteIDs
 	}
 
 	if b.options.ClientCAFile != "" {

@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
+
+	pkgtls "open-cluster-management.io/sdk-go/pkg/tls"
 )
 
 type GRPCServerOptions struct {
@@ -18,6 +20,7 @@ type GRPCServerOptions struct {
 	ClientCAFile            string        `json:"client_ca_file" yaml:"client_ca_file"`
 	TLSMinVersion           uint16        `json:"tls_min_version" yaml:"tls_min_version"`
 	TLSMaxVersion           uint16        `json:"tls_max_version" yaml:"tls_max_version"`
+	CipherSuites            string        `json:"cipher_suites" yaml:"cipher_suites"`
 	ServerBindPort          string        `json:"server_bind_port" yaml:"server_bind_port"`
 	MaxConcurrentStreams    uint32        `json:"max_concurrent_streams" yaml:"max_concurrent_streams"`
 	MaxReceiveMessageSize   int           `json:"max_receive_message_size" yaml:"max_receive_message_size"`
@@ -31,6 +34,9 @@ type GRPCServerOptions struct {
 	ServerPingTimeout       time.Duration `json:"server_ping_timeout" yaml:"server_ping_timeout"`
 	PermitPingWithoutStream bool          `json:"permit_ping_without_stream" yaml:"permit_ping_without_stream"`
 	CertWatchInterval       time.Duration `json:"cert_watch_interval" yaml:"cert_watch_interval"`
+
+	// cipherSuiteIDs holds the parsed uint16 IDs from CipherSuites, populated by Validate().
+	cipherSuiteIDs []uint16
 }
 
 func LoadGRPCServerOptions(configPath string) (*GRPCServerOptions, error) {
@@ -110,5 +116,37 @@ func (o *GRPCServerOptions) Validate() error {
 	if o.CertWatchInterval <= 30*time.Second {
 		return fmt.Errorf("cert_watch_interval (%v) must be greater than 30 seconds", o.CertWatchInterval)
 	}
+
+	return o.parseCipherSuiteIDs()
+}
+
+// ApplyTLSFlags overrides TLS settings loaded from the config file with values
+// from --tls-min-version and --tls-cipher-suites command-line flags.
+// Called after LoadGRPCServerOptions so flags take precedence over the config file.
+func (o *GRPCServerOptions) ApplyTLSFlags(minVersion, cipherSuites string) error {
+	if minVersion != "" {
+		ver, err := pkgtls.ParseTLSVersion(minVersion)
+		if err != nil {
+			return fmt.Errorf("invalid --tls-min-version: %w", err)
+		}
+		o.TLSMinVersion = ver
+	}
+	if cipherSuites != "" {
+		o.CipherSuites = cipherSuites
+	}
+	return o.Validate()
+}
+
+// parseCipherSuiteIDs converts the CipherSuites IANA names into uint16 IDs
+// using the shared pkg/tls parsing utilities.
+func (o *GRPCServerOptions) parseCipherSuiteIDs() error {
+	if o.CipherSuites == "" {
+		return nil
+	}
+	ids, unsupported := pkgtls.ParseCipherSuites(o.CipherSuites)
+	if len(unsupported) > 0 {
+		return fmt.Errorf("unrecognized cipher suite: %s", unsupported[0])
+	}
+	o.cipherSuiteIDs = ids
 	return nil
 }
