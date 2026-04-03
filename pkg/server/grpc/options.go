@@ -18,8 +18,8 @@ type GRPCServerOptions struct {
 	TLSCertFile             string        `json:"tls_cert_file" yaml:"tls_cert_file"`
 	TLSKeyFile              string        `json:"tls_key_file" yaml:"tls_key_file"`
 	ClientCAFile            string        `json:"client_ca_file" yaml:"client_ca_file"`
-	TLSMinVersion           uint16        `json:"tls_min_version" yaml:"tls_min_version"`
-	TLSMaxVersion           uint16        `json:"tls_max_version" yaml:"tls_max_version"`
+	TLSMinVersion           string        `json:"tls_min_version" yaml:"tls_min_version"`
+	TLSMaxVersion           string        `json:"tls_max_version" yaml:"tls_max_version"`
 	CipherSuites            string        `json:"cipher_suites" yaml:"cipher_suites"`
 	ServerBindPort          string        `json:"server_bind_port" yaml:"server_bind_port"`
 	MaxConcurrentStreams    uint32        `json:"max_concurrent_streams" yaml:"max_concurrent_streams"`
@@ -35,7 +35,9 @@ type GRPCServerOptions struct {
 	PermitPingWithoutStream bool          `json:"permit_ping_without_stream" yaml:"permit_ping_without_stream"`
 	CertWatchInterval       time.Duration `json:"cert_watch_interval" yaml:"cert_watch_interval"`
 
-	// cipherSuiteIDs holds the parsed uint16 IDs from CipherSuites, populated by Validate().
+	// Parsed TLS settings, populated by Validate().
+	tlsMinVersion  uint16
+	tlsMaxVersion  uint16
 	cipherSuiteIDs []uint16
 }
 
@@ -67,8 +69,8 @@ func NewGRPCServerOptions() *GRPCServerOptions {
 		ClientCAFile:          "/var/run/secrets/hub/grpc/ca/ca-bundle.crt",
 		TLSCertFile:           "/var/run/secrets/hub/grpc/serving-cert/tls.crt",
 		TLSKeyFile:            "/var/run/secrets/hub/grpc/serving-cert/tls.key",
-		TLSMinVersion:         tls.VersionTLS12,
-		TLSMaxVersion:         tls.VersionTLS13,
+		TLSMinVersion:         "VersionTLS12",
+		TLSMaxVersion:         "VersionTLS13",
 		ServerBindPort:        "8090",
 		MaxConcurrentStreams:  math.MaxUint32,
 		MaxReceiveMessageSize: 1024 * 1024 * 4,
@@ -105,13 +107,22 @@ func (o *GRPCServerOptions) AddFlags(flags *pflag.FlagSet) {
 
 // Validate checks option ranges and cross-field constraints.
 func (o *GRPCServerOptions) Validate() error {
-	// Enforce sane floor for TLS for security posture.
-	if o.TLSMinVersion < tls.VersionTLS12 {
-		return fmt.Errorf("tls_min_version (%d) is lower than TLS 1.2 (771); minimum supported is TLS 1.2", o.TLSMinVersion)
+	minVer, err := pkgtls.ParseTLSVersion(o.TLSMinVersion)
+	if err != nil {
+		return fmt.Errorf("invalid tls_min_version %q: %w", o.TLSMinVersion, err)
 	}
-	if o.TLSMinVersion > o.TLSMaxVersion {
-		return fmt.Errorf("tls_min_version (%d) must be <= tls_max_version (%d)", o.TLSMinVersion, o.TLSMaxVersion)
+	maxVer, err := pkgtls.ParseTLSVersion(o.TLSMaxVersion)
+	if err != nil {
+		return fmt.Errorf("invalid tls_max_version %q: %w", o.TLSMaxVersion, err)
 	}
+	if minVer < tls.VersionTLS12 {
+		return fmt.Errorf("tls_min_version %q is lower than TLS 1.2; minimum supported is TLS 1.2", o.TLSMinVersion)
+	}
+	if minVer > maxVer {
+		return fmt.Errorf("tls_min_version %q must be <= tls_max_version %q", o.TLSMinVersion, o.TLSMaxVersion)
+	}
+	o.tlsMinVersion = minVer
+	o.tlsMaxVersion = maxVer
 	// Validate certificate watch interval to prevent time.NewTicker panic
 	if o.CertWatchInterval <= 30*time.Second {
 		return fmt.Errorf("cert_watch_interval (%v) must be greater than 30 seconds", o.CertWatchInterval)
@@ -125,11 +136,7 @@ func (o *GRPCServerOptions) Validate() error {
 // Called after LoadGRPCServerOptions so flags take precedence over the config file.
 func (o *GRPCServerOptions) ApplyTLSFlags(minVersion, cipherSuites string) error {
 	if minVersion != "" {
-		ver, err := pkgtls.ParseTLSVersion(minVersion)
-		if err != nil {
-			return fmt.Errorf("invalid --tls-min-version: %w", err)
-		}
-		o.TLSMinVersion = ver
+		o.TLSMinVersion = minVersion
 	}
 	if cipherSuites != "" {
 		o.CipherSuites = cipherSuites
