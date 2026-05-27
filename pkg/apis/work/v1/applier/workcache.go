@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	workapiv1 "open-cluster-management.io/api/work/v1"
@@ -20,6 +21,7 @@ type workKey struct {
 type cachedResource struct {
 	resourceHash string
 	generation   int64
+	metadataHash string
 }
 
 type workCache struct {
@@ -48,6 +50,7 @@ func (w *workCache) updateCache(required, existing *workapiv1.ManifestWork) {
 	value := cachedResource{
 		resourceHash: hashOfResourceStruct(required),
 		generation:   existing.Generation,
+		metadataHash: hashOfMetadata(required),
 	}
 
 	w.cache[key] = value
@@ -79,12 +82,11 @@ func (w *workCache) safeToSkipApply(required, existing *workapiv1.ManifestWork) 
 	generation := existing.Generation
 	w.mutex.RLock()
 	defer w.mutex.RUnlock()
-	var generationMatch, hashMatch bool
+	metadataHash := hashOfMetadata(existing)
+
 	if cached, exists := w.cache[cacheKey]; exists {
-		generationMatch = cached.generation == generation
-		hashMatch = cached.resourceHash == resourceHash
-		if generationMatch && hashMatch {
-			klog.V(4).Infof("found matching generation & manifest hash")
+		if cached.generation == generation && cached.resourceHash == resourceHash && cached.metadataHash == metadataHash {
+			klog.V(4).Infof("found matching generation, manifest hash & metadata hash")
 			return true
 		}
 	}
@@ -100,4 +102,17 @@ func hashOfResourceStruct(o interface{}) string {
 	}
 	rval := fmt.Sprintf("%x", h.Sum(nil))
 	return rval
+}
+
+func hashOfMetadata(work *workapiv1.ManifestWork) string {
+	meta := struct {
+		Labels          map[string]string
+		Annotations     map[string]string
+		OwnerReferences []metav1.OwnerReference
+	}{
+		Labels:          work.Labels,
+		Annotations:     work.Annotations,
+		OwnerReferences: work.OwnerReferences,
+	}
+	return hashOfResourceStruct(meta)
 }
