@@ -55,7 +55,8 @@ The script reads the Go version from `go.mod` and selects the correct golangci-l
 
 | Go Version | golangci-lint Version | Config File |
 |------------|----------------------|-------------|
-| Go 1.24+ | v2.8.0 | `golangci-v2.yml` |
+| Go 1.26+ | v2.12.2 | `golangci-v2.yml` |
+| Go 1.24-1.25 | v2.8.0 | `golangci-v2.yml` |
 | Go 1.23 | v2.3.1 | `golangci-v2.yml` |
 
 ---

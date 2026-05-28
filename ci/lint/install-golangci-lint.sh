@@ -36,6 +36,7 @@ fi
 # Reference: https://github.com/golangci/golangci-lint/issues/5032
 #
 # Compatibility table (all projects require Go 1.23+):
+#   Go 1.26+  -> golangci-lint v2.12.2 (built with Go 1.26.2)
 #   Go 1.24+  -> golangci-lint v2.8.0
 #   Go 1.23   -> golangci-lint v2.3.1 (last v2 supporting Go 1.23)
 ###############################################################################
@@ -79,7 +80,10 @@ select_compatible_version() {
 
     # Select compatible version based on Go version
     # All projects require Go 1.23+
-    if [[ "${go_ver_num}" -ge 124 ]]; then
+    if [[ "${go_ver_num}" -ge 126 ]]; then
+        # v2.12.2 is built with Go 1.26.2 and supports Go 1.26+
+        echo "v2.12.2"
+    elif [[ "${go_ver_num}" -ge 124 ]]; then
         echo "v2.8.0"
     elif [[ "${go_ver_num}" -ge 123 ]]; then
         # v2.3.1 is the last v2 release supporting Go 1.23
