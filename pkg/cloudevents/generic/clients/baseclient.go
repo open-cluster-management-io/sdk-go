@@ -292,7 +292,7 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 						receiverCtx, receiverCancel = context.WithCancel(ctx)
 						// Set flag before spawning goroutine to prevent race condition
 						startReceiving = true
-						go func() {
+						go func(receiverCtx context.Context) {
 							if err := c.transport.Receive(receiverCtx, func(handlerCtx context.Context, evt cloudevents.Event) {
 								receiveLogger := logging.SetLogTracingByCloudEvent(klog.FromContext(handlerCtx), &evt)
 								handlerCtx = klog.NewContext(handlerCtx, receiveLogger)
@@ -307,7 +307,44 @@ func (c *baseClient) subscribe(ctx context.Context, receive receiveFn) {
 							}); err != nil {
 								runtime.HandleErrorWithContext(ctx, err, "failed to receive cloudevents")
 							}
-						}()
+
+							// If the parent context is canceled, the client is shutting down.
+							if ctx.Err() != nil {
+								return
+							}
+							// If the receiver context was canceled by stopReceiverSignal, the
+							// connection monitor goroutine owns recovery (it will reconnect and
+							// re-trigger subscribeChan); nothing to do here.
+							if receiverCtx.Err() != nil {
+								return
+							}
+							// Receive returned spontaneously (e.g. transient gRPC Canceled /
+							// Unavailable on the inbound subscribe stream) while the parent
+							// context is still alive and the transport-level ErrorChan never
+							// fired. Without this branch, startReceiving stays true, no future
+							// startReceiverSignal can respawn the receiver, and bundle status
+							// updates are silently dropped until the pod restarts.
+							//
+							// Recover by sending stopReceiverSignal (clears startReceiving and
+							// cancels the now-dead receiver context) and re-triggering the
+							// subscribe goroutine, which will retry Subscribe with backoff and
+							// emit a fresh startReceiverSignal on success.
+							logger.V(2).Info("cloudevents receiver exited unexpectedly, triggering resubscribe")
+							select {
+							case c.receiverChan <- stopReceiverSignal:
+								// Signal sent successfully
+							default:
+								// Receiver channel is unavailable, that's okay - don't block
+								logger.V(2).Info("stopReceiverSignal not sent, receiver channel unavailable")
+							}
+							select {
+							case c.subscribeChan <- struct{}{}:
+								// Signal sent successfully
+							default:
+								// Subscribe channel is unavailable, that's okay - don't block
+								logger.V(2).Info("subscribe signal not sent, subscribe channel is unavailable")
+							}
+						}(receiverCtx)
 					}
 				case stopReceiverSignal:
 					logger.V(2).Info("stop the cloudevents receiver")
