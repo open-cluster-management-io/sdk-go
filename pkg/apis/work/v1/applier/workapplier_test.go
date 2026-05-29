@@ -175,6 +175,38 @@ func TestWorkApplierWithTypedClient(t *testing.T) {
 	}
 	assertActions(t, fakeWorkClient.Actions(), "patch")
 
+	assertExternalMetadataChangeDetected := func(description string, tamper func(*workapiv1.ManifestWork)) {
+		obj, exists, getErr := workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().GetByKey("test/test")
+		if getErr != nil || !exists {
+			t.Fatalf("%s: failed to get work from store: err=%v exists=%v", description, getErr, exists)
+		}
+
+		tamperedWork := obj.(*workapiv1.ManifestWork).DeepCopy()
+		tamper(tamperedWork)
+		if err := workInformerFactory.Work().V1().ManifestWorks().Informer().GetStore().Update(tamperedWork); err != nil {
+			t.Errorf("%s: failed to update work with err %v", description, err)
+		}
+
+		fakeWorkClient.ClearActions()
+		_, err = workApplier.Apply(context.TODO(), newWork)
+		if err != nil {
+			t.Errorf("%s: failed to apply work with err %v", description, err)
+		}
+		assertActions(t, fakeWorkClient.Actions(), "patch")
+	}
+
+	assertExternalMetadataChangeDetected("external label change", func(w *workapiv1.ManifestWork) {
+		w.Labels = map[string]string{"tampered": "true"}
+	})
+	assertExternalMetadataChangeDetected("external annotation change", func(w *workapiv1.ManifestWork) {
+		w.Annotations = map[string]string{"tampered": "true"}
+	})
+	assertExternalMetadataChangeDetected("external owner reference change", func(w *workapiv1.ManifestWork) {
+		w.OwnerReferences = []metav1.OwnerReference{
+			{APIVersion: "v1", Kind: "ConfigMap", Name: "rogue-owner", UID: "rogue"},
+		}
+	})
+
 	fakeWorkClient.ClearActions()
 	err = workApplier.Delete(context.TODO(), newWork.Namespace, newWork.Name)
 	if err != nil {
