@@ -48,8 +48,11 @@ detect_versions() {
 
     # Determine golangci-lint version based on Go version
     # All projects require Go 1.23+, always use golangci-lint v2
+    # v2.12.2+ built with Go 1.26.2, supports Go 1.26+
     # v2.4.0+ requires Go 1.24+, v2.3.1 is the last v2 supporting Go 1.23
-    if (( major == 1 && minor >= 24 )) || (( major > 1 )); then
+    if (( major == 1 && minor >= 26 )) || (( major > 1 )); then
+        LINT_VERSION="v2.12.2"
+    elif (( major == 1 && minor >= 24 )); then
         LINT_VERSION="v2.8.0"
     elif (( major == 1 && minor == 23 )); then
         LINT_VERSION="v2.3.1"
