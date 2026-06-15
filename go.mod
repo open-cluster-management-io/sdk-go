@@ -1,6 +1,6 @@
 module open-cluster-management.io/sdk-go
 
-go 1.25.0
+go 1.26.0
 
 require (
 	cloud.google.com/go/pubsub/v2 v2.3.0
