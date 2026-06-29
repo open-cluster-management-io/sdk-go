@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"k8s.io/utils/ptr"
 	clienttesting "open-cluster-management.io/sdk-go/pkg/testing"
 )
@@ -113,6 +115,50 @@ func TestBuildGRPCOptionsFromFlags(t *testing.T) {
 
 			if !cmp.Equal(options, c.expectedOptions, cmpopts.IgnoreUnexported(GRPCDialer{})) {
 				t.Errorf("unexpected options %+v", options)
+			}
+		})
+	}
+}
+
+func TestDialExtraDialOpts(t *testing.T) {
+	cases := []struct {
+		name          string
+		extraDialOpts []grpc.DialOption
+	}{
+		{
+			name: "with extra dial opts",
+			extraDialOpts: []grpc.DialOption{
+				grpc.WithConnectParams(grpc.ConnectParams{
+					Backoff: backoff.Config{
+						BaseDelay:  1 * time.Second,
+						Multiplier: 1.6,
+						Jitter:     0.2,
+						MaxDelay:   5 * time.Second,
+					},
+					MinConnectTimeout: 5 * time.Second,
+				}),
+			},
+		},
+		{
+			name: "without extra dial opts",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dialer := &GRPCDialer{
+				URL:           "localhost:0",
+				ExtraDialOpts: c.extraDialOpts,
+			}
+
+			conn, err := dialer.Dial()
+			if err != nil {
+				t.Fatalf("Dial() failed: %v", err)
+			}
+			defer conn.Close()
+
+			if conn == nil {
+				t.Fatal("Dial() returned nil connection")
 			}
 		})
 	}
