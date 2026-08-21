@@ -448,3 +448,89 @@ func TestReceiveResourceSpec(t *testing.T) {
 		})
 	}
 }
+
+func TestAgentClientReadiness(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	agentOptions := fake.NewAgentOptions(fake.NewEventChan(), "cluster1", testAgentName)
+	lister := generictesting.NewMockResourceLister()
+	agent, err := NewCloudEventAgentClient(
+		ctx,
+		agentOptions,
+		lister,
+		generictesting.StatusHash,
+		generictesting.NewMockResourceCodec(),
+	)
+	require.NoError(t, err)
+
+	// Connected after creation
+	require.True(t, agent.IsConnected())
+	// Subscribed is initially false before subscribe is called
+	require.False(t, agent.IsSubscribed())
+	require.False(t, agent.IsReady())
+
+	agent.Subscribe(ctx, func(ctx context.Context, obj *generictesting.MockResource) error {
+		return nil
+	})
+
+	// Subscribe kicks off subscription asynchronously; IsSubscribed/IsReady become true
+	// once the transport's Subscribe call completes.
+	require.Eventually(t, func() bool {
+		return agent.IsSubscribed()
+	}, 5*time.Second, 10*time.Millisecond)
+	require.True(t, agent.IsReady())
+}
+
+func TestAgentClientReadinessAfterTransportError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Override the package-level reconnect backoff to a short, non-zero delay:
+	// long enough to reliably observe the transient disconnected window below,
+	// but short enough that the background reconnect goroutine settles (and
+	// stops touching DelayFn) well before this test returns - avoiding a
+	// leaked goroutine that sleeps on the real ~5s default backoff and races
+	// with other tests (e.g. TestReconnectMetrics) that also mutate DelayFn.
+	originalDelayFn := DelayFn
+	DelayFn = func() time.Duration { return 50 * time.Millisecond }
+	defer func() { DelayFn = originalDelayFn }()
+
+	eventChan := fake.NewEventChan()
+	agentOptions := fake.NewAgentOptions(eventChan, "cluster1", testAgentName)
+	lister := generictesting.NewMockResourceLister()
+	agent, err := NewCloudEventAgentClient(
+		ctx,
+		agentOptions,
+		lister,
+		generictesting.StatusHash,
+		generictesting.NewMockResourceCodec(),
+	)
+	require.NoError(t, err)
+
+	agent.Subscribe(ctx, func(ctx context.Context, obj *generictesting.MockResource) error {
+		return nil
+	})
+	require.Eventually(t, func() bool {
+		return agent.IsReady()
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Simulate a transport connection drop.
+	eventChan.ErrChan <- fmt.Errorf("simulated transport error")
+
+	// A dropped connection must clear both connected and subscribed state: the
+	// previous subscription is no longer live and a fresh Subscribe is required
+	// once reconnected, so IsReady must not report a false positive during this window.
+	// Poll tightly since the disconnected window is only ~50ms (the overridden backoff).
+	require.Eventually(t, func() bool {
+		return !agent.IsConnected() && !agent.IsSubscribed() && !agent.IsReady()
+	}, 200*time.Millisecond, time.Millisecond)
+
+	// The background reconnect goroutine reconnects after the overridden 50ms
+	// backoff and re-subscribes; wait for IsReady so the client has fully recovered
+	// and the goroutine has fully settled (and stopped touching the package-level DelayFn)
+	// before this test returns.
+	require.Eventually(t, func() bool {
+		return agent.IsReady()
+	}, 5*time.Second, 10*time.Millisecond)
+}

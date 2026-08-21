@@ -458,3 +458,36 @@ func TestReceiveResourceStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceClientReadiness(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sourceOptions := fake.NewSourceOptions(fake.NewEventChan(), testSourceName)
+	lister := generictesting.NewMockResourceLister()
+	source, err := NewCloudEventSourceClient(
+		ctx,
+		sourceOptions,
+		lister,
+		generictesting.StatusHash,
+		generictesting.NewMockResourceCodec(),
+	)
+	require.NoError(t, err)
+
+	// Connected after creation
+	require.True(t, source.IsConnected())
+	// Subscribed is initially false before subscribe is called
+	require.False(t, source.IsSubscribed())
+	require.False(t, source.IsReady())
+
+	source.Subscribe(ctx, func(ctx context.Context, obj *generictesting.MockResource) error {
+		return nil
+	})
+
+	// Subscribe kicks off subscription asynchronously; IsSubscribed/IsReady become true
+	// once the transport's Subscribe call completes.
+	require.Eventually(t, func() bool {
+		return source.IsSubscribed()
+	}, 5*time.Second, 10*time.Millisecond)
+	require.True(t, source.IsReady())
+}

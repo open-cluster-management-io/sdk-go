@@ -84,6 +84,9 @@ class CloudEventsClient {
     Publish(ctx, eventType, obj)
     Subscribe(ctx, handlers)
     SubscribedChan()
+    IsConnected()
+    IsSubscribed()
+    IsReady()
 }
 
 CloudEventsClient <|.. CloudEventSourceClient

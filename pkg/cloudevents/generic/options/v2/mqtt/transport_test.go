@@ -3,6 +3,7 @@ package mqtt
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -427,7 +428,7 @@ func TestTransportSubscribeWithoutConnect(t *testing.T) {
 	}
 }
 
-// TestTransportDoubleSubscribe tests error on double subscribe
+// TestTransportDoubleSubscribe tests that double subscribe is idempotent and succeeds
 func TestTransportDoubleSubscribe(t *testing.T) {
 	_, cleanup := setupTestBroker(t)
 	defer cleanup()
@@ -447,13 +448,61 @@ func TestTransportDoubleSubscribe(t *testing.T) {
 		t.Fatalf("first subscribe failed: %v", err)
 	}
 
-	// Second subscribe should fail
+	// Second subscribe should be idempotent and return nil
 	err := transport.Subscribe(ctx)
-	if err == nil {
-		t.Fatal("expected error on double subscribe, got nil")
+	if err != nil {
+		t.Fatalf("expected nil on double subscribe (idempotent), got: %v", err)
 	}
-	if err.Error() != "transport has already subscribed" {
-		t.Fatalf("unexpected error message: %v", err)
+}
+
+// TestTransportErrorChanDrainingAndCloseSuppression tests that errors during close are ignored
+// and stale errors in errorChan are drained upon reconnect.
+func TestTransportErrorChanDrainingAndCloseSuppression(t *testing.T) {
+	_, cleanup := setupTestBroker(t)
+	defer cleanup()
+
+	transport := createTestTransport("test-errorchan-lifecycle", "test/pub", "test/sub")
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	if err := transport.Connect(ctx); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+
+	// Close the transport; any socket error generated during Disconnect should be suppressed
+	if err := transport.Close(ctx); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+
+	// Verify errorChan has no pending errors
+	select {
+	case err := <-transport.ErrorChan():
+		t.Fatalf("unexpected error in errorChan after close: %v", err)
+	default:
+	}
+
+	// Manually inject an error into errorChan to simulate stale error
+	select {
+	case transport.errorChan <- errors.New("stale network error"):
+	default:
+	}
+
+	// Reconnecting should drain stale errors from previous session
+	if err := transport.Connect(ctx); err != nil {
+		t.Fatalf("reconnect failed: %v", err)
+	}
+	defer func() {
+		if err := transport.Close(ctx); err != nil {
+			t.Errorf("close after reconnect failed: %v", err)
+		}
+	}()
+
+	// Verify errorChan is drained after Connect
+	select {
+	case err := <-transport.ErrorChan():
+		t.Fatalf("errorChan should be empty after connect, but got: %v", err)
+	default:
 	}
 }
 
