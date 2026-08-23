@@ -59,6 +59,18 @@ func (m *mockCloudEventsClient) SubscribedChan() <-chan struct{} {
 	return m.subscribedCh
 }
 
+func (m *mockCloudEventsClient) IsConnected() bool {
+	return true
+}
+
+func (m *mockCloudEventsClient) IsSubscribed() bool {
+	return true
+}
+
+func (m *mockCloudEventsClient) IsReady() bool {
+	return true
+}
+
 func (m *mockCloudEventsClient) getPublishedWorks() []*workv1.ManifestWork {
 	m.mu.Lock()
 	defer m.mu.Unlock()

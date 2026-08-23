@@ -23,6 +23,8 @@ type mqttTransport struct {
 
 	mu         sync.RWMutex
 	subscribed bool
+	closing    bool
+	generation uint64
 	closeChan  chan struct{}
 	errorChan  chan error
 	msgChan    chan *paho.Publish
@@ -49,6 +51,19 @@ func (t *mqttTransport) Connect(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	// Drain any stale errors from previous connections
+	for {
+		select {
+		case <-t.errorChan:
+		default:
+			goto drained
+		}
+	}
+drained:
+	t.closing = false
+	t.generation++
+	gen := t.generation
+
 	logger := klog.FromContext(ctx)
 	tcpConn, err := t.opts.Dialer.Dial()
 	if err != nil {
@@ -59,6 +74,14 @@ func (t *mqttTransport) Connect(ctx context.Context) error {
 		ClientID: t.clientID,
 		Conn:     tcpConn,
 		OnClientError: func(err error) {
+			t.mu.RLock()
+			defer t.mu.RUnlock()
+
+			if t.closing || t.generation != gen {
+				logger.V(4).Info("ignoring mqtt client error from inactive session", "err", err, "currentGen", t.generation, "callbackGen", gen)
+				return
+			}
+
 			select {
 			case t.errorChan <- err:
 			default:
@@ -127,7 +150,7 @@ func (t *mqttTransport) Subscribe(ctx context.Context) error {
 	}
 
 	if t.subscribed {
-		return fmt.Errorf("transport has already subscribed")
+		return nil
 	}
 
 	subscribe, err := t.getSubscribe()
@@ -200,6 +223,9 @@ func (t *mqttTransport) Close(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	klog.FromContext(ctx).Info("close mqtt transport")
+
+	t.closing = true
+	t.generation++
 
 	if t.client == nil {
 		// no client, do nothing

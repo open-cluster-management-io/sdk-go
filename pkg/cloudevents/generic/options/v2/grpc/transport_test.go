@@ -1332,3 +1332,37 @@ func TestGrpcTransport_MixedEventsWithHeartbeats(t *testing.T) {
 		t.Errorf("Expected 1 regular event, got %d", receivedEvents.Load())
 	}
 }
+
+// TestGRPCTransportDoubleSubscribe tests that double subscribe on gRPC transport is idempotent and returns nil
+func TestGRPCTransportDoubleSubscribe(t *testing.T) {
+	conn, cleanup := setupMockServer(t, nil)
+	defer cleanup()
+
+	timeout := 5 * time.Second
+	transport := &grpcTransport{
+		opts: &grpcoptions.GRPCOptions{
+			ServerHealthinessTimeout: &timeout,
+		},
+		errorChan: make(chan error),
+		getSubscriptionRequest: func() *pbv1.SubscriptionRequest {
+			return &pbv1.SubscriptionRequest{
+				ClusterName: "test-cluster",
+				Source:      "test-source",
+			}
+		},
+		client: pbv1.NewCloudEventServiceClient(conn),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// First subscribe should succeed
+	if err := transport.Subscribe(ctx); err != nil {
+		t.Fatalf("first subscribe failed: %v", err)
+	}
+
+	// Second subscribe should be idempotent and return nil
+	if err := transport.Subscribe(ctx); err != nil {
+		t.Fatalf("expected nil on second subscribe (idempotent), got: %v", err)
+	}
+}
