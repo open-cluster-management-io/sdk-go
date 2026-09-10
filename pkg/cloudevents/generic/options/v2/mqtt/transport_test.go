@@ -192,6 +192,50 @@ func TestTransportReconnect(t *testing.T) {
 	}
 }
 
+// TestTransportReconnectPreservesBufferedMessages tests that messages already
+// buffered in msgChan (and thus already acked to the broker) before a disconnect
+// are not silently dropped when the transport reconnects.
+func TestTransportReconnectPreservesBufferedMessages(t *testing.T) {
+	_, cleanup := setupTestBroker(t)
+	defer cleanup()
+
+	transport := createTestTransport("test-reconnect-preserve", "test/pub", "test/sub")
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	if err := transport.Connect(ctx); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+	defer func() {
+		if err := transport.Close(ctx); err != nil {
+			t.Errorf("final close failed: %v", err)
+		}
+	}()
+
+	// Simulate a message that was received and already acked to the broker
+	// (queued in msgChan) but not yet drained by Receive when the connection drops.
+	pending := &paho.Publish{Topic: "test/pub", Payload: []byte("buffered-before-reconnect")}
+	transport.msgChan <- pending
+
+	if err := transport.Close(ctx); err != nil {
+		t.Fatalf("close before reconnect failed: %v", err)
+	}
+
+	if err := transport.Connect(ctx); err != nil {
+		t.Fatalf("reconnect failed: %v", err)
+	}
+
+	select {
+	case m := <-transport.msgChan:
+		if string(m.Payload) != "buffered-before-reconnect" {
+			t.Fatalf("unexpected message payload: %s", m.Payload)
+		}
+	default:
+		t.Fatal("message buffered before reconnect was dropped")
+	}
+}
+
 // TestTransportSend tests sending messages
 func TestTransportSend(t *testing.T) {
 	_, cleanup := setupTestBroker(t)

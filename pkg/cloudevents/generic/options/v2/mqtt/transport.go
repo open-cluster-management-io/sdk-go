@@ -102,10 +102,17 @@ drained:
 		return fmt.Errorf("failed to establish the connection: %s", connAck.String())
 	}
 
-	// Initialize closeChan and msgChan to support reconnect cycles
+	// Initialize closeChan to support reconnect cycles
 	t.closeChan = make(chan struct{})
-	// TODO consider to make the channel size configurable
-	t.msgChan = make(chan *paho.Publish, 100)
+	if t.msgChan == nil {
+		// Only allocate msgChan once. Recreating it on every reconnect would silently
+		// drop any messages buffered here but not yet drained by Receive before the
+		// disconnect: AddOnPublishReceived acks a message to the broker as soon as it
+		// is enqueued, so once it's in this channel the broker considers it delivered
+		// and will not redeliver it after a reconnect.
+		// TODO consider to make the channel size configurable
+		t.msgChan = make(chan *paho.Publish, 100)
+	}
 
 	logger.Info("mqtt is connected", "brokerHost", t.opts.Dialer.BrokerHost)
 
