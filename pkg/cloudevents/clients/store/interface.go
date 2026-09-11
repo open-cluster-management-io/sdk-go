@@ -27,6 +27,20 @@ type ResourceList[T generic.ResourceObject] struct {
 // StoreInitiated is a function that can be used to determine if a store has initiated.
 type StoreInitiated func() bool
 
+// ConditionalUpdater is an optional capability of a ClientWatcherStore. Stores implementing it
+// can update a resource with a compare-and-swap semantic: the update is applied only if the
+// store's current resource version of the resource equals expectedResourceVersion (the value
+// "0" forces the update), otherwise a conflict error is returned. The version check and the
+// write are atomic with respect to the other store writers, which gives resource clients a
+// read-modify-write guarantee that a concurrent writer (e.g. the handler of received resource
+// events) cannot be interleaved between the version check and the write.
+type ConditionalUpdater interface {
+	// UpdateWithVersion updates the resource in the store if the store's current resource
+	// version of the resource equals expectedResourceVersion, and returns a conflict error
+	// otherwise.
+	UpdateWithVersion(ctx context.Context, resource runtime.Object, expectedResourceVersion string) error
+}
+
 // ClientWatcherStore provides a watcher with a resource store.
 type ClientWatcherStore[T generic.ResourceObject] interface {
 	// GetWatcher returns a watcher to receive resource changes.
