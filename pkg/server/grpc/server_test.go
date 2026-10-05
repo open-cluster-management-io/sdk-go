@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -10,9 +11,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	certutil "k8s.io/client-go/util/cert"
 
 	cemetrics "open-cluster-management.io/sdk-go/pkg/cloudevents/server/grpc/metrics"
+	"open-cluster-management.io/sdk-go/pkg/server/grpc/authz"
 )
 
 // testAuthenticator implements Authenticator for testing
@@ -23,6 +27,83 @@ type testAuthenticator struct {
 func (a *testAuthenticator) Authenticate(ctx context.Context) (context.Context, error) {
 	// Test authentication logic - just return the context unchanged
 	return ctx, nil
+}
+
+// testUnaryAuthorizer implements authz.UnaryAuthorizer with a fixed result for testing
+type testUnaryAuthorizer struct {
+	decision authz.Decision
+	ctx      context.Context
+	err      error
+}
+
+func (a *testUnaryAuthorizer) AuthorizeRequest(_ context.Context, _ any) (authz.Decision, context.Context, error) {
+	return a.decision, a.ctx, a.err
+}
+
+func TestAuthzUnaryInterceptor(t *testing.T) {
+	type ctxKey struct{}
+	requestCtx := context.WithValue(context.Background(), ctxKey{}, "request")
+	authorizedCtx := context.WithValue(requestCtx, ctxKey{}, "authorized")
+
+	cases := []struct {
+		name        string
+		authorizers []authz.UnaryAuthorizer
+		wantCtxMark string
+		wantCode    codes.Code
+	}{
+		{
+			name:        "allow passes the authorized context to the handler",
+			authorizers: []authz.UnaryAuthorizer{&testUnaryAuthorizer{decision: authz.DecisionAllow, ctx: authorizedCtx}},
+			wantCtxMark: "authorized",
+			wantCode:    codes.OK,
+		},
+		{
+			name:        "allow without a context falls back to the request context",
+			authorizers: []authz.UnaryAuthorizer{&testUnaryAuthorizer{decision: authz.DecisionAllow}},
+			wantCtxMark: "request",
+			wantCode:    codes.OK,
+		},
+		{
+			name: "no opinion continues to the next authorizer",
+			authorizers: []authz.UnaryAuthorizer{
+				&testUnaryAuthorizer{decision: authz.DecisionNoOpinion},
+				&testUnaryAuthorizer{decision: authz.DecisionAllow, ctx: authorizedCtx},
+			},
+			wantCtxMark: "authorized",
+			wantCode:    codes.OK,
+		},
+		{
+			name:        "deny returns permission denied",
+			authorizers: []authz.UnaryAuthorizer{&testUnaryAuthorizer{decision: authz.DecisionDeny, err: errors.New("denied")}},
+			wantCode:    codes.PermissionDenied,
+		},
+		{
+			name:        "no authorizer with an opinion returns unauthenticated",
+			authorizers: []authz.UnaryAuthorizer{&testUnaryAuthorizer{decision: authz.DecisionNoOpinion}},
+			wantCode:    codes.Unauthenticated,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handlerCalled := false
+			handler := func(ctx context.Context, _ any) (any, error) {
+				handlerCalled = true
+				if mark, _ := ctx.Value(ctxKey{}).(string); mark != tc.wantCtxMark {
+					t.Errorf("expected handler context %q, got %q", tc.wantCtxMark, mark)
+				}
+				return nil, nil
+			}
+
+			_, err := newAuthzUnaryInterceptor(tc.authorizers...)(requestCtx, nil, &grpc.UnaryServerInfo{FullMethod: "/test/Method"}, handler)
+			if got := status.Code(err); got != tc.wantCode {
+				t.Fatalf("expected code %v, got %v (err=%v)", tc.wantCode, got, err)
+			}
+			if wantHandler := tc.wantCode == codes.OK; handlerCalled != wantHandler {
+				t.Errorf("expected handler called=%v, got %v", wantHandler, handlerCalled)
+			}
+		})
+	}
 }
 
 func TestGRPCServerBuilder_Basic(t *testing.T) {

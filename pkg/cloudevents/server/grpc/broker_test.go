@@ -6,12 +6,18 @@ import (
 	"testing"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/cloudevents/sdk-go/v2/binding"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	grpccli "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc"
 	pbv1 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protobuf/v1"
+	grpcprotocol "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/grpc/protocol"
 	grpcv2 "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/options/v2/grpc"
 	cetypes "open-cluster-management.io/sdk-go/pkg/cloudevents/generic/types"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/server"
+	"open-cluster-management.io/sdk-go/pkg/server/grpc/authz"
 )
 
 var dataType = cetypes.CloudEventsDataType{
@@ -48,6 +54,59 @@ func (s *testService) RegisterHandler(_ context.Context, handler server.EventHan
 func (s *testService) create(evt *cloudevents.Event) error {
 	s.evts[evt.ID()] = evt
 	return s.handler.HandleEvent(context.TODO(), evt)
+}
+
+func TestPublish(t *testing.T) {
+	statusUpdateType := cetypes.CloudEventsType{CloudEventsDataType: dataType, SubResource: cetypes.SubResourceStatus, Action: cetypes.UpdateRequestAction}
+	newStatusEvent := func(resourceID string) *cloudevents.Event {
+		evt := cetypes.NewEventBuilder("agent1", statusUpdateType).WithResourceID(resourceID).WithClusterName("cluster1").NewEvent()
+		return &evt
+	}
+	toPublishRequest := func(evt *cloudevents.Event) *pbv1.PublishRequest {
+		pbEvt := &pbv1.CloudEvent{}
+		if err := grpcprotocol.WritePBMessage(context.Background(), binding.ToMessage(evt), pbEvt); err != nil {
+			t.Fatalf("failed to convert event to protobuf: %v", err)
+		}
+		return &pbv1.PublishRequest{Event: pbEvt}
+	}
+
+	broker := NewGRPCBroker(NewBrokerOptions())
+	svc := &testService{evts: make(map[string]*cloudevents.Event)}
+	broker.RegisterService(context.Background(), dataType, svc)
+
+	t.Run("rejects a request without an event", func(t *testing.T) {
+		for _, req := range []*pbv1.PublishRequest{nil, {}} {
+			if _, err := broker.Publish(context.Background(), req); status.Code(err) != codes.InvalidArgument {
+				t.Errorf("expected InvalidArgument, got %v", err)
+			}
+		}
+	})
+
+	t.Run("decodes the request event when no authorized event is in the context", func(t *testing.T) {
+		evt := newStatusEvent("decoded")
+		if _, err := broker.Publish(context.Background(), toPublishRequest(evt)); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, ok := svc.evts[evt.ID()]; !ok {
+			t.Errorf("expected the service to receive event %s", evt.ID())
+		}
+	})
+
+	t.Run("handles the authorized event from the context instead of re-decoding the request", func(t *testing.T) {
+		requestEvt := newStatusEvent("request")
+		authorizedEvt := newStatusEvent("authorized")
+
+		ctx := authz.WithAuthorizedEvent(context.Background(), authorizedEvt)
+		if _, err := broker.Publish(ctx, toPublishRequest(requestEvt)); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, ok := svc.evts[authorizedEvt.ID()]; !ok || got != authorizedEvt {
+			t.Errorf("expected the service to receive the authorized event %s", authorizedEvt.ID())
+		}
+		if _, ok := svc.evts[requestEvt.ID()]; ok {
+			t.Errorf("expected the request event %s not to be handled", requestEvt.ID())
+		}
+	})
 }
 
 func TestServer(t *testing.T) {

@@ -460,7 +460,7 @@ func TestGrpcTransport_Receive_WithEvents(t *testing.T) {
 		SpecVersion: "1.0",
 		Type:        "test.type",
 		Attributes: map[string]*pbv1.CloudEventAttributeValue{
-			"datacontenttype": {
+			"contenttype": {
 				Attr: &pbv1.CloudEventAttributeValue_CeString{
 					CeString: "application/json",
 				},
@@ -1221,7 +1221,7 @@ func TestGrpcTransport_MixedEventsWithHeartbeats(t *testing.T) {
 		SpecVersion: "1.0",
 		Type:        "test.event",
 		Attributes: map[string]*pbv1.CloudEventAttributeValue{
-			"datacontenttype": {
+			"contenttype": {
 				Attr: &pbv1.CloudEventAttributeValue_CeString{
 					CeString: "application/json",
 				},
