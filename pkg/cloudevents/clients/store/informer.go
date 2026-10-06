@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"reflect"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +24,11 @@ import (
 type AgentInformerWatcherStore[T generic.ResourceObject] struct {
 	BaseClientWatchStore[T]
 	Watcher *Watcher
+
+	// mu synchronizes the store writers, making the read-modify-write sequence in
+	// HandleReceivedResource atomic with respect to the plain Add/Update/Delete writers
+	// (e.g. a resource client writing back a patched resource).
+	mu sync.Mutex
 }
 
 func NewAgentInformerWatcherStore[T generic.ResourceObject]() *AgentInformerWatcherStore[T] {
@@ -35,21 +41,44 @@ func NewAgentInformerWatcherStore[T generic.ResourceObject]() *AgentInformerWatc
 }
 
 func (s *AgentInformerWatcherStore[T]) Add(resource runtime.Object) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.add(resource)
+}
+
+func (s *AgentInformerWatcherStore[T]) Update(resource runtime.Object) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.update(resource)
+}
+
+func (s *AgentInformerWatcherStore[T]) Delete(resource runtime.Object) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.delete(resource)
+}
+
+func (s *AgentInformerWatcherStore[T]) add(resource runtime.Object) error {
 	s.Watcher.Receive(watch.Event{Type: watch.Added, Object: resource})
 	return s.Store.Add(resource)
 }
 
-func (s *AgentInformerWatcherStore[T]) Update(resource runtime.Object) error {
+func (s *AgentInformerWatcherStore[T]) update(resource runtime.Object) error {
 	s.Watcher.Receive(watch.Event{Type: watch.Modified, Object: resource})
 	return s.Store.Update(resource)
 }
 
-func (s *AgentInformerWatcherStore[T]) Delete(resource runtime.Object) error {
+func (s *AgentInformerWatcherStore[T]) delete(resource runtime.Object) error {
 	s.Watcher.Receive(watch.Event{Type: watch.Deleted, Object: resource})
 	return s.Store.Delete(resource)
 }
 
 func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Context, resource T) error {
+	// Hold the store lock for the whole read-modify-write sequence, so another store writer
+	// cannot be interleaved between reading the cached resource and writing it back.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	newRuntimeObj, err := utils.ToRuntimeObject(resource)
 	if err != nil {
 		return err
@@ -84,14 +113,14 @@ func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Contex
 			if err != nil {
 				return err
 			}
-			return s.Update(cachedRuntimeObj)
+			return s.update(cachedRuntimeObj)
 		}
 
 		cachedRuntimeObj, err := utils.ToRuntimeObject(cachedMetaObj)
 		if err != nil {
 			return err
 		}
-		return s.Delete(cachedRuntimeObj)
+		return s.delete(cachedRuntimeObj)
 	}
 
 	_, exists, err := s.Get(ctx, newMetaObj.GetNamespace(), newMetaObj.GetName())
@@ -99,10 +128,10 @@ func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Contex
 		return err
 	}
 	if !exists {
-		return s.Add(newRuntimeObj)
+		return s.add(newRuntimeObj)
 	}
 
-	return s.Update(newRuntimeObj)
+	return s.update(newRuntimeObj)
 }
 
 func (s *AgentInformerWatcherStore[T]) GetWatcher(ctx context.Context, namespace string, opts metav1.ListOptions) (watch.Interface, error) {
