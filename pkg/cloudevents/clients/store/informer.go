@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"reflect"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,7 +23,11 @@ import (
 // It is used for building resource agent client.
 type AgentInformerWatcherStore[T generic.ResourceObject] struct {
 	BaseClientWatchStore[T]
-	Watcher *Watcher
+
+	// watcherLock guards Watcher, which GetWatcher replaces once the current
+	// one has been stopped.
+	watcherLock sync.RWMutex
+	Watcher     *Watcher
 }
 
 func NewAgentInformerWatcherStore[T generic.ResourceObject]() *AgentInformerWatcherStore[T] {
@@ -34,18 +39,28 @@ func NewAgentInformerWatcherStore[T generic.ResourceObject]() *AgentInformerWatc
 	}
 }
 
+// currentWatcher returns the watcher events should be sent to right now. It is
+// not necessarily the one GetWatcher returned last, since a reflector can stop
+// its watch at any time.
+func (s *AgentInformerWatcherStore[T]) currentWatcher() *Watcher {
+	s.watcherLock.RLock()
+	defer s.watcherLock.RUnlock()
+
+	return s.Watcher
+}
+
 func (s *AgentInformerWatcherStore[T]) Add(resource runtime.Object) error {
-	s.Watcher.Receive(watch.Event{Type: watch.Added, Object: resource})
+	s.currentWatcher().Receive(watch.Event{Type: watch.Added, Object: resource})
 	return s.Store.Add(resource)
 }
 
 func (s *AgentInformerWatcherStore[T]) Update(resource runtime.Object) error {
-	s.Watcher.Receive(watch.Event{Type: watch.Modified, Object: resource})
+	s.currentWatcher().Receive(watch.Event{Type: watch.Modified, Object: resource})
 	return s.Store.Update(resource)
 }
 
 func (s *AgentInformerWatcherStore[T]) Delete(resource runtime.Object) error {
-	s.Watcher.Receive(watch.Event{Type: watch.Deleted, Object: resource})
+	s.currentWatcher().Receive(watch.Event{Type: watch.Deleted, Object: resource})
 	return s.Store.Delete(resource)
 }
 
@@ -106,6 +121,18 @@ func (s *AgentInformerWatcherStore[T]) HandleReceivedResource(ctx context.Contex
 }
 
 func (s *AgentInformerWatcherStore[T]) GetWatcher(ctx context.Context, namespace string, opts metav1.ListOptions) (watch.Interface, error) {
+	// A reflector stops its watch every time its watch loop exits and then asks
+	// for a new one. Handing back the stopped watcher would make every later
+	// Receive a silent no-op, leaving the informer permanently deaf: the agent
+	// would never see another spec change, so a ManifestWork deletion would
+	// never be acted on and its finalizer would never be removed.
+	s.watcherLock.Lock()
+	if s.Watcher == nil || s.Watcher.IsStopped() {
+		s.Watcher = NewWatcher()
+	}
+	watcher := s.Watcher
+	s.watcherLock.Unlock()
+
 	// If AllowWatchBookmarks is enabled, send a bookmark event to signal the end of the initial event stream.
 	// This is required by Kubernetes 1.35+ reflectors to properly initialize watches.
 	if opts.AllowWatchBookmarks {
@@ -121,11 +148,11 @@ func (s *AgentInformerWatcherStore[T]) GetWatcher(ctx context.Context, namespace
 					metav1.InitialEventsAnnotationKey: "true",
 				})
 			}
-			s.Watcher.Receive(watch.Event{Type: watch.Bookmark, Object: bookmarkObj})
+			watcher.Receive(watch.Event{Type: watch.Bookmark, Object: bookmarkObj})
 		}()
 	}
 
-	return s.Watcher, nil
+	return watcher, nil
 }
 
 func (s *AgentInformerWatcherStore[T]) HasInitiated() bool {
