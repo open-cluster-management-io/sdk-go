@@ -17,6 +17,14 @@ func TestNewBrokerOptions(t *testing.T) {
 	if opts.HeartbeatCheckInterval != 10*time.Second {
 		t.Errorf("Expected HeartbeatCheckInterval to be 10s by default, got %v", opts.HeartbeatCheckInterval)
 	}
+
+	if opts.EventQueueSize != 100 {
+		t.Errorf("Expected EventQueueSize to be 100 by default, got %d", opts.EventQueueSize)
+	}
+
+	if opts.HeartbeatQueueSize != 10 {
+		t.Errorf("Expected HeartbeatQueueSize to be 10 by default, got %d", opts.HeartbeatQueueSize)
+	}
 }
 
 func TestBrokerOptions_AddFlags(t *testing.T) {
@@ -38,6 +46,8 @@ func TestBrokerOptions_AddFlags(t *testing.T) {
 	args := []string{
 		"--broker-heartbeat-disabled=true",
 		"--broker-heartbeat-interval=30s",
+		"--broker-event-queue-size=500",
+		"--broker-heartbeat-queue-size=20",
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -51,6 +61,14 @@ func TestBrokerOptions_AddFlags(t *testing.T) {
 	if opts.HeartbeatCheckInterval != 30*time.Second {
 		t.Errorf("Expected HeartbeatCheckInterval to be 30s after parsing, got %v", opts.HeartbeatCheckInterval)
 	}
+
+	if opts.EventQueueSize != 500 {
+		t.Errorf("Expected EventQueueSize to be 500 after parsing, got %d", opts.EventQueueSize)
+	}
+
+	if opts.HeartbeatQueueSize != 20 {
+		t.Errorf("Expected HeartbeatQueueSize to be 20 after parsing, got %d", opts.HeartbeatQueueSize)
+	}
 }
 
 func TestNewGRPCBroker_WithOptions(t *testing.T) {
@@ -58,6 +76,8 @@ func TestNewGRPCBroker_WithOptions(t *testing.T) {
 	opts := &BrokerOptions{
 		HeartbeatDisabled:      true,
 		HeartbeatCheckInterval: 30 * time.Second,
+		EventQueueSize:         500,
+		HeartbeatQueueSize:     20,
 	}
 
 	broker := NewGRPCBroker(opts)
@@ -68,6 +88,26 @@ func TestNewGRPCBroker_WithOptions(t *testing.T) {
 
 	if broker.heartbeatCheckInterval != 30*time.Second {
 		t.Errorf("Expected heartbeatCheckInterval to be 30s, got %v", broker.heartbeatCheckInterval)
+	}
+
+	if broker.eventQueueSize != 500 {
+		t.Errorf("Expected eventQueueSize to be 500, got %d", broker.eventQueueSize)
+	}
+
+	if broker.heartbeatQueueSize != 20 {
+		t.Errorf("Expected heartbeatQueueSize to be 20, got %d", broker.heartbeatQueueSize)
+	}
+}
+
+func TestNewGRPCBroker_ZeroQueueSizesUseDefaults(t *testing.T) {
+	broker := NewGRPCBroker(&BrokerOptions{HeartbeatCheckInterval: 10 * time.Second})
+
+	if broker.eventQueueSize != 100 {
+		t.Errorf("Expected eventQueueSize to default to 100, got %d", broker.eventQueueSize)
+	}
+
+	if broker.heartbeatQueueSize != 10 {
+		t.Errorf("Expected heartbeatQueueSize to default to 10, got %d", broker.heartbeatQueueSize)
 	}
 }
 
@@ -80,6 +120,14 @@ func TestNewGRPCBroker_WithDefaultOptions(t *testing.T) {
 
 	if broker.heartbeatCheckInterval != 10*time.Second {
 		t.Errorf("Expected heartbeatCheckInterval to be 10s by default, got %v", broker.heartbeatCheckInterval)
+	}
+
+	if broker.eventQueueSize != 100 {
+		t.Errorf("Expected eventQueueSize to be 100 by default, got %d", broker.eventQueueSize)
+	}
+
+	if broker.heartbeatQueueSize != 10 {
+		t.Errorf("Expected heartbeatQueueSize to be 10 by default, got %d", broker.heartbeatQueueSize)
 	}
 }
 
@@ -139,6 +187,33 @@ func TestBrokerOptions_Validate(t *testing.T) {
 				HeartbeatCheckInterval: 10 * time.Second,
 			},
 			expectError: false,
+		},
+		{
+			name: "valid - custom queue sizes",
+			opts: &BrokerOptions{
+				HeartbeatCheckInterval: 10 * time.Second,
+				EventQueueSize:         1000,
+				HeartbeatQueueSize:     50,
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid - negative event queue size",
+			opts: &BrokerOptions{
+				HeartbeatCheckInterval: 10 * time.Second,
+				EventQueueSize:         -1,
+			},
+			expectError: true,
+			errorMsg:    "event_queue_size (-1) must not be negative",
+		},
+		{
+			name: "invalid - negative heartbeat queue size",
+			opts: &BrokerOptions{
+				HeartbeatCheckInterval: 10 * time.Second,
+				HeartbeatQueueSize:     -1,
+			},
+			expectError: true,
+			errorMsg:    "heartbeat_queue_size (-1) must not be negative",
 		},
 	}
 
