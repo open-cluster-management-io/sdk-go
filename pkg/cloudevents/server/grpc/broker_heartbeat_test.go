@@ -454,3 +454,68 @@ func TestGRPCBroker_Subscribe_HeartbeatDisabled(t *testing.T) {
 		t.Errorf("Expected at least 1 regular event, got %d", regularEventCount)
 	}
 }
+
+// blockingSendServer blocks every Send until its context is done, so events pile up in the broker's queue.
+type blockingSendServer struct {
+	*mockSubscribeServer
+}
+
+func (b *blockingSendServer) Send(*pbv1.CloudEvent) error {
+	<-b.ctx.Done()
+	return b.ctx.Err()
+}
+
+func (b *blockingSendServer) SendMsg(message interface{}) error {
+	return b.Send(message.(*pbv1.CloudEvent))
+}
+
+func TestSubscribe_UsesConfiguredEventQueueSize(t *testing.T) {
+	const queueSize = 3
+	broker := NewGRPCBroker(&BrokerOptions{HeartbeatDisabled: true, EventQueueSize: queueSize})
+
+	dataType := cetypes.CloudEventsDataType{Group: "test", Version: "v1", Resource: "tests"}
+	broker.RegisterService(context.Background(), dataType, &testService{evts: make(map[string]*cloudevents.Event)})
+
+	server := &blockingSendServer{newMockSubscribeServer()}
+	defer server.Close()
+
+	go func() {
+		_ = broker.Subscribe(&pbv1.SubscriptionRequest{ClusterName: "test-cluster", DataType: dataType.String()}, server)
+	}()
+
+	var handler resourceHandler
+	for i := 0; handler == nil; i++ {
+		if i > 100 {
+			t.Fatal("subscriber was not registered")
+		}
+		time.Sleep(10 * time.Millisecond)
+		broker.mu.RLock()
+		for _, sub := range broker.subscribers {
+			handler = sub.handler
+		}
+		broker.mu.RUnlock()
+	}
+
+	var mu sync.Mutex
+	delivered := 0
+	go func() {
+		for server.ctx.Err() == nil {
+			evt := cloudevents.NewEvent()
+			evt.SetID("id")
+			evt.SetSource("test")
+			evt.SetType("test")
+			_ = handler(context.Background(), "sub", &evt)
+			mu.Lock()
+			delivered++
+			mu.Unlock()
+		}
+	}()
+
+	// One event is held by the blocked Send and queueSize more fill the queue; the next handler call blocks.
+	time.Sleep(300 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if delivered != queueSize+1 {
+		t.Errorf("expected %d events accepted before blocking, got %d", queueSize+1, delivered)
+	}
+}
