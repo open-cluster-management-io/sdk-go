@@ -1,9 +1,13 @@
 package applier
 
 import (
+	"bytes"
 	"context"
 	"testing"
+
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	v1 "k8s.io/api/apps/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -12,10 +16,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	clienttesting "k8s.io/client-go/testing"
 	fakework "open-cluster-management.io/api/client/work/clientset/versioned/fake"
 	workinformers "open-cluster-management.io/api/client/work/informers/externalversions"
 	workapiv1 "open-cluster-management.io/api/work/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 // assertActions asserts the actual actions have the expected action verb
@@ -50,6 +57,7 @@ func newUnstructured(apiVersion, kind, namespace, name string) *unstructured.Uns
 
 func newFakeWork(name, namespace string, obj runtime.Object) *workapiv1.ManifestWork {
 	rawObject, _ := runtime.Encode(unstructured.UnstructuredJSONScheme, obj)
+	rawObject = bytes.TrimRight(rawObject, "\n")
 
 	return &workapiv1.ManifestWork{
 		ObjectMeta: metav1.ObjectMeta{
@@ -181,6 +189,119 @@ func TestWorkApplierWithTypedClient(t *testing.T) {
 		t.Errorf("failed to delete work with err %v", err)
 	}
 	assertActions(t, fakeWorkClient.Actions(), "delete")
+}
+
+func getWork(t *testing.T, c client.Client, namespace, name string) *workapiv1.ManifestWork {
+	t.Helper()
+	work := &workapiv1.ManifestWork{}
+	if err := c.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, work); err != nil {
+		t.Fatalf("failed to get work %s/%s: %v", namespace, name, err)
+	}
+	return work
+}
+
+func assertWorkState(t *testing.T, c client.Client, namespace, name string, desired *workapiv1.ManifestWork) {
+	t.Helper()
+	actual := getWork(t, c, namespace, name)
+	if diff := cmp.Diff(desired.Spec, actual.Spec); diff != "" {
+		t.Fatalf("spec of %s/%s mismatch (-want +got):\n%s", namespace, name, diff)
+	}
+	if diff := cmp.Diff(desired.Annotations, actual.Annotations); diff != "" {
+		t.Fatalf("annotations of %s/%s mismatch (-want +got):\n%s", namespace, name, diff)
+	}
+}
+
+func TestWorkApplierWithRuntimeClient(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := workapiv1.Install(scheme); err != nil {
+		t.Fatalf("failed to add work scheme: %v", err)
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	workApplier := NewWorkApplierWithRuntimeClient(fakeClient)
+	ctx := context.TODO()
+
+	baseWork := newFakeWork("test", "test", newUnstructured("batch/v1", "Job", "default", "test"))
+	desired := baseWork.DeepCopy()
+
+	// Create: apply a MW that doesn't exist, verify it's persisted
+	if _, err := workApplier.Apply(ctx, desired.DeepCopy()); err != nil {
+		t.Fatalf("failed to create work: %v", err)
+	}
+	assertWorkState(t, fakeClient, "test", "test", desired)
+
+	// Update: change the desired spec, verify the object is patched
+	desired.Spec.DeleteOption = &workapiv1.DeleteOption{PropagationPolicy: workapiv1.DeletePropagationPolicyTypeForeground}
+	if _, err := workApplier.Apply(ctx, desired.DeepCopy()); err != nil {
+		t.Fatalf("failed to update work: %v", err)
+	}
+	assertWorkState(t, fakeClient, "test", "test", desired)
+
+	// Annotation add: verify annotations are patched
+	desired.SetAnnotations(map[string]string{workapiv1.ManifestConfigSpecHashAnnotationKey: "hash"})
+	if _, err := workApplier.Apply(ctx, desired.DeepCopy()); err != nil {
+		t.Fatalf("failed to add annotation: %v", err)
+	}
+	assertWorkState(t, fakeClient, "test", "test", desired)
+
+	// Annotation remove: verify annotations are cleared
+	desired.Annotations = nil
+	if _, err := workApplier.Apply(ctx, desired.DeepCopy()); err != nil {
+		t.Fatalf("failed to remove annotation: %v", err)
+	}
+	assertWorkState(t, fakeClient, "test", "test", desired)
+
+	// Cache hit: same desired, verify no write via unchanged resourceVersion
+	rvBefore := getWork(t, fakeClient, "test", "test").ResourceVersion
+	if _, err := workApplier.Apply(ctx, desired.DeepCopy()); err != nil {
+		t.Fatalf("failed to re-apply unchanged work: %v", err)
+	}
+	rvAfter := getWork(t, fakeClient, "test", "test").ResourceVersion
+	if rvBefore != rvAfter {
+		t.Fatalf("expected no write, but resourceVersion changed from %s to %s", rvBefore, rvAfter)
+	}
+
+	// Cache hit when generation unchanged: externally modify the spec without
+	// bumping generation. The cache still sees matching generation + desired
+	// hash, so it skips the apply.
+	tampered := getWork(t, fakeClient, "test", "test").DeepCopy()
+	tampered.Spec.DeleteOption = &workapiv1.DeleteOption{PropagationPolicy: workapiv1.DeletePropagationPolicyTypeOrphan}
+	if err := fakeClient.Update(ctx, tampered); err != nil {
+		t.Fatalf("failed to externally modify work: %v", err)
+	}
+	rvBefore = getWork(t, fakeClient, "test", "test").ResourceVersion
+	if _, err := workApplier.Apply(ctx, desired.DeepCopy()); err != nil {
+		t.Fatalf("failed to re-apply after external modification without generation bump: %v", err)
+	}
+	rvAfter = getWork(t, fakeClient, "test", "test").ResourceVersion
+	if rvBefore != rvAfter {
+		t.Fatalf("expected no write when generation unchanged, but resourceVersion changed from %s to %s", rvBefore, rvAfter)
+	}
+
+	// External modification with generation bump: simulate a real API server
+	// spec change (e.g., kubectl edit or another addon manager).
+	// The applier should revert the work back to its desired state.
+	tampered.Generation++
+	if err := fakeClient.Update(ctx, tampered); err != nil {
+		t.Fatalf("failed to externally modify work: %v", err)
+	}
+	if _, err := workApplier.Apply(ctx, desired.DeepCopy()); err != nil {
+		t.Fatalf("failed to restore drifted work: %v", err)
+	}
+	assertWorkState(t, fakeClient, "test", "test", desired)
+
+	// Delete: verify object is removed
+	if err := workApplier.Delete(ctx, "test", "test"); err != nil {
+		t.Fatalf("failed to delete work: %v", err)
+	}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: "test", Namespace: "test"}, &workapiv1.ManifestWork{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected NotFound after delete, got: %v", err)
+	}
+
+	// Delete nonexistent: verify idempotency (no error)
+	if err := workApplier.Delete(ctx, "test", "nonexistent"); err != nil {
+		t.Fatalf("expected no error deleting nonexistent work, got: %v", err)
+	}
 }
 
 var deploymentJson = `{
