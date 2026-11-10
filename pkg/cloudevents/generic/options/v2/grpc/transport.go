@@ -75,10 +75,11 @@ func (t *grpcTransport) Connect(ctx context.Context) error {
 }
 
 func (t *grpcTransport) Send(ctx context.Context, evt cloudevents.Event) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu.RLock()
+	client := t.client
+	t.mu.RUnlock()
 
-	if t.client == nil {
+	if client == nil {
 		return fmt.Errorf("transport not connected")
 	}
 
@@ -87,7 +88,7 @@ func (t *grpcTransport) Send(ctx context.Context, evt cloudevents.Event) error {
 		return err
 	}
 
-	if _, err := t.client.Publish(ctx, &pbv1.PublishRequest{Event: pbEvt}); err != nil {
+	if _, err := client.Publish(ctx, &pbv1.PublishRequest{Event: pbEvt}); err != nil {
 		return err
 	}
 
