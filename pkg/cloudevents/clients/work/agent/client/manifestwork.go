@@ -233,6 +233,23 @@ func (c *ManifestWorkAgentClient) Patch(ctx context.Context, name string, pt kub
 		}
 	}
 
+	// Update the store with the patched work only if the work has not been changed in the store
+	// since the patched work was derived from it. If the store supports conditional updates, the
+	// version check and the write are atomic with respect to the other store writers, so an update
+	// from the agent informer (e.g. applying a received delete event) cannot be interleaved between
+	// the check and the write and then be overwritten by the stale patched work.
+	if conditionalUpdater, ok := c.watcherStore.(store.ConditionalUpdater); ok {
+		if err := conditionalUpdater.UpdateWithVersion(ctx, newWork, patchedWork.ResourceVersion); err != nil {
+			if statusErr, ok := err.(*errors.StatusError); ok {
+				returnErr = statusErr
+			} else {
+				returnErr = errors.NewInternalError(err)
+			}
+			return nil, returnErr
+		}
+		return newWork, nil
+	}
+
 	// Fetch the latest work from the store and verify the resource version to avoid updating the store
 	// with outdated work. Return a conflict error if the resource version is outdated.
 	// Due to the lack of read-modify-write guarantees in the store, race conditions may occur between
