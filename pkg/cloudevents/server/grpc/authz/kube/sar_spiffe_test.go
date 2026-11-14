@@ -2,6 +2,7 @@ package sar
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -196,4 +197,65 @@ func TestSARAuthorizeStreamSPIFFE(t *testing.T) {
 			require.Equal(t, authz.DecisionAllow, decision)
 		})
 	}
+}
+
+// TestSARSPIFFECheck checks that the extra SPIFFE check gets the data type of publishes and
+// subscriptions, denies before the SubjectAccessReview, and is skipped for requests without an
+// SVID.
+func TestSARSPIFFECheck(t *testing.T) {
+	refuseWork := func(_ authn.OCMIdentity, cluster string, et types.CloudEventsType) error {
+		if et.CloudEventsDataType == payload.ManifestBundleEventDataType {
+			return fmt.Errorf("no work for %s", cluster)
+		}
+		return nil
+	}
+	workStatus := types.CloudEventsType{CloudEventsDataType: payload.ManifestBundleEventDataType,
+		SubResource: types.SubResourceStatus, Action: types.UpdateRequestAction}
+	clusterStatus := types.CloudEventsType{CloudEventsDataType: cluster.ManagedClusterEventDataType,
+		SubResource: types.SubResourceStatus, Action: types.UpdateRequestAction}
+	id := agentIdentity("cluster1", "klusterlet")
+
+	t.Run("publish work: refused", func(t *testing.T) {
+		client, seen := allowAllSARClient(t)
+		decision, _, err := NewSARAuthorizer(client).WithSPIFFECheck(refuseWork).
+			AuthorizeRequest(spiffeContext(id), newPublishRequest(t, workStatus, "cluster1", nil))
+		require.Equal(t, authz.DecisionDeny, decision)
+		require.ErrorContains(t, err, "no work for cluster1")
+		require.Empty(t, *seen)
+	})
+	t.Run("publish ManagedCluster: allowed", func(t *testing.T) {
+		client, seen := allowAllSARClient(t)
+		decision, _, err := NewSARAuthorizer(client).WithSPIFFECheck(refuseWork).
+			AuthorizeRequest(spiffeContext(id), newPublishRequest(t, clusterStatus, "cluster1",
+				&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster1"}}))
+		require.NoError(t, err)
+		require.Equal(t, authz.DecisionAllow, decision)
+		require.Len(t, *seen, 1)
+	})
+	subscribe := func(t *testing.T, ctx context.Context, dataType types.CloudEventsDataType) (authz.Decision, error, int) {
+		client, seen := allowAllSARClient(t)
+		decision, _, err := NewSARAuthorizer(client).WithSPIFFECheck(refuseWork).AuthorizeStream(ctx,
+			&spiffeSubscribeStream{ctx: ctx, req: &pbv1.SubscriptionRequest{
+				ClusterName: "cluster1", DataType: dataType.String()}},
+			&grpc.StreamServerInfo{FullMethod: pbv1.CloudEventService_Subscribe_FullMethodName, IsServerStream: true})
+		return decision, err, len(*seen)
+	}
+	t.Run("subscribe to work: refused", func(t *testing.T) {
+		decision, err, sars := subscribe(t, spiffeContext(id), payload.ManifestBundleEventDataType)
+		require.Equal(t, authz.DecisionDeny, decision)
+		require.ErrorContains(t, err, "no work for cluster1")
+		require.Zero(t, sars)
+	})
+	t.Run("subscribe to ManagedCluster: allowed", func(t *testing.T) {
+		decision, err, _ := subscribe(t, spiffeContext(id), cluster.ManagedClusterEventDataType)
+		require.NoError(t, err)
+		require.Equal(t, authz.DecisionAllow, decision)
+	})
+	t.Run("no SVID: check skipped", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), authn.ContextUserKey, "user1")
+		decision, err, sars := subscribe(t, ctx, payload.ManifestBundleEventDataType)
+		require.NoError(t, err)
+		require.Equal(t, authz.DecisionAllow, decision)
+		require.Equal(t, 1, sars)
+	})
 }
