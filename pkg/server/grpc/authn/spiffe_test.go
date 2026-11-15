@@ -202,3 +202,7 @@ func TestSVIDExpiryInterceptors(t *testing.T) {
 		})
 	}
 }
+
+func TestSPIFFEAuthInfoAuthType(t *testing.T) {
+	require.Equal(t, "spiffe", SPIFFEAuthInfo{}.AuthType())
+}

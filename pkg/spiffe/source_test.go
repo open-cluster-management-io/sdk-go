@@ -79,3 +79,13 @@ func TestX509SourceLosesID(t *testing.T) {
 	api.SetSVIDs(ca.Issue(t, workID, time.Hour))
 	require.Eventually(t, func() bool { return src.Ready() == nil }, 5*time.Second, 50*time.Millisecond)
 }
+
+// Opening the Workload API fails, for example when the agent stops before it connects.
+func TestNewX509SourceWorkloadAPIError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := NewX509Source(ctx, "unix:///nonexistent/spire-agent.sock", spiffeid.RequireFromString(workID))
+	require.Error(t, err)
+	var notFound *ErrSVIDNotFound
+	require.False(t, errors.As(err, &notFound), "a Workload API error is not a missing SVID: %v", err)
+}
