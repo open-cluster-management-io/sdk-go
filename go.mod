@@ -120,4 +120,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
 )
 
-replace open-cluster-management.io/api => github.com/ssijbabu/api v1.3.1-0.20261113090800-b805cf6c07e4
+replace open-cluster-management.io/api => github.com/ssijbabu/api v1.3.1-0.20261120193913-0adf5a6ae3ae
