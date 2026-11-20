@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ import (
 
 	workv1 "open-cluster-management.io/api/work/v1"
 
+	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/common"
 	"open-cluster-management.io/sdk-go/pkg/cloudevents/clients/store"
 )
 
@@ -107,6 +109,11 @@ func (s *SourceInformerWatcherStore) SetInformer(informer cache.SharedIndexInfor
 type AgentInformerWatcherStore struct {
 	store.AgentInformerWatcherStore[*workv1.ManifestWork]
 
+	// mu synchronizes the store writers, making the read-modify-write sequences in
+	// HandleReceivedResource and UpdateWithVersion atomic with respect to each other
+	// and to the plain Add/Update/Delete writers.
+	mu sync.Mutex
+
 	versions *versioner
 }
 
@@ -141,6 +148,7 @@ func (v *versioner) delete(name string) {
 }
 
 var _ store.ClientWatcherStore[*workv1.ManifestWork] = &AgentInformerWatcherStore{}
+var _ store.ConditionalUpdater = &AgentInformerWatcherStore{}
 
 func NewAgentInformerWatcherStore() *AgentInformerWatcherStore {
 	return &AgentInformerWatcherStore{
@@ -155,6 +163,24 @@ func NewAgentInformerWatcherStore() *AgentInformerWatcherStore {
 }
 
 func (s *AgentInformerWatcherStore) Add(resource runtime.Object) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.add(resource)
+}
+
+func (s *AgentInformerWatcherStore) Update(resource runtime.Object) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.update(resource)
+}
+
+func (s *AgentInformerWatcherStore) Delete(resource runtime.Object) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.delete(resource)
+}
+
+func (s *AgentInformerWatcherStore) add(resource runtime.Object) error {
 	accessor, err := meta.Accessor(resource)
 	if err != nil {
 		return err
@@ -163,7 +189,7 @@ func (s *AgentInformerWatcherStore) Add(resource runtime.Object) error {
 	return s.AgentInformerWatcherStore.Add(resource)
 }
 
-func (s *AgentInformerWatcherStore) Update(resource runtime.Object) error {
+func (s *AgentInformerWatcherStore) update(resource runtime.Object) error {
 	accessor, err := meta.Accessor(resource)
 	if err != nil {
 		return err
@@ -172,7 +198,7 @@ func (s *AgentInformerWatcherStore) Update(resource runtime.Object) error {
 	return s.AgentInformerWatcherStore.Update(resource)
 }
 
-func (s *AgentInformerWatcherStore) Delete(resource runtime.Object) error {
+func (s *AgentInformerWatcherStore) delete(resource runtime.Object) error {
 	accessor, err := meta.Accessor(resource)
 	if err != nil {
 		return err
@@ -181,7 +207,48 @@ func (s *AgentInformerWatcherStore) Delete(resource runtime.Object) error {
 	return s.AgentInformerWatcherStore.Delete(resource)
 }
 
+// UpdateWithVersion updates the work in the store only if the store's current resource version
+// of the work equals expectedResourceVersion ("0" forces the update), returning a conflict
+// error otherwise. The version check and the write happen atomically with respect to the other
+// store writers, e.g. HandleReceivedResource applying a received delete event, so a stale
+// update derived from an older version of the work cannot overwrite a newer one.
+func (s *AgentInformerWatcherStore) UpdateWithVersion(ctx context.Context, resource runtime.Object, expectedResourceVersion string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	accessor, err := meta.Accessor(resource)
+	if err != nil {
+		return err
+	}
+
+	if expectedResourceVersion == "" {
+		return errors.NewConflict(common.ManifestWorkGR, accessor.GetName(), fmt.Errorf(
+			"the expected resource version of the work cannot be empty"))
+	}
+
+	lastWork, exists, err := s.Get(ctx, accessor.GetNamespace(), accessor.GetName())
+	if err != nil {
+		return errors.NewInternalError(err)
+	}
+	if !exists {
+		return errors.NewNotFound(common.ManifestWorkGR, accessor.GetName())
+	}
+
+	if expectedResourceVersion != "0" && lastWork.GetResourceVersion() != expectedResourceVersion {
+		return errors.NewConflict(common.ManifestWorkGR, accessor.GetName(), fmt.Errorf(
+			"the work has been modified in the store, expected resource version %s, current %s",
+			expectedResourceVersion, lastWork.GetResourceVersion()))
+	}
+
+	return s.update(resource)
+}
+
 func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, work *workv1.ManifestWork) error {
+	// Hold the store lock for the whole read-modify-write sequence, so another store writer
+	// cannot be interleaved between reading the cached work and writing it back.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// for compatibility, we get the work by its UID
 	// TODO get the work by its namespace/name
 	existingWorks, err := s.findWorksByUID(ctx, work.UID)
@@ -190,14 +257,14 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 	}
 
 	if len(existingWorks) == 0 {
-		return s.Add(work.DeepCopy())
+		return s.add(work.DeepCopy())
 	}
 
 	lastWork := s.getWork(existingWorks, work)
 	if lastWork == nil {
 		// For compatibility, if a work is found by UID but not by namespace/name,
 		// it means the work's name has changed — replace the existing work with the new one.
-		if err := s.Add(work.DeepCopy()); err != nil {
+		if err := s.add(work.DeepCopy()); err != nil {
 			return err
 		}
 
@@ -217,7 +284,7 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 		// the object is in deleting state.
 		deletingWork.DeletionTimestamp = work.DeletionTimestamp
 		deletingWork.Generation = work.Generation
-		return s.Update(deletingWork)
+		return s.update(deletingWork)
 	}
 
 	// Skip processing if the incoming work has a valid but stale generation.
@@ -233,7 +300,7 @@ func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, 
 	// restore the fields that are maintained by local agent.
 	updatedWork.Finalizers = lastWork.Finalizers
 	updatedWork.Status = lastWork.Status
-	return s.Update(updatedWork)
+	return s.update(updatedWork)
 }
 
 func (s *AgentInformerWatcherStore) findWorksByUID(ctx context.Context, uid kubetypes.UID) ([]*workv1.ManifestWork, error) {
