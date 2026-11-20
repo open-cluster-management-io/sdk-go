@@ -44,6 +44,7 @@ func agentIdentity(cluster, role string) authn.OCMIdentity {
 		Groups: []string{
 			"system:open-cluster-management:" + cluster,
 			"system:open-cluster-management:managed-clusters",
+			"system:open-cluster-management:spiffe-agents",
 			"system:authenticated",
 		},
 	}

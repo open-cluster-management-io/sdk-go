@@ -76,6 +76,7 @@ func TestIDSchemeGroups(t *testing.T) {
 		Groups: []string{
 			"system:open-cluster-management:cluster1",
 			"system:open-cluster-management:managed-clusters",
+			"system:open-cluster-management:spiffe-agents",
 			"system:authenticated",
 		},
 	}, work)
