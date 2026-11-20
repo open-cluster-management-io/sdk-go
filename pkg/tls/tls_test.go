@@ -251,6 +251,8 @@ func TestConfigToFunc(t *testing.T) {
 		expectMaxVersion    uint16
 		expectCipherSuites  bool
 		expectedCipherCount int
+		expectGroups        bool
+		expectedGroupCount  int
 	}{
 		{
 			name: "TLS 1.2 with ciphers",
@@ -295,6 +297,45 @@ func TestConfigToFunc(t *testing.T) {
 			expectMaxVersion:   tls.VersionTLS13,
 			expectCipherSuites: false, // TLS 1.3 branch doesn't set CipherSuites
 		},
+		{
+			name: "groups set CurvePreferences",
+			tlsCfg: &TLSConfig{
+				MinVersion: tls.VersionTLS12,
+				Groups:     []tls.CurveID{tls.X25519, tls.CurveP256},
+			},
+			expectMinVersion:   tls.VersionTLS12,
+			expectCipherSuites: false,
+			expectGroups:       true,
+			expectedGroupCount: 2,
+		},
+		{
+			name: "empty groups leave CurvePreferences unset",
+			tlsCfg: &TLSConfig{
+				MinVersion:   tls.VersionTLS12,
+				CipherSuites: nil,
+				Groups:       nil,
+			},
+			expectMinVersion:   tls.VersionTLS12,
+			expectCipherSuites: false,
+			expectGroups:       false,
+		},
+		{
+			name: "ciphers and groups together",
+			tlsCfg: &TLSConfig{
+				MinVersion:   tls.VersionTLS12,
+				CipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256},
+				Groups:       []tls.CurveID{tls.X25519},
+			},
+			expectMinVersion:    tls.VersionTLS12,
+			expectCipherSuites:  true,
+			expectedCipherCount: 1,
+			expectGroups:        true,
+			expectedGroupCount:  1,
+		},
+		{
+			name:   "nil config is a no-op",
+			tlsCfg: nil,
+		},
 	}
 
 	for _, tc := range cases {
@@ -302,6 +343,10 @@ func TestConfigToFunc(t *testing.T) {
 			config := &tls.Config{}
 			fn := ConfigToFunc(tc.tlsCfg)
 			fn(config)
+
+			if tc.tlsCfg == nil {
+				return
+			}
 
 			if config.MinVersion != tc.expectMinVersion {
 				t.Errorf("expected MinVersion %d, got %d", tc.expectMinVersion, config.MinVersion)
@@ -325,6 +370,17 @@ func TestConfigToFunc(t *testing.T) {
 			} else {
 				if len(config.CipherSuites) != 0 {
 					t.Errorf("expected no cipher suites, got %d", len(config.CipherSuites))
+				}
+			}
+
+			if tc.expectGroups {
+				if len(config.CurvePreferences) != tc.expectedGroupCount {
+					t.Errorf("expected %d curve preferences, got %d",
+						tc.expectedGroupCount, len(config.CurvePreferences))
+				}
+			} else {
+				if len(config.CurvePreferences) != 0 {
+					t.Errorf("expected no curve preferences, got %d", len(config.CurvePreferences))
 				}
 			}
 		})
@@ -351,12 +407,13 @@ func TestLoadTLSConfigFromConfigMap(t *testing.T) {
 	namespace := "test-namespace"
 
 	cases := []struct {
-		name        string
-		setupClient func() *fake.Clientset
-		expectNil   bool
-		expectError bool
-		expectedMin uint16
-		expectedLen int
+		name             string
+		setupClient      func() *fake.Clientset
+		expectNil        bool
+		expectError      bool
+		expectedMin      uint16
+		expectedLen      int
+		expectedGroupLen int
 	}{
 		{
 			name: "ConfigMap not found returns nil, nil",
@@ -499,6 +556,132 @@ func TestLoadTLSConfigFromConfigMap(t *testing.T) {
 			expectError: false,
 			expectedMin: tls.VersionTLS12,
 		},
+		{
+			name: "ConfigMap with groups parses them",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion: "VersionTLS12",
+						ConfigMapKeyGroups:     "x25519,secp256r1",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError:      false,
+			expectedMin:      tls.VersionTLS12,
+			expectedGroupLen: 2,
+		},
+		{
+			name: "ConfigMap with Go-style group names and mixed case parses them",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion: "VersionTLS12",
+						ConfigMapKeyGroups:     "X25519, P384 ,X25519MLKEM768",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError:      false,
+			expectedMin:      tls.VersionTLS12,
+			expectedGroupLen: 3,
+		},
+		{
+			name: "ConfigMap without groups key leaves Groups empty",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion: "VersionTLS12",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError: false,
+			expectedMin: tls.VersionTLS12,
+		},
+		{
+			name: "ConfigMap with unsupported group (warning but no error)",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion: "VersionTLS12",
+						ConfigMapKeyGroups:     "x25519,FutureGroup",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError:      false,
+			expectedMin:      tls.VersionTLS12,
+			expectedGroupLen: 1, // Only the valid group
+		},
+		{
+			name: "ConfigMap with all unsupported groups returns error",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion: "VersionTLS12",
+						ConfigMapKeyGroups:     "FutureGroup1,FutureGroup2",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError: true,
+		},
+		{
+			name: "ConfigMap with separator-only groups returns error",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion: "VersionTLS12",
+						ConfigMapKeyGroups:     ",,",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError: true,
+		},
+		{
+			name: "ConfigMap with whitespace-only groups is treated as absent",
+			setupClient: func() *fake.Clientset {
+				cm := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      ConfigMapName,
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						ConfigMapKeyMinVersion: "VersionTLS12",
+						ConfigMapKeyGroups:     "   ",
+					},
+				}
+				return fake.NewClientset(cm)
+			},
+			expectError: false,
+			expectedMin: tls.VersionTLS12,
+		},
 	}
 
 	for _, tc := range cases {
@@ -537,6 +720,10 @@ func TestLoadTLSConfigFromConfigMap(t *testing.T) {
 
 			if len(cfg.CipherSuites) != tc.expectedLen {
 				t.Errorf("expected %d cipher suites, got %d", tc.expectedLen, len(cfg.CipherSuites))
+			}
+
+			if len(cfg.Groups) != tc.expectedGroupLen {
+				t.Errorf("expected %d groups, got %d", tc.expectedGroupLen, len(cfg.Groups))
 			}
 		})
 	}
@@ -942,6 +1129,234 @@ func TestParseCipherSuites(t *testing.T) {
 				t.Errorf("expected %d unsupported ciphers, got %d", tc.expectedUnsupported, len(unsupported))
 			}
 		})
+	}
+}
+
+func TestParseGroups(t *testing.T) {
+	cases := []struct {
+		name                string
+		groupsString        string
+		expectedGroups      []tls.CurveID
+		expectedUnsupported int
+	}{
+		{
+			name:         "empty string",
+			groupsString: "",
+		},
+		{
+			name:         "whitespace only",
+			groupsString: "   ",
+		},
+		{
+			name:           "single IANA name",
+			groupsString:   "x25519",
+			expectedGroups: []tls.CurveID{tls.X25519},
+		},
+		{
+			name:           "multiple IANA names",
+			groupsString:   "x25519,secp256r1,secp384r1",
+			expectedGroups: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
+		},
+		{
+			name:           "Go CurveID names",
+			groupsString:   "X25519,P256,P384,P521",
+			expectedGroups: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384, tls.CurveP521},
+		},
+		{
+			name:           "case-insensitive matching",
+			groupsString:   "X25519,SECP256R1,SecP384r1",
+			expectedGroups: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
+		},
+		{
+			name:           "hybrid post-quantum groups",
+			groupsString:   "X25519MLKEM768,SecP256r1MLKEM768,secp384r1mlkem1024",
+			expectedGroups: []tls.CurveID{tls.X25519MLKEM768, tls.SecP256r1MLKEM768, tls.SecP384r1MLKEM1024},
+		},
+		{
+			name:                "single unsupported group",
+			groupsString:        "FutureGroup",
+			expectedUnsupported: 1,
+		},
+		{
+			name:                "mixed valid and unsupported",
+			groupsString:        "x25519,FutureGroup",
+			expectedGroups:      []tls.CurveID{tls.X25519},
+			expectedUnsupported: 1,
+		},
+		{
+			name:           "groups with whitespace",
+			groupsString:   " x25519 , secp256r1 ",
+			expectedGroups: []tls.CurveID{tls.X25519, tls.CurveP256},
+		},
+		{
+			name:           "empty entries in list",
+			groupsString:   "x25519,,secp256r1",
+			expectedGroups: []tls.CurveID{tls.X25519, tls.CurveP256},
+		},
+		{
+			name:           "hexadecimal code point",
+			groupsString:   "0x001d",
+			expectedGroups: []tls.CurveID{tls.X25519},
+		},
+		{
+			name:           "decimal code point",
+			groupsString:   "29",
+			expectedGroups: []tls.CurveID{tls.X25519},
+		},
+		{
+			name:           "uppercase hex prefix",
+			groupsString:   "0X001D",
+			expectedGroups: []tls.CurveID{tls.X25519},
+		},
+		{
+			name:           "mixed names and code points",
+			groupsString:   "x25519,0x0017,P384",
+			expectedGroups: []tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384},
+		},
+		{
+			name:           "unassigned code point passes through",
+			groupsString:   "0x0011",
+			expectedGroups: []tls.CurveID{0x0011},
+		},
+		{
+			name:                "zero code point is unsupported",
+			groupsString:        "0x0000",
+			expectedUnsupported: 1,
+		},
+		{
+			name:                "out-of-range code point is unsupported",
+			groupsString:        "0x10000",
+			expectedUnsupported: 1,
+		},
+		{
+			name:                "bare hex prefix is unsupported",
+			groupsString:        "0x",
+			expectedUnsupported: 1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			groups, unsupported := ParseGroups(tc.groupsString)
+
+			if len(groups) != len(tc.expectedGroups) {
+				t.Fatalf("expected %d groups, got %d", len(tc.expectedGroups), len(groups))
+			}
+			for i, group := range tc.expectedGroups {
+				if groups[i] != group {
+					t.Errorf("expected group %d to be %d, got %d", i, group, groups[i])
+				}
+			}
+
+			if len(unsupported) != tc.expectedUnsupported {
+				t.Errorf("expected %d unsupported groups, got %d", tc.expectedUnsupported, len(unsupported))
+			}
+		})
+	}
+}
+
+// TestParseGroupsAcceptsCurveIDStringNames verifies the advertised contract that
+// every name produced by tls.CurveID.String is parseable.
+func TestParseGroupsAcceptsCurveIDStringNames(t *testing.T) {
+	for id, canonicalName := range curveNamesByID {
+		t.Run(canonicalName, func(t *testing.T) {
+			groups, unsupported := ParseGroups(id.String())
+
+			if len(unsupported) != 0 {
+				t.Errorf("expected no unsupported groups, got %v", unsupported)
+			}
+			if len(groups) != 1 || groups[0] != id {
+				t.Errorf("expected [%d], got %v", id, groups)
+			}
+		})
+	}
+}
+
+func TestGroupsToString(t *testing.T) {
+	cases := []struct {
+		name     string
+		groups   []tls.CurveID
+		expected string
+	}{
+		{
+			name:     "empty slice",
+			groups:   []tls.CurveID{},
+			expected: "",
+		},
+		{
+			name:     "nil slice",
+			groups:   nil,
+			expected: "",
+		},
+		{
+			name:     "single group",
+			groups:   []tls.CurveID{tls.X25519},
+			expected: "x25519",
+		},
+		{
+			name:     "multiple groups",
+			groups:   []tls.CurveID{tls.X25519, tls.CurveP256},
+			expected: "x25519,secp256r1",
+		},
+		{
+			name:     "hybrid post-quantum group",
+			groups:   []tls.CurveID{tls.X25519MLKEM768},
+			expected: "X25519MLKEM768",
+		},
+		{
+			name: "unknown group ID falls back to numeric code point",
+			groups: []tls.CurveID{
+				tls.X25519,
+				0x9999, // unknown group
+				tls.CurveP256,
+			},
+			expected: "x25519,0x9999,secp256r1",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := GroupsToString(tc.groups)
+			if result != tc.expected {
+				t.Errorf("expected %s, got %s", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestGroupsRoundTrip(t *testing.T) {
+	// Every parseable name must survive a ParseGroups → GroupsToString round trip.
+	original := "x25519,secp256r1,secp384r1,secp521r1,X25519MLKEM768,SecP256r1MLKEM768,SecP384r1MLKEM1024"
+
+	groups, unsupported := ParseGroups(original)
+	if len(unsupported) != 0 {
+		t.Fatalf("expected no unsupported groups, got %v", unsupported)
+	}
+	if len(groups) != 7 {
+		t.Fatalf("expected 7 groups, got %d", len(groups))
+	}
+
+	roundTripped := GroupsToString(groups)
+	if roundTripped != original {
+		t.Errorf("round trip mismatch: expected %s, got %s", original, roundTripped)
+	}
+}
+
+func TestGroupsRoundTripNumeric(t *testing.T) {
+	// Code points must survive a ParseGroups → GroupsToString round trip.
+	original := "0x0011,0x0023"
+
+	groups, unsupported := ParseGroups(original)
+	if len(unsupported) != 0 {
+		t.Fatalf("expected no unsupported groups, got %v", unsupported)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+
+	roundTripped := GroupsToString(groups)
+	if roundTripped != original {
+		t.Errorf("round trip mismatch: expected %s, got %s", original, roundTripped)
 	}
 }
 

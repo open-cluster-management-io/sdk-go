@@ -168,6 +168,21 @@ func parseTLSConfigFromConfigMap(cm *corev1.ConfigMap) (*TLSConfig, error) {
 		cfg.CipherSuites = cipherSuites
 	}
 
+	// Parse groups (curve preferences). Whitespace-only values are treated as
+	// absent; any other non-empty value must yield at least one group.
+	groupsStr := strings.TrimSpace(cm.Data[ConfigMapKeyGroups])
+	if groupsStr != "" {
+		groups, unsupported := ParseGroups(groupsStr)
+		if len(unsupported) > 0 {
+			klog.Warningf("Unsupported groups in ConfigMap %s/%s: %v", cm.Namespace, cm.Name, unsupported)
+		}
+		if len(groups) == 0 {
+			return nil, fmt.Errorf("invalid groups in ConfigMap %s/%s: no supported groups found",
+				cm.Namespace, cm.Name)
+		}
+		cfg.Groups = groups
+	}
+
 	return cfg, nil
 }
 

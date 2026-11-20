@@ -1,8 +1,8 @@
 # pkg/tls
 
 Helpers for loading, parsing, and applying TLS profile configuration in OCM components.
-TLS settings (minimum version and cipher suites) are stored in a well-known ConfigMap
-(`ocm-tls-profile`) and optionally propagated via command-line flags.
+TLS settings (minimum version, cipher suites, and named groups) are stored in a well-known
+ConfigMap (`ocm-tls-profile`) and optionally propagated via command-line flags.
 
 ## ConfigMap format
 
@@ -16,6 +16,7 @@ data:
   minTLSVersion: VersionTLS13  # tls.ConfigMapKeyMinVersion
   cipherSuites: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
   #             ^ tls.ConfigMapKeyCipherSuites
+  groups: x25519,secp256r1     # tls.ConfigMapKeyGroups
 ```
 
 Supported `minTLSVersion` values: `VersionTLS10`, `VersionTLS11`, `VersionTLS12` (default),
@@ -25,24 +26,57 @@ Cipher suite names use the IANA format (e.g. `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA
 which matches what Go's `crypto/tls` package uses. TLS 1.3 cipher suites are fixed by
 the Go runtime and cannot be configured via `cipherSuites`.
 
+Group names use the IANA registered names for the TLS Supported Groups registry
+(e.g. `x25519`, `secp256r1`, `X25519MLKEM768`); the names produced by Go's
+`tls.CurveID.String` (e.g. `CurveP256`) and the short names `P256`/`P384`/`P521`
+are also accepted. Matching is case-insensitive.
+Groups restrict the key-exchange groups offered by the server (`tls.Config.CurvePreferences`);
+they apply to TLS 1.3 as well as to ECDHE cipher suites in earlier TLS versions. When
+`groups` is not set, Go's default group preferences apply. Group names that are not
+recognized are logged and skipped.
+
+Groups that are not in the name table can be configured by their numeric code point
+from the IANA registry, either hexadecimal with a `0x` prefix (e.g. `0x001d`) or
+decimal (e.g. `29`). Code points are passed through as-is, so newly registered
+groups can be used without library changes; the Go runtime ignores groups it does
+not support at handshake time.
+
 ## Use cases
 
 ### 1. Component receiving TLS flags
 
-Components that receive `--tls-min-version` and `--tls-cipher-suites` flags from their
-operator do not watch the ConfigMap directly.
+Components that receive `--tls-min-version`, `--tls-cipher-suites`, and `--tls-groups`
+flags from their operator do not watch the ConfigMap directly.
+
+`ConfigFromFlags` covers the version and cipher flags; the groups flag is parsed
+separately with `ParseGroups` and assigned to `TLSConfig.Groups` (the component must
+register the flag itself, since `ConfigFromFlags` does not take a groups argument):
 
 ```go
 import sdktls "open-cluster-management.io/sdk-go/pkg/tls"
 
+// Flags, typically registered via AddFlags on the component's command:
+//   --tls-min-version, --tls-cipher-suites, --tls-groups
+
 // Parse TLS configuration from command-line flags.
-// Returns nil if neither flag was provided (use GetDefaultTLSConfig as fallback).
-tlsCfg, err := sdktls.ConfigFromFlags(minVersionFlag, cipherSuitesFlag)
+// Returns nil if neither version nor ciphers flag was provided
+// (use GetDefaultTLSConfig as fallback).
+tlsCfg, err := sdktls.ConfigFromFlags(tlsMinVersionFlag, tlsCipherSuitesFlag)
 if err != nil {
     return err
 }
 if tlsCfg == nil {
     tlsCfg = sdktls.GetDefaultTLSConfig()
+}
+
+// Parse the groups flag. Reject unsupported names so typos fail fast at
+// startup instead of silently disabling groups.
+if tlsGroupsFlag != "" {
+    groups, unsupported := sdktls.ParseGroups(tlsGroupsFlag)
+    if len(groups) == 0 || len(unsupported) > 0 {
+        return fmt.Errorf("invalid --tls-groups: %v", unsupported)
+    }
+    tlsCfg.Groups = groups
 }
 
 // Apply to a controller-runtime webhook/metrics server via TLSOpts.
@@ -96,6 +130,9 @@ args := []string{
     "--tls-min-version", sdktls.VersionToString(tlsCfg.MinVersion),
     "--tls-cipher-suites", sdktls.CipherSuitesToString(tlsCfg.CipherSuites),
 }
+if len(tlsCfg.Groups) > 0 {
+    args = append(args, "--tls-groups", sdktls.GroupsToString(tlsCfg.Groups))
+}
 // Pass args to the managed component's Deployment.
 ```
 
@@ -110,5 +147,8 @@ args := []string{
 | `ConfigToFunc(tlsCfg)` | Returns a `func(*tls.Config)` for use with controller-runtime `TLSOpts`. |
 | `VersionToString(version)` | Convert a `crypto/tls` version constant to its string name. |
 | `CipherSuitesToString(suites)` | Convert cipher suite IDs back to a comma-separated IANA-format string. |
+| `ParseGroups(groupsString)` | Convert a comma-separated string of group names or numeric code points to `tls.CurveID` values. Returns unrecognized names. |
+| `GroupsToString(groups)` | Convert curve IDs back to a comma-separated string of IANA-format names. |
 
-Constants: `ConfigMapName`, `ConfigMapKeyMinVersion`, `ConfigMapKeyCipherSuites`.
+Constants: `ConfigMapName`, `ConfigMapKeyMinVersion`, `ConfigMapKeyCipherSuites`,
+`ConfigMapKeyGroups`.
