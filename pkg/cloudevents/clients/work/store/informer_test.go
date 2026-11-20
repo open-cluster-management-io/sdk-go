@@ -452,6 +452,62 @@ func TestSourceInformerWatcherStore_Watch(t *testing.T) {
 	}
 }
 
+// TestSourceInformerWatcherStore_WatchAfterWatcherStopped checks that the
+// source store hands back a working watcher after a reflector stops the
+// previous one, the same as the agent store.
+func TestSourceInformerWatcherStore_WatchAfterWatcherStopped(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	workClient := workfake.NewSimpleClientset()
+	workInformerFactory := workinformers.NewSharedInformerFactory(workClient, 10*time.Minute)
+
+	sourceStore := NewSourceInformerWatcherStore(ctx)
+	sourceStore.SetInformer(workInformerFactory.Work().V1().ManifestWorks().Informer())
+
+	first, err := sourceStore.GetWatcher(context.Background(), metav1.NamespaceAll, metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error getting watcher: %v", err)
+	}
+
+	// What client-go's reflector does via `defer w.Stop()`.
+	first.Stop()
+
+	second, err := sourceStore.GetWatcher(context.Background(), metav1.NamespaceAll, metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error getting watcher: %v", err)
+	}
+	defer second.Stop()
+	if first == second {
+		t.Fatal("expected a new watcher after the previous one was stopped")
+	}
+
+	events := make(chan watch.Event, 1)
+	go func() {
+		for evt := range second.ResultChan() {
+			select {
+			case events <- evt:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	work := &workv1.ManifestWork{ObjectMeta: metav1.ObjectMeta{Name: "test-work", Namespace: "test-cluster"}}
+	if err := sourceStore.Add(work); err != nil {
+		t.Fatalf("unexpected error calling Add: %v", err)
+	}
+
+	select {
+	case evt := <-events:
+		if evt.Type != watch.Added {
+			t.Errorf("expected Added event, got %s", evt.Type)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("event was dropped: the store kept using the stopped watcher")
+	}
+}
+
 func TestSourceInformerWatcherStore_HasInitiated(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -27,8 +27,11 @@ import (
 // It is used for building ManifestWork source client.
 type SourceInformerWatcherStore struct {
 	baseSourceStore
-	watcher  *store.Watcher
-	informer cache.SharedIndexInformer
+	// watcherLock guards watcher, which GetWatcher replaces once the current
+	// one has been stopped.
+	watcherLock sync.RWMutex
+	watcher     *store.Watcher
+	informer    cache.SharedIndexInformer
 }
 
 var _ store.ClientWatcherStore[*workv1.ManifestWork] = &SourceInformerWatcherStore{}
@@ -51,18 +54,28 @@ func NewSourceInformerWatcherStore(ctx context.Context) *SourceInformerWatcherSt
 	return s
 }
 
+// currentWatcher returns the watcher events should be sent to right now. It is
+// not necessarily the one GetWatcher returned last, since a reflector can stop
+// its watch at any time.
+func (s *SourceInformerWatcherStore) currentWatcher() *store.Watcher {
+	s.watcherLock.RLock()
+	defer s.watcherLock.RUnlock()
+
+	return s.watcher
+}
+
 func (s *SourceInformerWatcherStore) Add(work runtime.Object) error {
-	s.watcher.Receive(watch.Event{Type: watch.Added, Object: work})
+	s.currentWatcher().Receive(watch.Event{Type: watch.Added, Object: work})
 	return nil
 }
 
 func (s *SourceInformerWatcherStore) Update(work runtime.Object) error {
-	s.watcher.Receive(watch.Event{Type: watch.Modified, Object: work})
+	s.currentWatcher().Receive(watch.Event{Type: watch.Modified, Object: work})
 	return nil
 }
 
 func (s *SourceInformerWatcherStore) Delete(work runtime.Object) error {
-	s.watcher.Receive(watch.Event{Type: watch.Deleted, Object: work})
+	s.currentWatcher().Receive(watch.Event{Type: watch.Deleted, Object: work})
 	return nil
 }
 
@@ -75,6 +88,16 @@ func (s *SourceInformerWatcherStore) GetWatcher(ctx context.Context, namespace s
 		return nil, fmt.Errorf("unsupported to watch from the namespace %s", namespace)
 	}
 
+	// A reflector stops its watch every time its watch loop exits and then asks
+	// for a new one. Handing back the stopped watcher would make every later
+	// Receive a silent no-op, leaving the informer permanently deaf.
+	s.watcherLock.Lock()
+	if s.watcher == nil || s.watcher.IsStopped() {
+		s.watcher = store.NewWatcher()
+	}
+	watcher := s.watcher
+	s.watcherLock.Unlock()
+
 	// If AllowWatchBookmarks is enabled, send a bookmark event to signal the end of the initial event stream.
 	// This is required by Kubernetes 1.35+ reflectors to properly initialize watches.
 	if opts.AllowWatchBookmarks {
@@ -86,11 +109,11 @@ func (s *SourceInformerWatcherStore) GetWatcher(ctx context.Context, namespace s
 			bookmarkWork.SetAnnotations(map[string]string{
 				metav1.InitialEventsAnnotationKey: "true",
 			})
-			s.watcher.Receive(watch.Event{Type: watch.Bookmark, Object: bookmarkWork})
+			watcher.Receive(watch.Event{Type: watch.Bookmark, Object: bookmarkWork})
 		}()
 	}
 
-	return s.watcher, nil
+	return watcher, nil
 }
 
 func (s *SourceInformerWatcherStore) SetInformer(informer cache.SharedIndexInformer) {

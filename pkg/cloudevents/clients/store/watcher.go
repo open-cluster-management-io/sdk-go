@@ -39,6 +39,16 @@ func (w *Watcher) ResultChan() <-chan watch.Event {
 	return w.result
 }
 
+// IsStopped returns whether this watcher has been stopped. A stopped watcher
+// discards everything passed to Receive and can never be restarted, so a caller
+// handing out watchers must replace one that reports true.
+func (w *Watcher) IsStopped() bool {
+	w.RLock()
+	defer w.RUnlock()
+
+	return w.stopped
+}
+
 // Stop implements Interface.
 func (w *Watcher) Stop() {
 	// Call Close() exactly once by locking and setting a flag.
