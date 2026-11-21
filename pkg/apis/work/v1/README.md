@@ -89,52 +89,10 @@ The input `index` is the count of the existing manifestWorks.
 
 1. Create a `WorkApplier` instance.
 
-    There is a default `WorkApplier` instance with ManifestWork typed client.
+    There are two constructors:
     
-    One is `NewWorkApplierWithTypedClient(workClient workv1client.Interface, workLister worklister.ManifestWorkLister)` 
-    with manifestWork typed client. 
-
-    You can also define the instance with runtime client, for example:
-   ```go
-   func NewWorkApplierWithRuntimeClient(workClient client.Client) *WorkApplier {
-       return &WorkApplier{
-           cache: newWorkCache(),
-           getWork: func(ctx context.Context, namespace, name string) (*workapiv1.ManifestWork, error) {
-               work := &workapiv1.ManifestWork{}
-               err := workClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, work)
-               return work, err
-           },
-           deleteWork: func(ctx context.Context, namespace, name string) error {
-               work := &workapiv1.ManifestWork{
-                   ObjectMeta: metav1.ObjectMeta{
-                       Name:      name,
-                       Namespace: namespace,
-                   },
-               }
-               return workClient.Delete(ctx, work)
-           },
-           patchWork: func(ctx context.Context, namespace, name string, pt types.PatchType, data []byte) (*workapiv1.ManifestWork, error) {
-               work := &workapiv1.ManifestWork{
-                   ObjectMeta: metav1.ObjectMeta{
-                       Name:      name,
-                       Namespace: namespace,
-                   },
-               }
-               if err := workClient.Patch(ctx, work, client.RawPatch(pt, data)); err != nil {
-                   return nil, err
-               }
-               if err := workClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, work); err != nil {
-                   return nil, err
-               }
-               return work, nil
-           },
-           createWork: func(ctx context.Context, work *workapiv1.ManifestWork) (*workapiv1.ManifestWork, error) {
-               err := workClient.Create(ctx, work)
-               return work, err
-           },
-      }
-   }
-   ``` 
+    - `NewWorkApplierWithTypedClient(workClient workv1client.Interface, workLister worklister.ManifestWorkLister)`, for use with a typed ManifestWork client and a lister (e.g., from a SharedInformerFactory). Reads are served from the lister cache.
+    - `NewWorkApplierWithRuntimeClient(workClient client.Client)`, for use with a controller-runtime `client.Client` (e.g., in a controller-runtime based controller). Reads go through the client's cache.
 
 2. Apply a manifestWork.
     
