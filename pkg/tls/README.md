@@ -35,6 +35,10 @@ they apply to TLS 1.3 as well as to ECDHE cipher suites in earlier TLS versions.
 `groups` is not set, Go's default group preferences apply. Group names that are not
 recognized are logged and skipped.
 
+Components that emit group names can assert that every name they emit is
+parseable against `SupportedGroupNames`, turning a silent runtime skip into a
+build-time failure.
+
 Groups that are not in the name table can be configured by their numeric code point
 from the IANA registry, either hexadecimal with a `0x` prefix (e.g. `0x001d`) or
 decimal (e.g. `29`). Code points are passed through as-is, so newly registered
@@ -48,9 +52,8 @@ not support at handshake time.
 Components that receive `--tls-min-version`, `--tls-cipher-suites`, and `--tls-groups`
 flags from their operator do not watch the ConfigMap directly.
 
-`ConfigFromFlags` covers the version and cipher flags; the groups flag is parsed
-separately with `ParseGroups` and assigned to `TLSConfig.Groups` (the component must
-register the flag itself, since `ConfigFromFlags` does not take a groups argument):
+`ConfigFromFlags` covers the version, cipher and groups flags; the groups flag is
+optional, so callers without a groups flag keep the two-argument form:
 
 ```go
 import sdktls "open-cluster-management.io/sdk-go/pkg/tls"
@@ -59,24 +62,18 @@ import sdktls "open-cluster-management.io/sdk-go/pkg/tls"
 //   --tls-min-version, --tls-cipher-suites, --tls-groups
 
 // Parse TLS configuration from command-line flags.
-// Returns nil if neither version nor ciphers flag was provided
-// (use GetDefaultTLSConfig as fallback).
-tlsCfg, err := sdktls.ConfigFromFlags(tlsMinVersionFlag, tlsCipherSuitesFlag)
+// Returns nil if no flags were provided (use GetDefaultTLSConfig as fallback).
+// Unsupported group names are logged and skipped, mirroring the ConfigMap
+// loader: the flag value may have been rendered by a controller built against
+// a newer sdk-go whose name table knows groups this build does not. A value
+// that yields no groups at all is an error, so a typo can never silently
+// fall back to Go's default group preferences.
+tlsCfg, err := sdktls.ConfigFromFlags(tlsMinVersionFlag, tlsCipherSuitesFlag, tlsGroupsFlag)
 if err != nil {
     return err
 }
 if tlsCfg == nil {
     tlsCfg = sdktls.GetDefaultTLSConfig()
-}
-
-// Parse the groups flag. Reject unsupported names so typos fail fast at
-// startup instead of silently disabling groups.
-if tlsGroupsFlag != "" {
-    groups, unsupported := sdktls.ParseGroups(tlsGroupsFlag)
-    if len(groups) == 0 || len(unsupported) > 0 {
-        return fmt.Errorf("invalid --tls-groups: %v", unsupported)
-    }
-    tlsCfg.Groups = groups
 }
 
 // Apply to a controller-runtime webhook/metrics server via TLSOpts.
@@ -143,12 +140,13 @@ if len(tlsCfg.Groups) > 0 {
 | `StartTLSConfigMapWatcher(ctx, client, namespace, onChangeFn)` | Load config + start watcher in one call. Returns active `*TLSConfig`. |
 | `LoadTLSConfigFromConfigMap(ctx, client, namespace)` | Load TLS config from ConfigMap. Returns `nil, nil` if CM not found. |
 | `GetDefaultTLSConfig()` | Returns TLS 1.2 with Go's default cipher suites. |
-| `ConfigFromFlags(minVersion, cipherSuites)` | Parse TLS config from flag strings. Returns `nil` if both are empty. |
+| `ConfigFromFlags(minVersion, cipherSuites, groups...)` | Parse TLS config from flag strings; the groups argument is optional. Returns `nil` if all are empty. Unsupported group names are logged and skipped; a value yielding no groups is an error. |
 | `ConfigToFunc(tlsCfg)` | Returns a `func(*tls.Config)` for use with controller-runtime `TLSOpts`. |
 | `VersionToString(version)` | Convert a `crypto/tls` version constant to its string name. |
 | `CipherSuitesToString(suites)` | Convert cipher suite IDs back to a comma-separated IANA-format string. |
 | `ParseGroups(groupsString)` | Convert a comma-separated string of group names or numeric code points to `tls.CurveID` values. Returns unrecognized names. |
 | `GroupsToString(groups)` | Convert curve IDs back to a comma-separated string of IANA-format names. |
+| `SupportedGroupNames()` | Canonical IANA group names `ParseGroups` recognizes, sorted; for emitters asserting their names are parseable. |
 
 Constants: `ConfigMapName`, `ConfigMapKeyMinVersion`, `ConfigMapKeyCipherSuites`,
 `ConfigMapKeyGroups`.
