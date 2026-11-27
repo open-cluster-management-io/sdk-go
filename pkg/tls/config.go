@@ -3,6 +3,7 @@ package tls
 import (
 	"crypto/tls"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -231,11 +232,35 @@ func GetDefaultTLSConfig() *TLSConfig {
 	}
 }
 
-// ConfigFromFlags creates TLS config from command-line flags
-func ConfigFromFlags(minVersion, cipherSuites string) (*TLSConfig, error) {
+// ConfigFromFlags creates TLS config from command-line flags.
+// Accepted formats: minVersion ("VersionTLS12"), cipherSuites (comma-joined
+// IANA names), and optionally groups (comma-joined IANA names or numeric code
+// points, see ParseGroups). The groups parameter is optional for backward
+// compatibility: ConfigFromFlags(minVersion, cipherSuites) keeps working, and
+// components that take a --tls-groups flag pass it as a third argument:
+//
+//	ConfigFromFlags(tlsMinVersion, tlsCipherSuites, tlsGroups)
+//
+// Unsupported group names are logged and skipped, mirroring the ConfigMap
+// loader: the group name table is a frozen snapshot of the IANA registry, and
+// a component can receive a flag value rendered by a controller built against
+// a newer sdk-go, so an unknown name must not take the component down.
+// Dropping groups only ever narrows the offered set, never widens it; a value
+// that yields no groups at all is still an error, so the flag can never
+// silently fall back to Go's default group preferences.
+func ConfigFromFlags(minVersion, cipherSuites string, groups ...string) (*TLSConfig, error) {
 	minVersion = strings.TrimSpace(minVersion)
 	cipherSuites = strings.TrimSpace(cipherSuites)
-	if minVersion == "" && cipherSuites == "" {
+
+	if len(groups) > 1 {
+		return nil, fmt.Errorf("ConfigFromFlags takes at most one groups argument, got %d", len(groups))
+	}
+	groupsFlag := ""
+	if len(groups) == 1 {
+		groupsFlag = strings.TrimSpace(groups[0])
+	}
+
+	if minVersion == "" && cipherSuites == "" && groupsFlag == "" {
 		return nil, nil // No flags provided
 	}
 
@@ -259,6 +284,23 @@ func ConfigFromFlags(minVersion, cipherSuites string) (*TLSConfig, error) {
 			return nil, fmt.Errorf("unsupported cipher suites: %v", unsupported)
 		}
 		cfg.CipherSuites = suites
+	}
+
+	// Parse groups (curve preferences). Unsupported names are skipped with a
+	// warning rather than an error: the value may have been rendered by a
+	// controller built against a newer sdk-go whose name table knows groups
+	// this build does not. Dropping only narrows the offered set; a value
+	// that yields no groups at all is an error so the flag can never
+	// silently fall back to Go's default group preferences.
+	if groupsFlag != "" {
+		parsed, unsupported := ParseGroups(groupsFlag)
+		if len(unsupported) > 0 {
+			klog.Warningf("Skipping unsupported TLS groups in --tls-groups: %v", unsupported)
+		}
+		if len(parsed) == 0 {
+			return nil, fmt.Errorf("invalid --tls-groups: no supported groups found")
+		}
+		cfg.Groups = parsed
 	}
 
 	return cfg, nil
@@ -314,6 +356,18 @@ func GroupsToString(groups []tls.CurveID) string {
 		names = append(names, name)
 	}
 	return strings.Join(names, ",")
+}
+
+// SupportedGroupNames returns the canonical IANA registered group names that
+// ParseGroups recognizes, sorted for determinism. Aliases (the names produced
+// by tls.CurveID.String and the short P256-style names) are not included.
+func SupportedGroupNames() []string {
+	names := make([]string, 0, len(curveNamesByID))
+	for _, name := range curveNamesByID {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // ConfigToFunc returns a function that applies the TLS configuration to a tls.Config.

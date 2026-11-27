@@ -3,6 +3,7 @@ package tls
 import (
 	"context"
 	"crypto/tls"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,18 +17,21 @@ import (
 
 func TestConfigFromFlags(t *testing.T) {
 	cases := []struct {
-		name         string
-		minVersion   string
-		cipherSuites string
-		expectNil    bool
-		expectError  bool
-		expectedMin  uint16
-		expectedLen  int
+		name             string
+		minVersion       string
+		cipherSuites     string
+		groups           string
+		expectNil        bool
+		expectError      bool
+		expectedMin      uint16
+		expectedLen      int
+		expectedGroupLen int
 	}{
 		{
-			name:         "both empty returns nil",
+			name:         "all empty returns nil",
 			minVersion:   "",
 			cipherSuites: "",
+			groups:       "",
 			expectNil:    true,
 			expectError:  false,
 		},
@@ -110,11 +114,71 @@ func TestConfigFromFlags(t *testing.T) {
 			expectedMin:  tls.VersionTLS12,
 			expectedLen:  2,
 		},
+		{
+			name:             "valid groups with version",
+			minVersion:       "VersionTLS12",
+			groups:           "x25519,secp256r1",
+			expectError:      false,
+			expectedMin:      tls.VersionTLS12,
+			expectedGroupLen: 2,
+		},
+		{
+			name:             "groups only defaults to TLS 1.2",
+			groups:           "X25519MLKEM768",
+			expectError:      false,
+			expectedMin:      tls.VersionTLS12,
+			expectedGroupLen: 1,
+		},
+		{
+			name:             "numeric code points in groups",
+			minVersion:       "VersionTLS13",
+			groups:           "0x001d,23",
+			expectError:      false,
+			expectedMin:      tls.VersionTLS13,
+			expectedGroupLen: 2,
+		},
+		{
+			name:             "version ciphers and groups together",
+			minVersion:       "VersionTLS12",
+			cipherSuites:     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			groups:           "x25519",
+			expectError:      false,
+			expectedMin:      tls.VersionTLS12,
+			expectedLen:      1,
+			expectedGroupLen: 1,
+		},
+		{
+			name:        "whitespace-only groups treated as absent",
+			minVersion:  "VersionTLS12",
+			groups:      "   ",
+			expectError: false,
+			expectedMin: tls.VersionTLS12,
+		},
+		{
+			name:             "unsupported group name is skipped with a warning",
+			minVersion:       "VersionTLS12",
+			groups:           "x25519,FutureGroup",
+			expectError:      false,
+			expectedMin:      tls.VersionTLS12,
+			expectedGroupLen: 1, // only the supported group
+		},
+		{
+			name:        "all group names unsupported errors",
+			minVersion:  "VersionTLS12",
+			groups:      "FutureGroup1,FutureGroup2",
+			expectError: true,
+		},
+		{
+			name:        "separator-only groups errors",
+			minVersion:  "VersionTLS12",
+			groups:      ",",
+			expectError: true,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := ConfigFromFlags(tc.minVersion, tc.cipherSuites)
+			cfg, err := ConfigFromFlags(tc.minVersion, tc.cipherSuites, tc.groups)
 
 			if tc.expectError {
 				if err == nil {
@@ -146,7 +210,20 @@ func TestConfigFromFlags(t *testing.T) {
 			if len(cfg.CipherSuites) != tc.expectedLen {
 				t.Errorf("expected %d cipher suites, got %d", tc.expectedLen, len(cfg.CipherSuites))
 			}
+
+			if len(cfg.Groups) != tc.expectedGroupLen {
+				t.Errorf("expected %d groups, got %d", tc.expectedGroupLen, len(cfg.Groups))
+			}
 		})
+	}
+}
+
+// TestConfigFromFlagsRejectsExtraGroupsArgs guards the variadic signature:
+// at most one groups argument is accepted.
+func TestConfigFromFlagsRejectsExtraGroupsArgs(t *testing.T) {
+	_, err := ConfigFromFlags("VersionTLS12", "", "x25519", "secp256r1")
+	if err == nil {
+		t.Error("expected error for more than one groups argument, got none")
 	}
 }
 
@@ -1269,6 +1346,109 @@ func TestParseGroupsAcceptsCurveIDStringNames(t *testing.T) {
 				t.Errorf("expected [%d], got %v", id, groups)
 			}
 		})
+	}
+}
+
+// TestParseGroupsAcceptsAllRuntimeCurveIDNames enumerates every curve ID the
+// linked Go runtime knows about — by brute-forcing the CurveID space and
+// skipping IDs whose String() output is the unknown sentinel ("CurveID(<n>)") —
+// and asserts each one is fully covered by this package's tables.
+//
+// Unlike TestParseGroupsAcceptsCurveIDStringNames, which only iterates this
+// package's own table and therefore cannot notice a constant the runtime added,
+// this test fails when a newer Go toolchain ships a curve constant the tables
+// have not learned yet.
+//
+// When this fails after a Go toolchain upgrade, add the new group to BOTH
+// curveIDsByName (its tls.CurveID.String name and its IANA registered name,
+// plus any short alias) and curveNamesByID (its IANA registered name as the
+// canonical name).
+func TestParseGroupsAcceptsAllRuntimeCurveIDNames(t *testing.T) {
+	const unknownSentinel = "CurveID("
+
+	found := 0
+	for id := 1; id <= 0xFFFF; id++ {
+		curve := tls.CurveID(id)
+		name := curve.String()
+		if strings.HasPrefix(name, unknownSentinel) {
+			continue // not a constant this runtime knows
+		}
+		found++
+
+		t.Run(name, func(t *testing.T) {
+			// The Go-style name must parse.
+			groups, unsupported := ParseGroups(name)
+			if len(unsupported) != 0 {
+				t.Errorf("runtime curve name %q is not parseable; add it to curveIDsByName", name)
+			}
+			if len(groups) != 1 || groups[0] != curve {
+				t.Errorf("expected [%d], got %v", curve, groups)
+			}
+
+			// The runtime constant must have a canonical IANA name...
+			canonical, ok := curveNamesByID[curve]
+			if !ok {
+				t.Errorf("runtime curve %q (ID %d) has no canonical IANA name in curveNamesByID; "+
+					"add its IANA registered name", name, id)
+				return
+			}
+
+			// ...and that name must parse back to the same curve and round-trip.
+			ianaGroups, unsupported := ParseGroups(canonical)
+			if len(unsupported) != 0 || len(ianaGroups) != 1 || ianaGroups[0] != curve {
+				t.Errorf("canonical IANA name %q for runtime curve %q does not parse to %d "+
+					"(groups %v, unsupported %v)", canonical, name, curve, ianaGroups, unsupported)
+			}
+			if got := GroupsToString([]tls.CurveID{curve}); got != canonical {
+				t.Errorf("GroupsToString(%d) = %q, want canonical name %q", curve, got, canonical)
+			}
+		})
+	}
+
+	if found == 0 {
+		t.Fatal("no runtime curve IDs enumerated; the CurveID.String unknown sentinel " +
+			"format may have changed in this Go version")
+	}
+}
+
+// TestSupportedGroupNames pins the contract of the exported function: the
+// output is sorted, unique, exactly the canonical names from curveNamesByID,
+// and every name parses to the curve ID it is canonically named for — i.e.
+// curveNamesByID and curveIDsByName agree on every entry.
+func TestSupportedGroupNames(t *testing.T) {
+	names := SupportedGroupNames()
+
+	// Sorted and unique, as documented: two curve IDs sharing a canonical
+	// name would produce a duplicate and break consumers that diff this list
+	// against another sorted list of expected names.
+	for i := 1; i < len(names); i++ {
+		if names[i-1] >= names[i] {
+			t.Errorf("names not sorted or contain duplicates at index %d: %q, %q", i, names[i-1], names[i])
+		}
+	}
+
+	// The output is exactly the canonical names, and each parses to its own
+	// ID. The two tables are maintained in parallel; updating one without the
+	// other is the maintenance error this catches.
+	expected := make(map[string]tls.CurveID, len(curveNamesByID))
+	for id, canonical := range curveNamesByID {
+		expected[canonical] = id
+	}
+	if len(names) != len(expected) {
+		t.Errorf("expected %d names, got %d", len(expected), len(names))
+	}
+	for _, name := range names {
+		id, ok := expected[name]
+		if !ok {
+			t.Errorf("unexpected name %q: not a canonical name in curveNamesByID", name)
+			continue
+		}
+		groups, unsupported := ParseGroups(name)
+		if len(unsupported) != 0 || len(groups) != 1 || groups[0] != id {
+			t.Errorf("canonical name %q (curve ID %d) does not parse to its own ID "+
+				"(groups %v, unsupported %v): curveNamesByID and curveIDsByName disagree — "+
+				"add the name to curveIDsByName", name, id, groups, unsupported)
+		}
 	}
 }
 
