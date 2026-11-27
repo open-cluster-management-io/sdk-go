@@ -1,0 +1,810 @@
+// Copyright Contributors to the Open Cluster Management project
+package v1
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+)
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
+
+// Klusterlet represents controllers to install the resources for a managed cluster.
+// When configured, the Klusterlet requires a secret named bootstrap-hub-kubeconfig in the
+// agent namespace to allow API requests to the hub for the registration protocol.
+// In Hosted mode, the Klusterlet requires an additional secret named external-managed-kubeconfig
+// in the agent namespace to allow API requests to the managed cluster for resources installation.
+type Klusterlet struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Spec represents the desired deployment configuration of Klusterlet agent.
+	Spec KlusterletSpec `json:"spec,omitempty"`
+
+	// Status represents the current status of Klusterlet agent.
+	Status KlusterletStatus `json:"status,omitempty"`
+}
+
+// KlusterletSpec represents the desired deployment configuration of Klusterlet agent.
+// +kubebuilder:validation:XValidation:rule="!has(self.registrationConfiguration) || !has(self.registrationConfiguration.registrationDriver) || !has(self.registrationConfiguration.registrationDriver.authType) || self.registrationConfiguration.registrationDriver.authType != 'spiffe' || (has(self.clusterName) && size(self.clusterName) > 0)",message="clusterName is required when registrationDriver.authType is spiffe"
+// +kubebuilder:validation:XValidation:rule="!has(self.registrationConfiguration) || !has(self.registrationConfiguration.registrationDriver) || !has(self.registrationConfiguration.registrationDriver.authType) || self.registrationConfiguration.registrationDriver.authType != 'spiffe' || !has(self.deployOption) || !has(self.deployOption.mode) || size(self.deployOption.mode) == 0 || self.deployOption.mode in ['Default', 'Singleton']",message="registrationDriver.authType spiffe supports only the Default and Singleton install modes"
+type KlusterletSpec struct {
+	// namespace is the namespace to deploy the agent on the managed cluster.
+	// The namespace must have a prefix of "open-cluster-management-", and if it is not set,
+	// the namespace of "open-cluster-management-agent" is used to deploy agent.
+	// In addition, the add-ons are deployed to the namespace of "{Namespace}-addon".
+	// In the Hosted mode, this namespace still exists on the managed cluster to contain
+	// necessary resources, like service accounts, roles and rolebindings, while the agent
+	// is deployed to the namespace with the same name as klusterlet on the management cluster.
+	// +optional
+	// +kubebuilder:validation:MaxLength=57
+	// +kubebuilder:validation:Pattern=^open-cluster-management-[-a-z0-9]*[a-z0-9]$
+	Namespace string `json:"namespace,omitempty"`
+
+	// RegistrationImagePullSpec represents the desired image configuration of registration agent.
+	// quay.io/open-cluster-management.io/registration:latest will be used if unspecified.
+	// +optional
+	RegistrationImagePullSpec string `json:"registrationImagePullSpec,omitempty"`
+
+	// WorkImagePullSpec represents the desired image configuration of work agent.
+	// quay.io/open-cluster-management.io/work:latest will be used if unspecified.
+	// +optional
+	WorkImagePullSpec string `json:"workImagePullSpec,omitempty"`
+
+	// ImagePullSpec represents the desired image configuration of agent, it takes effect only when
+	// singleton mode is set. quay.io/open-cluster-management.io/registration-operator:latest will
+	// be used if unspecified
+	// +optional
+	ImagePullSpec string `json:"imagePullSpec,omitempty"`
+
+	// clusterName is the name of the managed cluster to be created on hub.
+	// The Klusterlet agent generates a random name if it is not set, or discovers the appropriate cluster name on OpenShift.
+	// It is required when registrationConfiguration.registrationDriver.authType is spiffe, because the
+	// agents' SPIFFE IDs contain it.
+	// +optional
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+	ClusterName string `json:"clusterName,omitempty"`
+
+	// ExternalServerURLs represents a list of apiserver urls and ca bundles that is accessible externally
+	// If it is set empty, managed cluster has no externally accessible url that hub cluster can visit.
+	// +optional
+	ExternalServerURLs []ServerURL `json:"externalServerURLs,omitempty"`
+
+	// NodePlacement enables explicit control over the scheduling of the deployed pods.
+	// +optional
+	NodePlacement NodePlacement `json:"nodePlacement,omitempty"`
+
+	// DeployOption contains the options of deploying a klusterlet
+	// +optional
+	DeployOption KlusterletDeployOption `json:"deployOption,omitempty"`
+
+	// RegistrationConfiguration contains the configuration of registration
+	// +optional
+	RegistrationConfiguration *RegistrationConfiguration `json:"registrationConfiguration,omitempty"`
+
+	// WorkConfiguration contains the configuration of work
+	// +optional
+	WorkConfiguration *WorkAgentConfiguration `json:"workConfiguration,omitempty"`
+
+	// HubApiServerHostAlias contains the host alias for hub api server.
+	// registration-agent and work-agent will use it to communicate with hub api server.
+	// +optional
+	HubApiServerHostAlias *HubApiServerHostAlias `json:"hubApiServerHostAlias,omitempty"`
+
+	// ResourceRequirement specify QoS classes of deployments managed by klusterlet.
+	// It applies to all the containers in the deployments.
+	// +optional
+	ResourceRequirement *ResourceRequirement `json:"resourceRequirement,omitempty"`
+
+	// PriorityClassName is the name of the PriorityClass that will be used by the
+	// deployed klusterlet agent. It will be ignored when the PriorityClass/v1 API
+	// is not available on the managed cluster.
+	// +optional
+	PriorityClassName string `json:"priorityClassName,omitempty"`
+
+	// AgentConfiguration contains the configuration of the klusterlet agents,
+	// such as the bind ports of their health probe and metrics endpoints.
+	// +optional
+	AgentConfiguration *AgentConfiguration `json:"agentConfiguration,omitempty"`
+}
+
+// AgentConfiguration represents customization of the klusterlet agents.
+type AgentConfiguration struct {
+	// BindConfiguration represents the server bind configuration of the klusterlet agents.
+	// It applies to the klusterlet-agent in Singleton mode. In Default mode, it applies to
+	// the registration and work agents that do not set their own bindConfiguration.
+	// +optional
+	BindConfiguration *AgentBindConfiguration `json:"bindConfiguration,omitempty"`
+
+	// RegistrationAgentConfiguration represents the configuration of the registration agent
+	// in Default mode. It is ignored in Singleton mode.
+	// +optional
+	RegistrationAgentConfiguration *AgentComponentConfiguration `json:"registrationAgentConfiguration,omitempty"`
+
+	// WorkAgentConfiguration represents the configuration of the work agent in Default mode.
+	// It is ignored in Singleton mode.
+	// +optional
+	WorkAgentConfiguration *AgentComponentConfiguration `json:"workAgentConfiguration,omitempty"`
+}
+
+// AgentComponentConfiguration represents customization of a single klusterlet agent.
+type AgentComponentConfiguration struct {
+	// BindConfiguration represents the server bind configuration of the agent.
+	// In Default mode the registration and work agents run as separate pods. When both
+	// use hostNetwork and can be scheduled on the same node, set a different
+	// healthProbePort for each of them.
+	// +optional
+	BindConfiguration *AgentBindConfiguration `json:"bindConfiguration,omitempty"`
+}
+
+// AgentBindConfiguration represents customization of the server bindings of the klusterlet agents.
+type AgentBindConfiguration struct {
+	// HealthProbePort represents the bind port of the agents' health check endpoint. The default value is 8443.
+	// Agents run as non-root, so privileged ports below 1024 are not allowed.
+	// +optional
+	// +kubebuilder:default=8443
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:validation:Maximum=65535
+	HealthProbePort int32 `json:"healthProbePort,omitempty"`
+
+	// MetricsPort represents the bind port of the agents' metrics endpoint. The default value is 8080.
+	// Metrics may be disabled by setting a value less than or equal to 0.
+	// +optional
+	// +kubebuilder:default=8080
+	// +kubebuilder:validation:Maximum=65535
+	MetricsPort int32 `json:"metricsPort"`
+
+	// HostNetwork enables running the agent pods in host networking mode.
+	// +optional
+	HostNetwork bool `json:"hostNetwork,omitempty"`
+}
+
+// ServerURL represents the apiserver url and ca bundle that is accessible externally
+type ServerURL struct {
+	// URL is the url of apiserver endpoint of the managed cluster.
+	// +required
+	URL string `json:"url"`
+
+	// CABundle is the ca bundle to connect to apiserver of the managed cluster.
+	// System certs are used if it is not set.
+	// +optional
+	CABundle []byte `json:"caBundle,omitempty"`
+}
+
+// HubApiServerHostAlias holds the mapping between IP and hostname that will be injected as an entry in the
+// pod's hosts file.
+type HubApiServerHostAlias struct {
+	// IP address of the host file entry.
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`
+	IP string `json:"ip"`
+
+	// Hostname for the above IP address.
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$`
+	Hostname string `json:"hostname"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!has(self.registrationDriver) || !has(self.registrationDriver.authType) || self.registrationDriver.authType != 'spiffe' || (has(self.addOnKubeClientRegistrationDriver) && has(self.addOnKubeClientRegistrationDriver.authType) && self.addOnKubeClientRegistrationDriver.authType == 'spiffe')",message="addOnKubeClientRegistrationDriver.authType must be spiffe when registrationDriver.authType is spiffe"
+// +kubebuilder:validation:XValidation:rule="!has(self.addOnKubeClientRegistrationDriver) || !has(self.addOnKubeClientRegistrationDriver.authType) || self.addOnKubeClientRegistrationDriver.authType != 'spiffe' || (has(self.registrationDriver) && has(self.registrationDriver.authType) && self.registrationDriver.authType == 'spiffe')",message="registrationDriver.authType must be spiffe when addOnKubeClientRegistrationDriver.authType is spiffe"
+type RegistrationConfiguration struct {
+	// clientCertExpirationSeconds represents the seconds of a client certificate to expire. If it is not set or 0, the default
+	// duration seconds will be set by the hub cluster. If the value is larger than the max signing duration seconds set on
+	// the hub cluster, the max signing duration seconds will be set.
+	// +optional
+	ClientCertExpirationSeconds int32 `json:"clientCertExpirationSeconds,omitempty"`
+
+	// FeatureGates represents the list of feature gates for registration
+	// If it is set empty, default feature gates will be used.
+	// If it is set, featuregate/Foo is an example of one item in FeatureGates:
+	//   1. If featuregate/Foo does not exist, registration-operator will discard it
+	//   2. If featuregate/Foo exists and is false by default. It is now possible to set featuregate/Foo=[false|true]
+	//   3. If featuregate/Foo exists and is true by default. If a cluster-admin upgrading from 1 to 2 wants to continue having featuregate/Foo=false,
+	//  	he can set featuregate/Foo=false before upgrading. Let's say the cluster-admin wants featuregate/Foo=false.
+	// +optional
+	FeatureGates []FeatureGate `json:"featureGates,omitempty"`
+
+	// ClusterAnnotations is annotations with the reserve prefix "agent.open-cluster-management.io" set on
+	// ManagedCluster when creating only, other actors can update it afterwards.
+	// +optional
+	ClusterAnnotations map[string]string `json:"clusterAnnotations,omitempty"`
+
+	// ClusterLabels is labels set on ManagedCluster when creating only, other actors can update it afterwards.
+	// +optional
+	ClusterLabels map[string]string `json:"clusterLabels,omitempty"`
+
+	// KubeAPIQPS indicates the maximum QPS while talking with apiserver on the spoke cluster.
+	// If it is set empty, use the default value: 50
+	// +optional
+	// +kubebuilder:default:=50
+	KubeAPIQPS int32 `json:"kubeAPIQPS,omitempty"`
+
+	// KubeAPIBurst indicates the maximum burst of the throttle while talking with apiserver on the spoke cluster.
+	// If it is set empty, use the default value: 100
+	// +optional
+	// +kubebuilder:default:=100
+	KubeAPIBurst int32 `json:"kubeAPIBurst,omitempty"`
+
+	// BootstrapKubeConfigs defines the ordered list of bootstrap kubeconfigs. The order decides which bootstrap kubeconfig to use first when rebootstrap.
+	//
+	// When the agent loses the connection to the current hub over HubConnectionTimeoutSeconds, or the managedcluster CR
+	// is set `hubAcceptsClient=false` on the hub, the controller marks the related bootstrap kubeconfig as "failed".
+	//
+	// A failed bootstrapkubeconfig won't be used for the duration specified by SkipFailedBootstrapKubeConfigSeconds.
+	// But if the user updates the content of a failed bootstrapkubeconfig, the "failed" mark will be cleared.
+	// +optional
+	BootstrapKubeConfigs BootstrapKubeConfigs `json:"bootstrapKubeConfigs,omitempty"`
+
+	// This provides driver details required to register klusterlet agent with hub
+	// +optional
+	RegistrationDriver RegistrationDriver `json:"registrationDriver,omitempty"`
+
+	// This provides driver details required to register add-ons with hub for kubeClient type
+	// +optional
+	AddOnKubeClientRegistrationDriver *AddOnRegistrationDriver `json:"addOnKubeClientRegistrationDriver,omitempty"`
+
+	// ClusterClaimConfiguration represents the configuration of ClusterClaim
+	// Effective only when the `ClusterClaim` feature gate is enabled.
+	// +optional
+	ClusterClaimConfiguration *ClusterClaimConfiguration `json:"clusterClaimConfiguration,omitempty"`
+}
+
+// ClusterClaimConfiguration represents the configuration of ClusterClaim
+type ClusterClaimConfiguration struct {
+	// Maximum number of custom ClusterClaims allowed.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:default:=20
+	// +required
+	MaxCustomClusterClaims int32 `json:"maxCustomClusterClaims"`
+
+	// Custom suffixes for reserved ClusterClaims.
+	// +optional
+	// +kubebuilder:validation:MaxItems=10
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:MaxLength=64
+	ReservedClusterClaimSuffixes []string `json:"reservedClusterClaimSuffixes,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!has(self.authType) || self.authType != 'spiffe' || has(self.spiffe)",message="spiffe is required when authType is spiffe"
+type RegistrationDriver struct {
+	// Type of the authentication used by managedcluster to register as well as pull work from hub.
+	// Possible values are csr, awsirsa, grpc and spiffe.
+	// +required
+	// +kubebuilder:default:=csr
+	// +kubebuilder:validation:Enum=csr;awsirsa;grpc;spiffe
+	AuthType string `json:"authType,omitempty"`
+
+	// Contain the details required for registering with hub cluster (ie: an EKS cluster) using AWS IAM roles for service account.
+	// This is required only when the authType is awsirsa.
+	AwsIrsa *AwsIrsa `json:"awsIrsa,omitempty"`
+
+	// spiffe contains what the agents need to reach the hub with their SPIRE-issued SVIDs.
+	// It is required when authType is spiffe, and nothing in it is secret.
+	// Effective only when the SPIFFERegistration feature gate is enabled.
+	// authType spiffe supports only the Default and Singleton install modes; Hosted and
+	// SingletonHosted are not supported yet.
+	// +optional
+	SPIFFE *KlusterletSPIFFEConfig `json:"spiffe,omitempty"`
+}
+
+// KlusterletSPIFFEConfig configures the spiffe registration driver on the managed cluster.
+// +kubebuilder:validation:XValidation:rule="!has(self.agentIDTemplate) || (self.agentIDTemplate.contains('/{cluster}') && self.agentIDTemplate.contains('/{role}'))",message="agentIDTemplate must contain {cluster} and {role}"
+// +kubebuilder:validation:XValidation:rule="!has(self.addOnAgentIDTemplate) || (self.addOnAgentIDTemplate.contains('/{cluster}') && self.addOnAgentIDTemplate.contains('/{addon}') && self.addOnAgentIDTemplate.contains('/{agent}'))",message="addOnAgentIDTemplate must contain {cluster}, {addon} and {agent}"
+type KlusterletSPIFFEConfig struct {
+	// hubEndpoint is host:port of the hub gRPC server's grpc-spiffe listener.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=512
+	HubEndpoint string `json:"hubEndpoint"`
+
+	// hubSPIFFEID is the only SPIFFE ID the agents accept from the hub, for example
+	// spiffe://ocm-hub.example.org/ocm/hub/grpc-server. It is in the hub's trust domain.
+	// +required
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern=`^spiffe://[a-z0-9._-]+(/([A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*|[.]{3,}))+$`
+	HubSPIFFEID string `json:"hubSPIFFEID"`
+
+	// trustDomain is the agents' own SPIFFE trust domain, for example east.example.org. The
+	// agents build their expected SPIFFE IDs in it, and the hub must list it in the
+	// ClusterManager's agentTrustDomains. If it is not set, the trust domain of hubSPIFFEID is used.
+	// +optional
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[a-z0-9._-]+$`
+	TrustDomain string `json:"trustDomain,omitempty"`
+
+	// workloadAPISocket is the address of the local SPIRE agent's Workload API, as mounted
+	// into the agent pods by the SPIFFE CSI driver.
+	// +optional
+	// +kubebuilder:default:="unix:///spiffe-workload-api/spire-agent.sock"
+	WorkloadAPISocket string `json:"workloadAPISocket,omitempty"`
+
+	// agentIDTemplate is the layout of this Klusterlet's agent SPIFFE IDs. It must equal the
+	// hub's ClusterManager agentIDTemplate, or the hub refuses the agents. The klusterlet
+	// operator fills it in for each agent and passes the result to the agent: {trustDomain} is
+	// trustDomain, {cluster} is clusterName, {role} is registration, work or klusterlet, and
+	// {namespace} is the namespace the agent runs in. Each placeholder fills a whole path
+	// segment.
+	// +optional
+	// +kubebuilder:default:="spiffe://{trustDomain}/ocm/cluster/{cluster}/agent/{role}"
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern=`^spiffe://\{trustDomain\}(/(([A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*|[.]{3,})|\{[A-Za-z]+\}))+$`
+	AgentIDTemplate string `json:"agentIDTemplate,omitempty"`
+
+	// addOnAgentIDTemplate is the layout of add-on agent SPIFFE IDs on this cluster. It must
+	// equal the hub's ClusterManager addOnAgentIDTemplate. {addon} is the add-on name, {agent}
+	// the add-on agent name, and {namespace} the add-on's install namespace.
+	// +optional
+	// +kubebuilder:default:="spiffe://{trustDomain}/ocm/cluster/{cluster}/addon/{addon}/agent/{agent}"
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern=`^spiffe://\{trustDomain\}(/(([A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*|[.]{3,})|\{[A-Za-z]+\}))+$`
+	AddOnAgentIDTemplate string `json:"addOnAgentIDTemplate,omitempty"`
+
+	// admissionEnforcement is how the klusterlet operator enforces the admission rules that keep
+	// other workloads from getting the agents' SVIDs. ValidatingAdmissionPolicy needs Kubernetes
+	// 1.30 or later; the API server evaluates the rules itself, and on an older cluster the
+	// Klusterlet is refused as an unsupported Kubernetes version. ValidatingWebhook works on every
+	// version; the operator serves the webhook, with an SVID from SPIRE that carries the webhook
+	// Service's DNS name. Both enforce the same rules. When it changes, the operator puts the new
+	// enforcement in place before it removes the old one.
+	// +required
+	// +kubebuilder:validation:Enum=ValidatingAdmissionPolicy;ValidatingWebhook
+	AdmissionEnforcement SPIFFEAdmissionEnforcement `json:"admissionEnforcement"`
+}
+
+// SPIFFEAdmissionEnforcement is how the spiffe driver's admission rules are enforced.
+type SPIFFEAdmissionEnforcement string
+
+const (
+	// SPIFFEAdmissionValidatingAdmissionPolicy enforces the rules with ValidatingAdmissionPolicies.
+	SPIFFEAdmissionValidatingAdmissionPolicy SPIFFEAdmissionEnforcement = "ValidatingAdmissionPolicy"
+	// SPIFFEAdmissionValidatingWebhook enforces the rules with a validating webhook the klusterlet
+	// operator serves.
+	SPIFFEAdmissionValidatingWebhook SPIFFEAdmissionEnforcement = "ValidatingWebhook"
+)
+
+type AwsIrsa struct {
+	// The arn of the hub cluster (ie: an EKS cluster). This will be required to pass information to hub, which hub will use to create IAM identities for this klusterlet.
+	// Example - arn:aws:eks:us-west-2:123456789010:cluster/hub-cluster1.
+	// Non-commercial partitions are supported too, e.g. arn:aws-us-gov:eks:us-gov-west-1:123456789010:cluster/hub-cluster1.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^arn:aws(?:-[a-z0-9]+)*:eks:([a-zA-Z0-9-]+):(\d{12}):cluster/([a-zA-Z0-9-]+)$`
+	HubClusterArn string `json:"hubClusterArn"`
+	// The arn of the managed cluster (ie: an EKS cluster). This will be required to generate the md5hash which will be used as a suffix to create IAM role on hub
+	// as well as used by kluslerlet-agent, to assume role suffixed with the md5hash, on startup.
+	// Example - arn:aws:eks:us-west-2:123456789010:cluster/managed-cluster1.
+	// Non-commercial partitions are supported too, e.g. arn:aws-us-gov:eks:us-gov-west-1:123456789010:cluster/managed-cluster1.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^arn:aws(?:-[a-z0-9]+)*:eks:([a-zA-Z0-9-]+):(\d{12}):cluster/([a-zA-Z0-9-]+)$`
+	ManagedClusterArn string `json:"managedClusterArn"`
+
+	// credentialSource selects how AWS credentials are obtained. IRSA annotates the service
+	// accounts with eks.amazonaws.com/role-arn; PodIdentity leaves them unannotated so an
+	// EKS Pod Identity association is used instead.
+	// +optional
+	// +kubebuilder:default:=IRSA
+	CredentialSource AwsCredentialSource `json:"credentialSource,omitempty"`
+}
+
+type AddOnRegistrationDriver struct {
+	// AuthType is the authentication driver used for add-on registration.
+	// Possible values are csr, token and spiffe. With spiffe, each add-on agent authenticates
+	// with its own SPIRE-issued SVID and no add-on credential is created.
+	// Currently, this field only affects kubeClient type add-on registration. The csr type add-on registration always uses csr driver,
+	// except with spiffe: the hub signs no certificates then, so a customSigner registration is refused, with the
+	// RegistrationApplied condition False and reason CustomSignerNotSupported on the ManagedClusterAddOn.
+	// In the future, this may be extended to customize authentication for csr type add-on registration as well.
+	// +optional
+	// +kubebuilder:validation:Enum=csr;token;spiffe
+	AuthType string `json:"authType,omitempty"`
+
+	// Token contains the configuration for token-based registration.
+	// +optional
+	Token *TokenConfig `json:"token,omitempty"`
+}
+
+type TokenConfig struct {
+	// ExpirationSeconds represents the seconds of a token to expire.
+	// If it is not set or 0, the default duration will be used, which is
+	// the same as the certificate expiration set by the hub cluster's
+	// kube-controller-manager (typically 1 year).
+	// The minimum valid value for production use is 3600 (1 hour), though smaller values are allowed for testing.
+	// +optional
+	ExpirationSeconds int64 `json:"expirationSeconds,omitempty"`
+}
+
+type TypeBootstrapKubeConfigs string
+
+const (
+	LocalSecrets TypeBootstrapKubeConfigs = "LocalSecrets"
+	None         TypeBootstrapKubeConfigs = "None"
+)
+
+type BootstrapKubeConfigs struct {
+	// Type specifies the type of priority bootstrap kubeconfigs.
+	// By default, it is set to None, representing no priority bootstrap kubeconfigs are set.
+	// +required
+	// +kubebuilder:default:=None
+	// +kubebuilder:validation:Enum=None;LocalSecrets
+	Type TypeBootstrapKubeConfigs `json:"type,omitempty"`
+
+	// LocalSecretsConfig include a list of secrets that contains the kubeconfigs for ordered bootstrap kubeconifigs.
+	// The secrets must be in the same namespace where the agent controller runs.
+	// +optional
+	LocalSecrets *LocalSecretsConfig `json:"localSecretsConfig,omitempty"`
+}
+
+type LocalSecretsConfig struct {
+	// KubeConfigSecrets is a list of secret names. The secrets are in the same namespace where the agent controller runs.
+	// +required
+	// +kubebuilder:validation:minItems=2
+	KubeConfigSecrets []KubeConfigSecret `json:"kubeConfigSecrets"`
+
+	// HubConnectionTimeoutSeconds is used to set the timeout of connecting to the hub cluster.
+	// When agent loses the connection to the hub over the timeout seconds, the agent do a rebootstrap.
+	// By default is 10 mins.
+	// +optional
+	// +kubebuilder:default:=600
+	// +kubebuilder:validation:Minimum=180
+	HubConnectionTimeoutSeconds int32 `json:"hubConnectionTimeoutSeconds,omitempty"`
+}
+
+type KubeConfigSecret struct {
+	// Name is the name of the secret.
+	// +required
+	Name string `json:"name"`
+}
+
+type WorkAgentConfiguration struct {
+	// FeatureGates represents the list of feature gates for work
+	// If it is set empty, default feature gates will be used.
+	// If it is set, featuregate/Foo is an example of one item in FeatureGates:
+	//   1. If featuregate/Foo does not exist, registration-operator will discard it
+	//   2. If featuregate/Foo exists and is false by default. It is now possible to set featuregate/Foo=[false|true]
+	//   3. If featuregate/Foo exists and is true by default. If a cluster-admin upgrading from 1 to 2 wants to continue having featuregate/Foo=false,
+	//  	he can set featuregate/Foo=false before upgrading. Let's say the cluster-admin wants featuregate/Foo=false.
+	// +optional
+	FeatureGates []FeatureGate `json:"featureGates,omitempty"`
+
+	// KubeAPIQPS indicates the maximum QPS while talking with apiserver on the spoke cluster.
+	// If it is set empty, use the default value: 50
+	// +optional
+	// +kubebuilder:default:=50
+	KubeAPIQPS int32 `json:"kubeAPIQPS,omitempty"`
+
+	// KubeAPIBurst indicates the maximum burst of the throttle while talking with apiserver on the spoke cluster.
+	// If it is set empty, use the default value: 100
+	// +optional
+	// +kubebuilder:default:=100
+	KubeAPIBurst int32 `json:"kubeAPIBurst,omitempty"`
+
+	// HubKubeAPIQPS indicates the maximum QPS while talking with apiserver on the hub cluster.
+	// If it is set empty, use the default value: 50
+	// +optional
+	// +kubebuilder:default:=50
+	HubKubeAPIQPS int32 `json:"hubKubeAPIQPS,omitempty"`
+
+	// HubKubeAPIBurst indicates the maximum burst of the throttle while talking with apiserver on the hub cluster.
+	// If it is set empty, use the default value: 100
+	// +optional
+	// +kubebuilder:default:=100
+	HubKubeAPIBurst int32 `json:"hubKubeAPIBurst,omitempty"`
+
+	// AppliedManifestWorkEvictionGracePeriod is the eviction grace period the work agent will wait before
+	// evicting the AppliedManifestWorks, whose corresponding ManifestWorks are missing on the hub cluster, from
+	// the managed cluster. If not present, the default value of the work agent will be used.
+	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern="^([0-9]+(s|m|h))+$"
+	AppliedManifestWorkEvictionGracePeriod *metav1.Duration `json:"appliedManifestWorkEvictionGracePeriod,omitempty"`
+
+	// StatusSyncInterval is the interval for the work agent to check the status of ManifestWorks.
+	// Larger value means less frequent status sync and less api calls to the managed cluster, vice versa.
+	// The value(x) should be: 5s <= x <= 1h.
+	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern="^([0-9]+(s|m|h))+$"
+	StatusSyncInterval *metav1.Duration `json:"statusSyncInterval,omitempty"`
+}
+
+const (
+	// ClusterAnnotationsKeyPrefix is the prefix of annotations set on ManagedCluster when creating only.
+	ClusterAnnotationsKeyPrefix = "agent.open-cluster-management.io"
+)
+
+// KlusterletDeployOption describes the deployment options for klusterlet
+type KlusterletDeployOption struct {
+	// Mode can be Default, Hosted, Singleton or SingletonHosted. It is Default mode if not specified
+	// In Default mode, all klusterlet related resources are deployed on the managed cluster.
+	// In Hosted mode, only crd and configurations are installed on the spoke/managed cluster. Controllers run in another
+	// cluster (defined as management-cluster) and connect to the mangaged cluster with the kubeconfig in secret of
+	// "external-managed-kubeconfig"(a kubeconfig of managed-cluster with cluster-admin permission).
+	// In Singleton mode, registration/work agent is started as a single deployment.
+	// In SingletonHosted mode, agent is started as a single deployment in hosted mode.
+	// Note: Do not modify the Mode field once it's applied.
+	// +optional
+	Mode InstallMode `json:"mode"`
+
+	// ReportHostingCluster, when set to Enable, makes this klusterlet self-report where its own
+	// controllers actually run - its own cluster name when they run locally, or
+	// Hosted.ManagementClusterName when they run on a separate management cluster - via a
+	// reserved ClusterClaim named "hosting-cluster.open-cluster-management.io". Disabled by
+	// default: the klusterlet-operator emits nothing and behaves exactly as it does today unless
+	// this is explicitly set to Enable.
+	// +optional
+	ReportHostingCluster ReportHostingClusterMode `json:"reportHostingCluster,omitempty"`
+
+	// Hosted holds configuration for a mode whose controllers run on a separate management
+	// cluster rather than locally.
+	// +optional
+	Hosted *KlusterletHostedConfiguration `json:"hosted,omitempty"`
+}
+
+// ReportHostingClusterMode is the type for KlusterletDeployOption.ReportHostingCluster. A typed
+// enum, not a bool, so a later mode can be added without a breaking change to the field's shape.
+// +kubebuilder:validation:Enum=Enable;Disable
+type ReportHostingClusterMode string
+
+const (
+	// ReportHostingClusterModeEnable enables self-reporting of the klusterlet's hosting cluster.
+	ReportHostingClusterModeEnable ReportHostingClusterMode = "Enable"
+	// ReportHostingClusterModeDisable disables self-reporting. This is the default.
+	ReportHostingClusterModeDisable ReportHostingClusterMode = "Disable"
+)
+
+// KlusterletHostedConfiguration holds configuration for a mode whose controllers run on a
+// separate management cluster rather than locally.
+type KlusterletHostedConfiguration struct {
+	// ManagementClusterName is the name (as known to the hub) of the cluster where this
+	// klusterlet's controllers actually run, for a mode where that's a separate management
+	// cluster rather than the klusterlet running locally.
+	// +optional
+	ManagementClusterName string `json:"managementClusterName,omitempty"`
+}
+
+// KlusterletStatus represents the current status of Klusterlet agent.
+type KlusterletStatus struct {
+	// ObservedGeneration is the last generation change you've dealt with
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// Conditions contain the different condition statuses for this Klusterlet.
+	// Valid condition types are:
+	// Applied: Components have been applied in the managed cluster.
+	// Available: Components in the managed cluster are available and ready to serve.
+	// Progressing: Components in the managed cluster are in a transitioning state.
+	// Degraded: Components in the managed cluster do not match the desired configuration and only provide
+	// degraded service.
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions"`
+
+	// Generations are used to determine when an item needs to be reconciled or has changed in a way that needs a reaction.
+	// +optional
+	Generations []GenerationStatus `json:"generations,omitempty"`
+
+	// RelatedResources are used to track the resources that are related to this Klusterlet.
+	// +optional
+	RelatedResources []RelatedResourceMeta `json:"relatedResources,omitempty"`
+
+	// spiffe records the state the klusterlet operator has made trusted when the
+	// registration driver is spiffe. It holds only names, UIDs and generations.
+	// +optional
+	SPIFFE *KlusterletSPIFFEStatus `json:"spiffe,omitempty"`
+}
+
+const (
+	// ConditionSPIFFEAdmissionReady is True once the klusterlet operator has finished its first
+	// recovery of the agent and add-on namespaces and recorded the admission enforcement it trusts.
+	// The platform should create the cluster's SPIRE registration entries only after that.
+	ConditionSPIFFEAdmissionReady = "SPIFFEAdmissionReady"
+)
+
+// KlusterletSPIFFEStatus is the trusted state of a Klusterlet that uses the spiffe driver.
+type KlusterletSPIFFEStatus struct {
+	// admissionPolicies are the ValidatingAdmissionPolicies and their bindings the operator
+	// ran recovery for. When a live policy or binding no longer matches its entry, the
+	// operator runs recovery again before any agent runs.
+	// +optional
+	// +listType=map
+	// +listMapKey=policyName
+	// +kubebuilder:validation:MaxItems=16
+	AdmissionPolicies []SPIFFEAdmissionPolicyStatus `json:"admissionPolicies,omitempty"`
+
+	// admissionEnforcement is the enforcement the operator has put in place and recorded:
+	// ValidatingAdmissionPolicy, with admissionPolicies, or ValidatingWebhook, with
+	// admissionWebhooks.
+	// +optional
+	// +kubebuilder:validation:Enum=ValidatingAdmissionPolicy;ValidatingWebhook
+	AdmissionEnforcement SPIFFEAdmissionEnforcement `json:"admissionEnforcement,omitempty"`
+
+	// admissionWebhooks are the ValidatingWebhookConfigurations the operator ran recovery for,
+	// with ValidatingWebhook enforcement. When a live configuration no longer matches its entry,
+	// the operator runs recovery again before any agent runs.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=16
+	AdmissionWebhooks []SPIFFEAdmissionWebhookStatus `json:"admissionWebhooks,omitempty"`
+
+	// webhookDNSName is the DNS name the operator's webhook serves on, with ValidatingWebhook
+	// enforcement. The operator's SVID must carry it, so the platform's SPIRE registration entry
+	// for the operator sets it.
+	// +optional
+	// +kubebuilder:validation:MaxLength=253
+	WebhookDNSName string `json:"webhookDNSName,omitempty"`
+
+	// webhookSPIFFEID is the SPIFFE ID the operator's webhook SVID must have, with
+	// ValidatingWebhook enforcement: agentIDTemplate rendered with the role operator. The hub
+	// accepts no agent with that role, so the SVID is good only for serving the webhook.
+	// +optional
+	// +kubebuilder:validation:MaxLength=2048
+	WebhookSPIFFEID string `json:"webhookSPIFFEID,omitempty"`
+
+	// addOnNamespace is the add-on namespace the operator created itself, recorded by name and
+	// UID so recovery only cleans that exact namespace.
+	// +optional
+	AddOnNamespace *SPIFFENamespaceRef `json:"addOnNamespace,omitempty"`
+
+	// agentIDs are the SPIFFE IDs the operator rendered for this Klusterlet's agents from
+	// agentIDTemplate, one per agent role the install mode runs. The platform's SPIRE
+	// registration entries must issue exactly these IDs.
+	// +optional
+	// +listType=map
+	// +listMapKey=role
+	// +kubebuilder:validation:MaxItems=3
+	AgentIDs []SPIFFEAgentID `json:"agentIDs,omitempty"`
+}
+
+// SPIFFEAgentID is the SPIFFE ID of one Klusterlet agent.
+type SPIFFEAgentID struct {
+	// role is the agent role: registration, work or klusterlet.
+	// +required
+	// +kubebuilder:validation:Enum=registration;work;klusterlet
+	Role string `json:"role"`
+
+	// spiffeID is the SPIFFE ID the agent expects from the Workload API.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
+	SPIFFEID string `json:"spiffeID"`
+}
+
+// SPIFFEAdmissionPolicyStatus records one ValidatingAdmissionPolicy and its binding.
+type SPIFFEAdmissionPolicyStatus struct {
+	// policyName is the name of the ValidatingAdmissionPolicy and of its binding.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	PolicyName string `json:"policyName"`
+
+	// policyUID is the UID of the policy.
+	// +required
+	PolicyUID types.UID `json:"policyUID"`
+
+	// policyGeneration is the generation of the policy.
+	// +required
+	PolicyGeneration int64 `json:"policyGeneration"`
+
+	// bindingUID is the UID of the policy binding.
+	// +required
+	BindingUID types.UID `json:"bindingUID"`
+
+	// bindingGeneration is the generation of the policy binding.
+	// +required
+	BindingGeneration int64 `json:"bindingGeneration"`
+}
+
+// SPIFFEAdmissionWebhookStatus records one ValidatingWebhookConfiguration.
+type SPIFFEAdmissionWebhookStatus struct {
+	// name is the name of the ValidatingWebhookConfiguration.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	Name string `json:"name"`
+
+	// uid is the UID of the configuration.
+	// +required
+	UID types.UID `json:"uid"`
+
+	// generation is the generation of the configuration.
+	// +required
+	Generation int64 `json:"generation"`
+}
+
+// SPIFFENamespaceRef identifies a namespace by name and UID.
+type SPIFFENamespaceRef struct {
+	// name is the name of the namespace.
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	Name string `json:"name"`
+
+	// uid is the UID of the namespace.
+	// +required
+	UID types.UID `json:"uid"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// KlusterletList is a collection of Klusterlet agents.
+type KlusterletList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	// Items is a list of Klusterlet agents.
+	Items []Klusterlet `json:"items"`
+}
+
+const (
+	// The types of klusterlet condition status.
+	// ConditionKlusterletApplied is the klusterlet condition status which means all components have been applied on the managed cluster.
+	ConditionKlusterletApplied = "Applied"
+	// ConditionReadyToApply is a klusterlet condition status which means it is ready to apply the resources on the managed cluster.
+	ConditionReadyToApply = "ReadyToApply"
+	// ConditionKlusterletAvailable is the klusterlet condition status which means all components are available and ready to serve.
+	ConditionKlusterletAvailable = "Available"
+	// ConditionHubConnectionDegraded is the klusterlet condition status which means the agent on the managed cluster cannot access the hub cluster.
+	ConditionHubConnectionDegraded = "HubConnectionDegraded"
+	// ConditionRegistrationDesiredDegraded is the klusterlet condition status which means the registration agent on the managed cluster is not ready to serve.
+	ConditionRegistrationDesiredDegraded = "RegistrationDesiredDegraded"
+	// ConditionWorkDesiredDegraded is the klusterlet condition status which means the work agent on the managed cluster is not ready to serve.
+	ConditionWorkDesiredDegraded = "WorkDesiredDegraded"
+
+	// ReasonKlusterletApplied is the reason of ConditionKlusterletApplied condition to show resources are applied.
+	ReasonKlusterletApplied = "KlusterletApplied"
+	// ReasonKlusterletApplyFailed is the reason of ConditionKlusterletApplied condition to show it is failed to apply resources.
+	ReasonKlusterletApplyFailed = "KlusterletApplyFailed"
+	// ReasonKlusterletCRDApplyFailed is the reason of ConditionKlusterletApplied condition to show it is failed to apply CRDs.
+	ReasonKlusterletCRDApplyFailed = "CRDApplyFailed"
+	// ReasonManagedClusterResourceApplyFailed is the reason of ConditionKlusterletApplied condition to show it is failed to apply resources on managed cluster.
+	ReasonManagedClusterResourceApplyFailed = "ManagedClusterResourceApplyFailed"
+	// ReasonManagementClusterResourceApplyFailed is the reason of ConditionKlusterletApplied condition to show it is failed to apply resources on management cluster.
+	ReasonManagementClusterResourceApplyFailed = "ManagementClusterResourceApplyFailed"
+
+	// ReasonKlusterletPrepareFailed is the reason of ConditionReadyToApply condition to show it is failed to get the kubeConfig
+	// of managed cluster from the external-managed-kubeconfig secret in the hosted mode.
+	ReasonKlusterletPrepareFailed = "KlusterletPrepareFailed"
+	// ReasonKlusterletPrepared is the reason of ConditionReadyToApply condition to show the kubeConfig of managed cluster is
+	// validated from the external-managed-kubeconfig secret in the hosted mode.
+	ReasonKlusterletPrepared = "KlusterletPrepared"
+
+	// ReasonKlusterletGetDeploymentFailed is the reason of ConditionKlusterletAvailable/ConditionRegistrationDesiredDegraded/ConditionWorkDesiredDegraded
+	// condition to show it is failed to get deployments.
+	ReasonKlusterletGetDeploymentFailed = "GetDeploymentFailed"
+	// ReasonKlusterletUnavailablePods is the reason of ConditionKlusterletAvailable/ConditionRegistrationDesiredDegraded/ConditionWorkDesiredDegraded
+	// condition to show there is unavailable pod.
+	ReasonKlusterletUnavailablePods = "UnavailablePods"
+	// ReasonKlusterletDeploymentsFunctional is the reason of ConditionKlusterletAvailable/ConditionRegistrationDesiredDegraded/ConditionWorkDesiredDegraded
+	// condition to show all deployments are functional.
+	ReasonKlusterletDeploymentsFunctional = "DeploymentsFunctional"
+	// ReasonKlusterletNoAvailablePods is the reason of ConditionKlusterletAvailable/ConditionRegistrationDesiredDegraded/ConditionWorkDesiredDegraded
+	// condition to show there is no available pod.
+	ReasonKlusterletNoAvailablePods = "NoAvailablePods"
+
+	// ReasonKlusterletAvailable is the reason of ConditionKlusterletAvailable condition to show all deployed resources are available.
+	ReasonKlusterletAvailable = "KlusterletAvailable"
+
+	// ReasonHubConnectionFunctional is the reason of ConditionHubConnectionDegraded condition to show spoke cluster connects hub cluster.
+	ReasonHubConnectionFunctional = "HubConnectionFunctional"
+	// ReasonHubKubeConfigSecretMissing is the reason of ConditionHubConnectionDegraded condition to show hubKubeConfigSecret is missing.
+	ReasonHubKubeConfigSecretMissing = "HubKubeConfigSecretMissing"
+	// ReasonHubKubeConfigMissing is the reason of ConditionHubConnectionDegraded condition to show hubKubeConfig in hubKubeConfigSecret is missing.
+	ReasonHubKubeConfigMissing = "HubKubeConfigMissing"
+	// ReasonHubKubeConfigError is the reason of ConditionHubConnectionDegraded condition to show it is failed to get hubKubeConfig.
+	ReasonHubKubeConfigError = "HubKubeConfigError"
+	// ReasonClusterNameMissing is the reason of ConditionHubConnectionDegraded condition to show the cluster-name is missing in the hubKubeConfigSecret.
+	ReasonClusterNameMissing = "ClusterNameMissing"
+	// ReasonHubKubeConfigUnauthorized is the reason of ConditionHubConnectionDegraded condition to show there is no permission to access hub using the hubKubeConfigSecret.
+	ReasonHubKubeConfigUnauthorized = "HubKubeConfigUnauthorized"
+)
