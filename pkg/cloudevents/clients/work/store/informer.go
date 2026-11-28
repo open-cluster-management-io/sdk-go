@@ -108,6 +108,11 @@ type AgentInformerWatcherStore struct {
 	store.AgentInformerWatcherStore[*workv1.ManifestWork]
 
 	versions *versioner
+
+	// mu makes the "check the cached UID, then delete" sequence in Delete atomic with the
+	// "find, then add" sequence in HandleReceivedResource, so a late cleanup of an old work
+	// cannot remove a same-name successor that was added in between.
+	mu sync.Mutex
 }
 
 type versioner struct {
@@ -177,11 +182,29 @@ func (s *AgentInformerWatcherStore) Delete(resource runtime.Object) error {
 	if err != nil {
 		return err
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// The cache is keyed by namespace/name, so a same-name successor with a new UID may already
+	// occupy the slot of the work being cleaned up. Deleting by key would evict the successor and
+	// reset its version, so skip it: the work being deleted is already gone from the cache.
+	cached, exists, err := s.Get(context.Background(), accessor.GetNamespace(), accessor.GetName())
+	if err != nil {
+		return err
+	}
+	if exists && accessor.GetUID() != "" && cached.GetUID() != "" && cached.GetUID() != accessor.GetUID() {
+		return nil
+	}
+
 	s.versions.delete(accessor.GetName())
 	return s.AgentInformerWatcherStore.Delete(resource)
 }
 
 func (s *AgentInformerWatcherStore) HandleReceivedResource(ctx context.Context, work *workv1.ManifestWork) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// for compatibility, we get the work by its UID
 	// TODO get the work by its namespace/name
 	existingWorks, err := s.findWorksByUID(ctx, work.UID)
