@@ -1366,3 +1366,107 @@ func TestGRPCTransportDoubleSubscribe(t *testing.T) {
 		t.Fatalf("expected nil on second subscribe (idempotent), got: %v", err)
 	}
 }
+
+func TestGrpcTransport_Send_DoesNotBlockReceiverDuringPublish(t *testing.T) {
+	newEvent := func(id string) *pbv1.CloudEvent {
+		return &pbv1.CloudEvent{
+			Id:          id,
+			Source:      "test-source",
+			SpecVersion: "1.0",
+			Type:        "test.type",
+			Attributes: map[string]*pbv1.CloudEventAttributeValue{
+				"contenttype": {Attr: &pbv1.CloudEventAttributeValue_CeString{CeString: "application/json"}},
+			},
+			Data: &pbv1.CloudEvent_TextData{TextData: `{"test":"data"}`},
+		}
+	}
+
+	publishStarted := make(chan struct{})
+	replayHandled := make(chan struct{})
+
+	service := &mockCloudEventService{
+		publishFunc: func(ctx context.Context, req *pbv1.PublishRequest) (*emptypb.Empty, error) {
+			close(publishStarted)
+			select {
+			case <-replayHandled:
+				return &emptypb.Empty{}, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		},
+		subscribeFunc: func(req *pbv1.SubscriptionRequest, stream pbv1.CloudEventService_SubscribeServer) error {
+			if err := stream.Send(newEvent("warmup")); err != nil {
+				return err
+			}
+			select {
+			case <-publishStarted:
+			case <-stream.Context().Done():
+				return stream.Context().Err()
+			}
+			for _, id := range []string{"replay-1", "replay-2"} {
+				if err := stream.Send(newEvent(id)); err != nil {
+					return err
+				}
+			}
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	conn, cleanup := setupMockServer(t, service)
+	defer cleanup()
+
+	transport := &grpcTransport{
+		opts:      &grpcoptions.GRPCOptions{},
+		client:    pbv1.NewCloudEventServiceClient(conn),
+		errorChan: make(chan error, 10),
+		closeChan: make(chan struct{}),
+		getSubscriptionRequest: func() *pbv1.SubscriptionRequest {
+			return &pbv1.SubscriptionRequest{Source: "test-source", DataType: "test-type"}
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := transport.Subscribe(ctx); err != nil {
+		t.Fatalf("Subscribe failed: %v", err)
+	}
+
+	warmupHandled := make(chan struct{})
+	handleFn := func(ctx context.Context, evt cloudevents.Event) {
+		switch evt.ID() {
+		case "warmup":
+			close(warmupHandled)
+		case "replay-2":
+			close(replayHandled)
+		}
+	}
+	go func() {
+		_ = transport.Receive(ctx, handleFn)
+	}()
+
+	select {
+	case <-warmupHandled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for the receiver to start")
+	}
+
+	sendDone := make(chan error, 1)
+	go func() {
+		evt := cloudevents.NewEvent()
+		evt.SetID("resync-request")
+		evt.SetSource("test-source")
+		evt.SetType("test.type")
+		sendDone <- transport.Send(ctx, evt)
+	}()
+
+	select {
+	case err := <-sendDone:
+		if err != nil {
+			t.Fatalf("Send failed: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("deadlock: Send holds the transport mutex while Publish waits for the receiver to handle replayed events")
+	}
+}
