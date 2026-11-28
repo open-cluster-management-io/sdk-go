@@ -198,3 +198,50 @@ func TestWatch(t *testing.T) {
 		return received.result()
 	}, 5*time.Second, time.Second)
 }
+
+// TestWatchAfterWatcherStopped covers the reflector's behaviour of stopping its
+// watch whenever its watch loop exits and then asking for a new one. The store
+// must hand back a working watcher: reusing the stopped one made every later
+// Receive a silent no-op, so the informer never saw another event. For a work
+// agent that meant a ManifestWork deletion was never acted on and its finalizer
+// was never removed.
+func TestWatchAfterWatcherStopped(t *testing.T) {
+	watchStore := NewAgentInformerWatcherStore[*clusterv1.ManagedCluster]()
+
+	first, err := watchStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	require.NoError(t, err)
+
+	// What client-go's reflector does via `defer w.Stop()`.
+	first.Stop()
+
+	second, err := watchStore.GetWatcher(context.Background(), "", metav1.ListOptions{})
+	require.NoError(t, err)
+	require.NotSame(t, first, second, "expected a new watcher after the previous one was stopped")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		second.Stop()
+		cancel()
+	}()
+
+	events := make(chan watch.Event, 1)
+	go func() {
+		for evt := range second.ResultChan() {
+			select {
+			case events <- evt:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	require.NoError(t, watchStore.HandleReceivedResource(ctx,
+		&clusterv1.ManagedCluster{ObjectMeta: metav1.ObjectMeta{Name: "test1"}}))
+
+	select {
+	case evt := <-events:
+		require.Equal(t, watch.Added, evt.Type)
+	case <-time.After(10 * time.Second):
+		t.Fatal("event was dropped: the store kept using the stopped watcher")
+	}
+}
